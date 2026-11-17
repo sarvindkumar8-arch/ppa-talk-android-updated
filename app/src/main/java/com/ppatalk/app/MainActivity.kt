@@ -74,8 +74,21 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
 
+    val authFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.LightGray,
+        cursorColor = NeonCyan,
+        focusedBorderColor = ElectricBlue,
+        unfocusedBorderColor = NeonCyan,
+        focusedLabelColor = NeonCyan,
+        unfocusedLabelColor = Color.LightGray,
+        focusedContainerColor = SurfaceNavy,
+        unfocusedContainerColor = SurfaceNavy
+    )
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -89,17 +102,17 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
 
         if (isSignUp) {
             OutlinedTextField(name, { name = it }, label = { Text("Full name") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true)
+                modifier = Modifier.fillMaxWidth(), singleLine = true, colors = authFieldColors)
             Spacer(Modifier.height(8.dp))
         }
         OutlinedTextField(email, { email = it }, label = { Text("Email address") },
             modifier = Modifier.fillMaxWidth(), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), colors = authFieldColors)
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(password, { password = it }, label = { Text("Password") },
             modifier = Modifier.fillMaxWidth(), singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
         Spacer(Modifier.height(12.dp))
 
         Button(
