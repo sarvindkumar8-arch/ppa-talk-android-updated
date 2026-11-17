@@ -5,6 +5,7 @@ import android.app.Activity
 import android.net.Uri
 import android.content.Intent
 import android.widget.VideoView
+import android.widget.MediaController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -656,7 +657,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
             } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
                 Spacer(Modifier.height(10.dp))
                 AndroidView(
-                    factory = { context -> VideoView(context).apply { setVideoURI(Uri.parse(post.mediaUrl)) } },
+                    factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); setVideoURI(Uri.parse(post.mediaUrl)) } },
                     update = { view -> if (!view.isPlaying) view.setVideoURI(Uri.parse(post.mediaUrl)) },
                     modifier = Modifier.fillMaxWidth().height(230.dp)
                 )
