@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
+import java.util.concurrent.TimeUnit
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -89,6 +92,10 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var usePhoneLogin by remember { mutableStateOf(false) }
+    var phoneNumber by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
+    var verificationId by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -185,25 +192,94 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(), singleLine = true, colors = authFieldColors)
             Spacer(Modifier.height(8.dp))
         }
-        OutlinedTextField(email, { email = it }, label = { Text("Email address") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), colors = authFieldColors)
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(password, { password = it }, label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
+        if (!isSignUp) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !usePhoneLogin, onClick = {
+                    usePhoneLogin = false; verificationId = null; otp = ""; message = ""
+                }, label = { Text("Email") })
+                FilterChip(selected = usePhoneLogin, onClick = {
+                    usePhoneLogin = true; verificationId = null; otp = ""; message = ""
+                }, label = { Text("Mobile") })
+            }
+        }
+        if (isSignUp || !usePhoneLogin) {
+            OutlinedTextField(email, { email = it }, label = { Text("Email address") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), colors = authFieldColors)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(password, { password = it }, label = { Text("Password") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
+        } else {
+            OutlinedTextField(phoneNumber, { phoneNumber = it }, label = { Text("Mobile number") },
+                placeholder = { Text("+91XXXXXXXXXX") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors)
+            if (verificationId != null) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(otp, { otp = it.filter(Char::isDigit).take(6) }, label = { Text("6-digit OTP") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors)
+            }
+        }
         Spacer(Modifier.height(12.dp))
 
         Button(
             onClick = {
                 message = ""
-                if (email.isBlank() || password.length < 6 || (isSignUp && name.isBlank())) {
-                    message = "Enter valid details. Password must be at least 6 characters."
+                val auth = FirebaseAuth.getInstance()
+                if (isSignUp && (email.isBlank() || password.length < 6 || name.isBlank())) {
+                    message = "Enter valid name, email and password (minimum 6 characters)."
+                    return@Button
+                }
+                if (!isSignUp && usePhoneLogin && verificationId == null) {
+                    if (!phoneNumber.trim().matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
+                        message = "Enter mobile number with country code, e.g. +919876543210."
+                        return@Button
+                    }
+                    val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                        override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                            auth.signInWithCredential(credential)
+                                .addOnSuccessListener { busy = false; onAuthenticated() }
+                                .addOnFailureListener { exception -> busy = false; message = exception.localizedMessage ?: "Mobile login failed." }
+                        }
+                        override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
+                            busy = false
+                            message = exception.localizedMessage ?: "Could not send OTP. Check Firebase Phone sign-in setup."
+                        }
+                        override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                            verificationId = id
+                            busy = false
+                            message = "OTP sent. Enter the 6-digit code received on your mobile."
+                        }
+                    }
+                    busy = true
+                    val options = PhoneAuthOptions.newBuilder(auth)
+                        .setPhoneNumber(phoneNumber.trim())
+                        .setTimeout(60L, TimeUnit.SECONDS)
+                        .setActivity(context as Activity)
+                        .setCallbacks(callbacks)
+                        .build()
+                    PhoneAuthProvider.verifyPhoneNumber(options)
+                    return@Button
+                }
+                if (!isSignUp && usePhoneLogin && verificationId != null) {
+                    if (otp.length != 6) {
+                        message = "Enter the 6-digit OTP."
+                        return@Button
+                    }
+                    busy = true
+                    val credential = PhoneAuthProvider.getCredential(verificationId!!, otp)
+                    auth.signInWithCredential(credential)
+                        .addOnSuccessListener { busy = false; onAuthenticated() }
+                        .addOnFailureListener { exception -> busy = false; message = exception.localizedMessage ?: "Invalid OTP. Try again." }
+                    return@Button
+                }
+                if (!isSignUp && !usePhoneLogin && (email.isBlank() || password.length < 6)) {
+                    message = "Enter a valid email and password (minimum 6 characters)."
                     return@Button
                 }
                 busy = true
-                val auth = FirebaseAuth.getInstance()
                 if (isSignUp) {
                     auth.createUserWithEmailAndPassword(email.trim(), password)
                         .addOnSuccessListener { result ->
@@ -244,7 +320,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Login")
+            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else if (usePhoneLogin && verificationId != null) "Verify OTP" else if (usePhoneLogin) "Send OTP" else "Login")
         }
         OutlinedButton(
             onClick = {
@@ -260,7 +336,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Login" else "New here? Create account")
         }
-        if (!isSignUp) {
+        if (!isSignUp && !usePhoneLogin) {
             TextButton(
                 enabled = !busy,
                 onClick = {
