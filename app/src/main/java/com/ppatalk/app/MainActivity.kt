@@ -86,6 +86,7 @@ fun PPATalkApp() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(onAuthenticated: () -> Unit) {
     var isSignUp by remember { mutableStateOf(true) }
@@ -94,6 +95,18 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var usePhoneLogin by remember { mutableStateOf(false) }
     var phoneNumber by remember { mutableStateOf("") }
+    var countryCode by remember { mutableStateOf("+91") }
+    var countryMenuExpanded by remember { mutableStateOf(false) }
+    val countryCodes = listOf(
+        "India (+91)" to "+91", "United States (+1)" to "+1", "United Kingdom (+44)" to "+44",
+        "United Arab Emirates (+971)" to "+971", "Canada (+1)" to "+1", "Australia (+61)" to "+61",
+        "Saudi Arabia (+966)" to "+966", "Pakistan (+92)" to "+92", "Bangladesh (+880)" to "+880",
+        "Nepal (+977)" to "+977", "Sri Lanka (+94)" to "+94", "Singapore (+65)" to "+65",
+        "Malaysia (+60)" to "+60", "Germany (+49)" to "+49", "France (+33)" to "+33",
+        "South Africa (+27)" to "+27", "New Zealand (+64)" to "+64", "Japan (+81)" to "+81",
+        "China (+86)" to "+86", "Qatar (+974)" to "+974", "Kuwait (+965)" to "+965",
+        "Oman (+968)" to "+968"
+    )
     var otp by remember { mutableStateOf("") }
     var verificationId by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -212,8 +225,36 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
         } else {
-            OutlinedTextField(phoneNumber, { phoneNumber = it }, label = { Text("Mobile number") },
-                placeholder = { Text("+91XXXXXXXXXX") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            ExposedDropdownMenuBox(
+                expanded = countryMenuExpanded,
+                onExpandedChange = { countryMenuExpanded = !countryMenuExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = countryCodes.firstOrNull { it.second == countryCode }?.first ?: "Country code ($countryCode)",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Country code") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryMenuExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    singleLine = true,
+                    colors = authFieldColors
+                )
+                ExposedDropdownMenu(
+                    expanded = countryMenuExpanded,
+                    onDismissRequest = { countryMenuExpanded = false }
+                ) {
+                    countryCodes.forEach { (country, code) ->
+                        DropdownMenuItem(
+                            text = { Text(country) },
+                            onClick = { countryCode = code; countryMenuExpanded = false }
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(phoneNumber, { phoneNumber = it.filter(Char::isDigit) }, label = { Text("Mobile number") },
+                placeholder = { Text("Enter mobile number") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors)
             if (verificationId != null) {
                 Spacer(Modifier.height(8.dp))
@@ -233,8 +274,10 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                     return@Button
                 }
                 if (!isSignUp && usePhoneLogin && verificationId == null) {
-                    if (!phoneNumber.trim().matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
-                        message = "Enter mobile number with country code, e.g. +919876543210."
+                    val fullPhoneNumber = countryCode + phoneNumber.filter(Char::isDigit)
+                    if (phoneNumber.filter(Char::isDigit).length !in 6..14 ||
+                        !fullPhoneNumber.matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
+                        message = "Enter a valid mobile number for the selected country."
                         return@Button
                     }
                     val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
@@ -255,7 +298,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                     }
                     busy = true
                     val options = PhoneAuthOptions.newBuilder(auth)
-                        .setPhoneNumber(phoneNumber.trim())
+                        .setPhoneNumber(fullPhoneNumber)
                         .setTimeout(60L, TimeUnit.SECONDS)
                         .setActivity(context as Activity)
                         .setCallbacks(callbacks)
