@@ -3,6 +3,8 @@ package com.ppatalk.app
 import android.os.Bundle
 import android.app.Activity
 import android.net.Uri
+import android.content.Intent
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
@@ -477,7 +480,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
     }
 }
 
-data class FeedPost(val id: String, val uid: String, val authorName: String, val authorEmail: String, val text: String, val createdAt: Date?)
+data class FeedPost(val id: String, val uid: String, val authorName: String, val authorEmail: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
 
 @Composable
@@ -498,7 +501,8 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
                         FeedPost(doc.id, doc.getString("uid") ?: "",
                             doc.getString("authorName") ?: "PPA Talk user",
                             doc.getString("authorEmail") ?: "", doc.getString("text") ?: "",
-                            doc.getTimestamp("createdAt")?.toDate())
+                            doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
+                            doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
                     }
                     loading = false
                     error = ""
@@ -640,7 +644,23 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Text(post.text)
+            if (post.text.isNotBlank()) Text(post.text)
+            if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
+                Spacer(Modifier.height(10.dp))
+                AsyncImage(
+                    model = post.mediaUrl,
+                    contentDescription = "Post photo",
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    contentScale = ContentScale.Crop
+                )
+            } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
+                Spacer(Modifier.height(10.dp))
+                AndroidView(
+                    factory = { context -> VideoView(context).apply { setVideoURI(Uri.parse(post.mediaUrl)) } },
+                    update = { view -> if (!view.isPlaying) view.setVideoURI(Uri.parse(post.mediaUrl)) },
+                    modifier = Modifier.fillMaxWidth().height(230.dp)
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(enabled = !actionBusy, onClick = {
@@ -657,6 +677,37 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
                 TextButton(onClick = onCommentsClick) {
                     Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = NeonCyan)
                     Spacer(Modifier.width(5.dp)); Text("Comment"); Spacer(Modifier.width(5.dp)); Text(commentCount.toString())
+                }
+                val context = LocalContext.current
+                TextButton(onClick = {
+                    val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\\n" + post.mediaUrl
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
+                }) {
+                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Orange)
+                    Spacer(Modifier.width(4.dp)); Text("Share")
+                }
+            }
+            if (post.uid == currentUid) {
+                var menuExpanded by remember(post.id) { mutableStateOf(false) }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    TextButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Post options")
+                        Text("Options")
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Delete post") },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                menuExpanded = false
+                                db.collection("posts").document(post.id).delete()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -751,49 +802,102 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
 @Composable
 fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier) {
     var postText by remember { mutableStateOf("") }
+    var selectedMedia by remember { mutableStateOf<Uri?>(null) }
+    var mediaType by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var success by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedMedia = uri
+        mediaType = if (uri == null) "" else "image"
+        message = ""
+    }
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedMedia = uri
+        mediaType = if (uri == null) "" else "video"
+        message = ""
+    }
 
-    Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Create a post", style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, color = ElectricBlue)
-        Text("Share something with the PPA Talk community.", color = Color.Gray)
+        Text("Share a photo, video or update with the PPA Talk community.", color = Color.Gray)
         OutlinedTextField(
             value = postText,
             onValueChange = { postText = it; success = false; message = "" },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 130.dp),
             label = { Text("What's on your mind?") },
             placeholder = { Text("Write your post...") }
         )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.Photo, contentDescription = null); Spacer(Modifier.width(5.dp)); Text("Photo")
+            }
+            OutlinedButton(onClick = { videoPicker.launch("video/*") }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.VideoCall, contentDescription = null); Spacer(Modifier.width(5.dp)); Text("Video / Reel")
+            }
+        }
+        selectedMedia?.let { uri ->
+            Text(if (mediaType == "video") "Video selected" else "Photo selected", color = NeonCyan)
+            if (mediaType == "image") {
+                AsyncImage(model = uri, contentDescription = "Selected photo", modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), contentScale = ContentScale.Crop)
+            } else {
+                Text("Video ready to upload. You can publish it as a Reel.", color = Color.LightGray)
+            }
+            TextButton(onClick = { selectedMedia = null; mediaType = "" }) { Text("Remove attachment") }
+        }
         Button(
-            enabled = !busy && postText.isNotBlank() && postText.trim().length <= 5000,
+            enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
             onClick = {
                 busy = true
                 message = ""
-                val post = hashMapOf(
-                    "uid" to uid,
-                    "authorName" to displayName,
-                    "authorEmail" to email,
-                    "text" to postText.trim(),
-                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                )
-                FirebaseFirestore.getInstance().collection("posts").add(post)
-                    .addOnSuccessListener {
-                        busy = false
-                        postText = ""
-                        success = true
-                        message = "Your post was published!"
-                    }
-                    .addOnFailureListener {
-                        busy = false
-                        message = it.localizedMessage ?: "Post failed. Check Firestore rules and connection."
-                    }
+                success = false
+                val db = FirebaseFirestore.getInstance()
+                fun savePost(mediaUrl: String) {
+                    val post = hashMapOf(
+                        "uid" to uid,
+                        "authorName" to displayName,
+                        "authorEmail" to email,
+                        "text" to postText.trim(),
+                        "mediaUrl" to mediaUrl,
+                        "mediaType" to mediaType,
+                        "postType" to if (mediaType == "video") "reel" else "post",
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    db.collection("posts").add(post)
+                        .addOnSuccessListener {
+                            busy = false
+                            postText = ""
+                            selectedMedia = null
+                            mediaType = ""
+                            success = true
+                            message = "Your post was published!"
+                        }
+                        .addOnFailureListener { ex ->
+                            busy = false
+                            message = ex.localizedMessage ?: "Post failed. Check Firestore rules."
+                        }
+                }
+                val uri = selectedMedia
+                if (uri == null) {
+                    savePost("")
+                } else {
+                    val extension = if (mediaType == "video") "mp4" else "jpg"
+                    val folder = if (mediaType == "video") "reels" else "post_photos"
+                    val mediaRef = FirebaseStorage.getInstance().reference.child("$folder/$uid/${System.currentTimeMillis()}.$extension")
+                    mediaRef.putFile(uri)
+                        .addOnSuccessListener {
+                            mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString()) }
+                                .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media URL could not be loaded." }
+                        }
+                        .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media upload failed. Check Firebase Storage rules." }
+                }
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (busy) "Publishing..." else "Publish Post") }
+        ) { Text(if (busy) "Uploading..." else "Publish Post / Reel") }
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
-        if (message.isNotBlank()) Text(message, color = if (success) Color(0xFF16803C) else MaterialTheme.colorScheme.error)
+        if (message.isNotBlank()) Text(message, color = if (success) NeonCyan else MaterialTheme.colorScheme.error)
     }
 }
 
