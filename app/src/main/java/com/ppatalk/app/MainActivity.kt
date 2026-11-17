@@ -590,6 +590,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var favoritePlace by remember { mutableStateOf("") }
     var hometown by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
+    var coverPhotoUrl by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -613,6 +614,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     favoritePlace = snapshot.getString("favoritePlace") ?: ""
                     hometown = snapshot.getString("hometown") ?: ""
                     photoUrl = snapshot.getString("photoUrl") ?: ""
+                    coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
                     loading = false
                 }
             }
@@ -654,130 +656,220 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         }
     }
 
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            saving = true
+            message = "Cover photo upload ho rahi hai..."
+            isError = false
+            val imageRef = FirebaseStorage.getInstance().reference.child("cover_photos/$uid/cover.jpg")
+            imageRef.putFile(uri)
+                .addOnSuccessListener {
+                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
+                        FirebaseFirestore.getInstance().collection("users").document(uid)
+                            .set(mapOf("coverPhotoUrl" to downloadUri.toString()), com.google.firebase.firestore.SetOptions.merge())
+                            .addOnSuccessListener {
+                                saving = false
+                                coverPhotoUrl = downloadUri.toString()
+                                message = "Cover photo update ho gayi."
+                            }
+                            .addOnFailureListener { exception ->
+                                saving = false
+                                isError = true
+                                message = exception.localizedMessage ?: "Cover photo URL save nahi hua."
+                            }
+                    }.addOnFailureListener { exception ->
+                        saving = false
+                        isError = true
+                        message = exception.localizedMessage ?: "Cover photo URL nahi mil paya."
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    saving = false
+                    isError = true
+                    message = exception.localizedMessage ?: "Cover upload failed. Firebase Storage rules check karein."
+                }
+        }
+    }
+
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("My Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ElectricBlue)
-        Box(contentAlignment = Alignment.Center) {
-            if (photoUrl.isNotBlank()) {
-                AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                    modifier = Modifier.size(116.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-            } else {
-                Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo placeholder",
-                    modifier = Modifier.size(116.dp), tint = NeonCyan)
-            }
-        }
-        OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !saving) {
-            Icon(Icons.Default.PhotoCamera, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Change profile photo")
-        }
-        if (loading) CircularProgressIndicator()
-        OutlinedTextField(value = displayName, onValueChange = { displayName = it },
-            label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(value = email, onValueChange = {}, readOnly = true,
-            label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
-            placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
-            minLines = 3, maxLines = 4)
-        Text("Personal details", style = MaterialTheme.typography.titleMedium,
-            color = Orange, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
-            label = { Text("Date of birth") }, placeholder = { Text("DD/MM/YYYY") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        var genderMenuExpanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = genderMenuExpanded,
-            onExpandedChange = { genderMenuExpanded = !genderMenuExpanded },
-            modifier = Modifier.fillMaxWidth()
+        Text("My Profile", style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold, color = ElectricBlue,
+            modifier = Modifier.padding(start = 20.dp, top = 16.dp))
+
+        // Facebook-style cover banner with an upload/change control.
+        Box(
+            modifier = Modifier.fillMaxWidth().height(190.dp).padding(horizontal = 12.dp)
         ) {
-            OutlinedTextField(
-                value = gender,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Gender") },
-                placeholder = { Text("Select gender") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = genderMenuExpanded) },
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
-                singleLine = true
-            )
-            ExposedDropdownMenu(
-                expanded = genderMenuExpanded,
-                onDismissRequest = { genderMenuExpanded = false }
+            Card(
+                modifier = Modifier.fillMaxSize(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = SurfaceNavy)
             ) {
-                listOf("Male", "Female", "Other", "Prefer not to say").forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = { gender = option; genderMenuExpanded = false }
-                    )
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (coverPhotoUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = coverPhotoUrl,
+                            contentDescription = "Profile cover photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Photo, contentDescription = null,
+                                tint = NeonCyan, modifier = Modifier.size(38.dp))
+                            Text("Your cover photo", color = Color.LightGray)
+                        }
+                    }
+                }
+            }
+            FilledIconButton(
+                onClick = { coverPicker.launch("image/*") },
+                enabled = !saving,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = ElectricBlue, contentColor = Color.White
+                )
+            ) {
+                Icon(Icons.Default.CameraAlt, contentDescription = "Change cover photo")
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(104.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (photoUrl.isNotBlank()) {
+                    AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                        modifier = Modifier.size(104.dp).clip(CircleShape),
+                        contentScale = ContentScale.Crop)
+                } else {
+                    Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo placeholder",
+                        modifier = Modifier.size(104.dp), tint = NeonCyan)
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(displayName.ifBlank { "PPA Talk user" },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = Color.White)
+                Text("PPA Talk member", style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !saving) {
+                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Edit profile photo")
                 }
             }
         }
-        OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it },
-            label = { Text("Phone number") }, placeholder = { Text("Enter phone number") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
-        OutlinedTextField(value = hobby, onValueChange = { hobby = it },
-            label = { Text("Hobby") }, placeholder = { Text("Your hobbies") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(value = school, onValueChange = { school = it },
-            label = { Text("School / College") }, placeholder = { Text("School or college name") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(value = favoritePlace, onValueChange = { favoritePlace = it },
-            label = { Text("Favorite place") }, placeholder = { Text("Your favorite place") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(value = hometown, onValueChange = { hometown = it },
-            label = { Text("Hometown") }, placeholder = { Text("Your hometown") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Text("Email is linked to your login account. Avoid sharing private details publicly.",
-            style = MaterialTheme.typography.bodySmall, color = Color.LightGray,
-            modifier = Modifier.fillMaxWidth())
-        Button(
-            onClick = {
-                val cleanName = displayName.trim()
-                if (cleanName.isBlank()) {
-                    message = "Display name khali nahi ho sakta."
-                    isError = true
-                } else {
-                    saving = true
-                    message = ""
-                    isError = false
-                    val updates = mapOf(
-                        "displayName" to cleanName,
-                        "bio" to bio.trim(),
-                        "dateOfBirth" to dateOfBirth.trim(),
-                        "gender" to gender,
-                        "phoneNumber" to phoneNumber.trim(),
-                        "hobby" to hobby.trim(),
-                        "school" to school.trim(),
-                        "favoritePlace" to favoritePlace.trim(),
-                        "hometown" to hometown.trim(),
-                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                    )
-                    FirebaseFirestore.getInstance().collection("users").document(uid)
-                        .set(updates, com.google.firebase.firestore.SetOptions.merge())
-                        .addOnSuccessListener {
-                            FirebaseAuth.getInstance().currentUser
-                                ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                                    .setDisplayName(cleanName).build())
-                            saving = false
-                            message = "Profile save ho gayi."
-                        }
-                        .addOnFailureListener { exception ->
-                            saving = false
-                            isError = true
-                            message = exception.localizedMessage ?: "Profile save nahi hui."
-                        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (loading) CircularProgressIndicator()
+            OutlinedTextField(value = displayName, onValueChange = { displayName = it },
+                label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = email, onValueChange = {}, readOnly = true,
+                label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
+                placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
+                minLines = 3, maxLines = 4)
+            Text("Personal details", style = MaterialTheme.typography.titleMedium,
+                color = Orange, fontWeight = FontWeight.Bold)
+            OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
+                label = { Text("Date of birth") }, placeholder = { Text("DD/MM/YYYY") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            var genderMenuExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = genderMenuExpanded,
+                onExpandedChange = { genderMenuExpanded = !genderMenuExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = gender, onValueChange = {}, readOnly = true,
+                    label = { Text("Gender") }, placeholder = { Text("Select gender") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = genderMenuExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(), singleLine = true
+                )
+                ExposedDropdownMenu(expanded = genderMenuExpanded,
+                    onDismissRequest = { genderMenuExpanded = false }) {
+                    listOf("Male", "Female", "Other", "Prefer not to say").forEach { option ->
+                        DropdownMenuItem(text = { Text(option) },
+                            onClick = { gender = option; genderMenuExpanded = false })
+                    }
                 }
-            },
-            enabled = !saving && !loading,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (saving) "Saving..." else "Save Profile") }
-        if (message.isNotBlank()) {
-            Text(message, color = if (isError) MaterialTheme.colorScheme.error else NeonCyan)
+            }
+            OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it },
+                label = { Text("Phone number") }, placeholder = { Text("Enter phone number") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+            OutlinedTextField(value = hobby, onValueChange = { hobby = it },
+                label = { Text("Hobby") }, placeholder = { Text("Your hobbies") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = school, onValueChange = { school = it },
+                label = { Text("School / College") }, placeholder = { Text("School or college name") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = favoritePlace, onValueChange = { favoritePlace = it },
+                label = { Text("Favorite place") }, placeholder = { Text("Your favorite place") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = hometown, onValueChange = { hometown = it },
+                label = { Text("Hometown") }, placeholder = { Text("Your hometown") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Text("Email is linked to your login account. Avoid sharing private details publicly.",
+                style = MaterialTheme.typography.bodySmall, color = Color.LightGray,
+                modifier = Modifier.fillMaxWidth())
+            Button(
+                onClick = {
+                    val cleanName = displayName.trim()
+                    if (cleanName.isBlank()) {
+                        message = "Display name khali nahi ho sakta."
+                        isError = true
+                    } else {
+                        saving = true
+                        message = ""
+                        isError = false
+                        val updates = mapOf(
+                            "displayName" to cleanName,
+                            "bio" to bio.trim(),
+                            "dateOfBirth" to dateOfBirth.trim(),
+                            "gender" to gender,
+                            "phoneNumber" to phoneNumber.trim(),
+                            "hobby" to hobby.trim(),
+                            "school" to school.trim(),
+                            "favoritePlace" to favoritePlace.trim(),
+                            "hometown" to hometown.trim(),
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                        FirebaseFirestore.getInstance().collection("users").document(uid)
+                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                            .addOnSuccessListener {
+                                FirebaseAuth.getInstance().currentUser
+                                    ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                        .setDisplayName(cleanName).build())
+                                saving = false
+                                message = "Profile save ho gayi."
+                            }
+                            .addOnFailureListener { exception ->
+                                saving = false
+                                isError = true
+                                message = exception.localizedMessage ?: "Profile save nahi hui."
+                            }
+                    }
+                },
+                enabled = !saving && !loading,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (saving) "Saving..." else "Save Profile") }
+            if (message.isNotBlank()) {
+                Text(message, color = if (isError) MaterialTheme.colorScheme.error else NeonCyan)
+            }
         }
+        Spacer(Modifier.height(12.dp))
     }
 }
 
