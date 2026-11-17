@@ -293,7 +293,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                     }
                     FirebaseFunctions.getInstance("asia-south1").getHttpsCallable(functionName).call(payload)
                         .addOnSuccessListener { result ->
-                            val data = result.data as? Map<*, *>
+                            val data = result.getData() as? Map<*, *>
                             val token = data?.get("token") as? String
                             if (token.isNullOrBlank()) {
                                 busy = false
