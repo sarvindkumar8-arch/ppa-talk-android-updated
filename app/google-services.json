@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "469604923642",
+    "project_id": "ppa-talk",
+    "storage_bucket": "ppa-talk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:469604923642:android:1bf4d018741a5452093143",
+        "android_client_info": {
+          "package_name": "com.ppatalk.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgLSiCFrfEdBQSsF8yUBL-VnnjeIlovlY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
