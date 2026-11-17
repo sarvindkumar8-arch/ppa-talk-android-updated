@@ -446,7 +446,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
         }
     ) { padding ->
         when (selected) {
-            "Home" -> HomeFeed(Modifier.padding(padding))
+            "Home" -> HomeFeed(uid, Modifier.padding(padding))
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Search" -> SimplePage("Discover", "Find people and public posts", Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
@@ -455,20 +455,15 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
     }
 }
 
-data class FeedPost(
-    val id: String,
-    val authorName: String,
-    val authorEmail: String,
-    val text: String,
-    val createdAt: Date?
-)
+data class FeedPost(val id: String, val uid: String, val authorName: String, val authorEmail: String, val text: String, val createdAt: Date?)
+data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
 
 @Composable
-fun HomeFeed(modifier: Modifier = Modifier) {
+fun HomeFeed(currentUid: String, modifier: Modifier = Modifier) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
-
+    var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
     DisposableEffect(Unit) {
         val registration = FirebaseFirestore.getInstance().collection("posts")
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -478,13 +473,10 @@ fun HomeFeed(modifier: Modifier = Modifier) {
                     loading = false
                 } else if (snapshot != null) {
                     posts = snapshot.documents.map { doc ->
-                        FeedPost(
-                            id = doc.id,
-                            authorName = doc.getString("authorName") ?: "PPA Talk user",
-                            authorEmail = doc.getString("authorEmail") ?: "",
-                            text = doc.getString("text") ?: "",
-                            createdAt = doc.getTimestamp("createdAt")?.toDate()
-                        )
+                        FeedPost(doc.id, doc.getString("uid") ?: "",
+                            doc.getString("authorName") ?: "PPA Talk user",
+                            doc.getString("authorEmail") ?: "", doc.getString("text") ?: "",
+                            doc.getTimestamp("createdAt")?.toDate())
                     }
                     loading = false
                     error = ""
@@ -492,39 +484,158 @@ fun HomeFeed(modifier: Modifier = Modifier) {
             }
         onDispose { registration.remove() }
     }
-
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Your Feed", style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, color = ElectricBlue)
+            Text("Your Feed", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ElectricBlue)
             Text("Latest public posts from the PPA Talk community", color = Color.Gray)
         }
         if (loading) item { CircularProgressIndicator() }
         if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
-        if (!loading && posts.isEmpty() && error.isBlank()) {
-            item { Text("No posts yet. Be the first to share something!") }
-        }
+        if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
         items(posts, key = { it.id }) { post ->
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SurfaceNavy, contentColor = Color.White)) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue)
-                        Spacer(Modifier.width(8.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(post.authorName, fontWeight = FontWeight.SemiBold)
-                            if (post.createdAt != null) {
-                                Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
-                                    style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(post.text)
+            FeedPostCard(post, currentUid) { selectedPost = post }
+        }
+    }
+    selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
+}
+
+@Composable
+fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit) {
+    var liked by remember(post.id, currentUid) { mutableStateOf(false) }
+    var likeCount by remember(post.id) { mutableIntStateOf(0) }
+    var commentCount by remember(post.id) { mutableIntStateOf(0) }
+    var actionBusy by remember(post.id) { mutableStateOf(false) }
+    val db = remember { FirebaseFirestore.getInstance() }
+    DisposableEffect(post.id, currentUid) {
+        val likesRef = db.collection("posts").document(post.id).collection("likes")
+        val likeListener = likesRef.addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                likeCount = snapshot.size()
+                liked = snapshot.documents.any { it.id == currentUid }
+            }
+        }
+        val commentsListener = db.collection("posts").document(post.id).collection("comments")
+            .addSnapshotListener { snapshot, _ -> if (snapshot != null) commentCount = snapshot.size() }
+        onDispose { likeListener.remove(); commentsListener.remove() }
+    }
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SurfaceNavy, contentColor = Color.White)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(post.authorName, fontWeight = FontWeight.SemiBold)
+                    if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
+                        style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(post.text)
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(enabled = !actionBusy, onClick = {
+                    actionBusy = true
+                    val ref = db.collection("posts").document(post.id).collection("likes").document(currentUid)
+                    if (liked) ref.delete().addOnCompleteListener { actionBusy = false }
+                    else ref.set(mapOf("uid" to currentUid, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                        .addOnCompleteListener { actionBusy = false }
+                }) {
+                    Icon(if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Like", tint = if (liked) Orange else NeonCyan)
+                    Spacer(Modifier.width(5.dp)); Text(if (liked) "Liked" else "Like"); Spacer(Modifier.width(5.dp)); Text(likeCount.toString())
+                }
+                TextButton(onClick = onCommentsClick) {
+                    Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = NeonCyan)
+                    Spacer(Modifier.width(5.dp)); Text("Comment"); Spacer(Modifier.width(5.dp)); Text(commentCount.toString())
                 }
             }
         }
     }
+}
+
+@Composable
+fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit) {
+    var comments by remember(post.id) { mutableStateOf<List<FeedComment>>(emptyList()) }
+    var commentText by remember(post.id) { mutableStateOf("") }
+    var replyTo by remember(post.id) { mutableStateOf<FeedComment?>(null) }
+    var sending by remember(post.id) { mutableStateOf(false) }
+    var message by remember(post.id) { mutableStateOf("") }
+    var currentName by remember(currentUid) { mutableStateOf("PPA Talk user") }
+    val db = remember { FirebaseFirestore.getInstance() }
+    DisposableEffect(post.id) {
+        val registration = db.collection("posts").document(post.id).collection("comments")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) comments = snapshot.documents.map { doc ->
+                    FeedComment(doc.id, doc.getString("uid") ?: "", doc.getString("authorName") ?: "PPA Talk user",
+                        doc.getString("text") ?: "", doc.getString("parentId") ?: "", doc.getTimestamp("createdAt")?.toDate())
+                }
+            }
+        onDispose { registration.remove() }
+    }
+    LaunchedEffect(currentUid) {
+        db.collection("users").document(currentUid).get()
+            .addOnSuccessListener { currentName = it.getString("displayName") ?: currentName }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Comments") },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 440.dp)) {
+                Text(post.text, style = MaterialTheme.typography.bodySmall, color = Color.LightGray, maxLines = 3)
+                Spacer(Modifier.height(10.dp))
+                LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val topLevel = comments.filter { it.parentId.isBlank() }
+                    if (topLevel.isEmpty()) item { Text("No comments yet. Start the conversation!") }
+                    items(topLevel, key = { it.id }) { comment ->
+                        Column(Modifier.fillMaxWidth()) {
+                            Card(colors = CardDefaults.cardColors(containerColor = SurfaceNavy)) {
+                                Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                                    Text(comment.authorName, fontWeight = FontWeight.Bold, color = NeonCyan)
+                                    Text(comment.text)
+                                    TextButton(onClick = { replyTo = comment }) { Text("Reply") }
+                                }
+                            }
+                            comments.filter { it.parentId == comment.id }.forEach { reply ->
+                                Row(Modifier.fillMaxWidth().padding(start = 24.dp, top = 5.dp)) {
+                                    Icon(Icons.Default.SubdirectoryArrowRight, contentDescription = null, tint = Orange,
+                                        modifier = Modifier.padding(end = 6.dp))
+                                    Column {
+                                        Text(reply.authorName, fontWeight = FontWeight.SemiBold, color = NeonCyan)
+                                        Text(reply.text)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (replyTo != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Replying to " + replyTo!!.authorName, modifier = Modifier.weight(1f),
+                            color = Orange, style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { replyTo = null }) { Text("Cancel") }
+                    }
+                }
+                OutlinedTextField(value = commentText, onValueChange = { commentText = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text(if (replyTo == null) "Write a comment" else "Write a reply") }, maxLines = 3)
+                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !sending && commentText.isNotBlank() && commentText.trim().length <= 1000, onClick = {
+                sending = true; message = ""
+                val comment = hashMapOf("uid" to currentUid, "authorName" to currentName,
+                    "text" to commentText.trim(), "parentId" to (replyTo?.id ?: ""),
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                db.collection("posts").document(post.id).collection("comments").add(comment)
+                    .addOnSuccessListener { commentText = ""; replyTo = null; sending = false }
+                    .addOnFailureListener { exception ->
+                        sending = false; message = exception.localizedMessage ?: "Comment/reply failed. Check Firestore rules."
+                    }
+            }) { Text(if (sending) "Sending..." else "Send") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
 }
 
 @Composable
