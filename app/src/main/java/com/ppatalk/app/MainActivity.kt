@@ -174,8 +174,10 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     }
 
     val authFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color(0xFF1C1E21),
-        unfocusedTextColor = Color(0xFF1C1E21),
+        focusedTextColor = Color.Black,
+        unfocusedTextColor = Color.Black,
+        focusedPlaceholderColor = Color(0xFF65676B),
+        unfocusedPlaceholderColor = Color(0xFF65676B),
         disabledTextColor = Color(0xFF65676B),
         cursorColor = ElectricBlue,
         focusedBorderColor = ElectricBlue,
@@ -211,7 +213,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
                 label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, colors = authFieldColors
+                singleLine = true, textStyle = LocalTextStyle.current.copy(color = Color.Black), colors = authFieldColors
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -241,7 +243,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 value = phoneNumber,
                 onValueChange = { phoneNumber = it.filter(Char::isDigit).take(14) },
                 label = { Text("Mobile number") }, placeholder = { Text("Enter mobile number") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = Color.Black),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors
             )
         } else {
@@ -257,7 +259,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             value = password, onValueChange = { password = it },
             label = { Text("Password") },
             placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = Color.Black),
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
