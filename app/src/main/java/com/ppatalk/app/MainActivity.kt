@@ -1,9 +1,15 @@
 package com.ppatalk.app
 
 import android.os.Bundle
+import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,11 +27,16 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.storage.FirebaseStorage
+import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
 
-private val Navy = Color(0xFF123A8C)
-private val Orange = Color(0xFFFF8500)
+private val DarkNavy = Color(0xFF081426)
+private val SurfaceNavy = Color(0xFF11243D)
+private val ElectricBlue = Color(0xFF168BFF)
+private val NeonCyan = Color(0xFF00D5FF)
+private val Orange = Color(0xFFFF7A1A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,7 +48,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PPATalkApp() {
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-    MaterialTheme(colorScheme = lightColorScheme(primary = Navy, secondary = Orange)) {
+    MaterialTheme(colorScheme = darkColorScheme(primary = ElectricBlue, secondary = Orange, tertiary = NeonCyan, background = DarkNavy, surface = SurfaceNavy, onPrimary = Color.White, onSecondary = Color.White, onBackground = Color.White, onSurface = Color.White)) {
         if (user == null) {
             AuthScreen(onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
         } else {
@@ -69,7 +80,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("PPA Talk", style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.ExtraBold, color = Navy)
+            fontWeight = FontWeight.ExtraBold, color = ElectricBlue)
         Text("Create. Connect. Share.", color = Orange)
         Spacer(Modifier.height(28.dp))
         Text(if (isSignUp) "Create your account" else "Welcome back",
@@ -186,7 +197,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
     ) { padding ->
         when (selected) {
             "Home" -> HomeFeed(Modifier.padding(padding))
-            "Profile" -> SimplePage("Public profile", "$displayName\n$email", Modifier.padding(padding))
+            "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Search" -> SimplePage("Discover", "Find people and public posts", Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
@@ -312,6 +323,137 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         ) { Text(if (busy) "Publishing..." else "Publish Post") }
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) Color(0xFF16803C) else MaterialTheme.colorScheme.error)
+    }
+}
+
+
+@Composable
+fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
+    var displayName by remember { mutableStateOf(initialName) }
+    var bio by remember { mutableStateOf("") }
+    var photoUrl by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+
+    DisposableEffect(uid) {
+        val registration = FirebaseFirestore.getInstance().collection("users").document(uid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    message = error.localizedMessage ?: "Profile load nahi ho paya."
+                    isError = true
+                    loading = false
+                } else if (snapshot != null) {
+                    displayName = snapshot.getString("displayName") ?: initialName
+                    bio = snapshot.getString("bio") ?: ""
+                    photoUrl = snapshot.getString("photoUrl") ?: ""
+                    loading = false
+                }
+            }
+        onDispose { registration.remove() }
+    }
+
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            saving = true
+            message = "Profile photo upload ho rahi hai..."
+            isError = false
+            val imageRef = FirebaseStorage.getInstance().reference.child("profile_photos/$uid/profile.jpg")
+            imageRef.putFile(uri)
+                .addOnSuccessListener {
+                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
+                        FirebaseFirestore.getInstance().collection("users").document(uid)
+                            .set(mapOf("photoUrl" to downloadUri.toString()), com.google.firebase.firestore.SetOptions.merge())
+                            .addOnSuccessListener {
+                                saving = false
+                                photoUrl = downloadUri.toString()
+                                message = "Profile photo update ho gayi."
+                            }
+                            .addOnFailureListener { exception ->
+                                saving = false
+                                isError = true
+                                message = exception.localizedMessage ?: "Photo URL save nahi hua."
+                            }
+                    }.addOnFailureListener { exception ->
+                        saving = false
+                        isError = true
+                        message = exception.localizedMessage ?: "Photo URL nahi mil paya."
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    saving = false
+                    isError = true
+                    message = exception.localizedMessage ?: "Photo upload failed. Firebase Storage rules check karein."
+                }
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize().padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("My Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ElectricBlue)
+        Box(contentAlignment = Alignment.Center) {
+            if (photoUrl.isNotBlank()) {
+                AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                    modifier = Modifier.size(116.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+            } else {
+                Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo placeholder",
+                    modifier = Modifier.size(116.dp), tint = NeonCyan)
+            }
+        }
+        OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !saving) {
+            Icon(Icons.Default.PhotoCamera, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Change profile photo")
+        }
+        if (loading) CircularProgressIndicator()
+        OutlinedTextField(value = displayName, onValueChange = { displayName = it },
+            label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = email, onValueChange = {}, readOnly = true,
+            label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
+            placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
+            minLines = 3, maxLines = 4)
+        Button(
+            onClick = {
+                val cleanName = displayName.trim()
+                if (cleanName.isBlank()) {
+                    message = "Display name khali nahi ho sakta."
+                    isError = true
+                } else {
+                    saving = true
+                    message = ""
+                    isError = false
+                    val updates = mapOf(
+                        "displayName" to cleanName,
+                        "bio" to bio.trim(),
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    FirebaseFirestore.getInstance().collection("users").document(uid)
+                        .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                        .addOnSuccessListener {
+                            FirebaseAuth.getInstance().currentUser
+                                ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                    .setDisplayName(cleanName).build())
+                            saving = false
+                            message = "Profile save ho gayi."
+                        }
+                        .addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = exception.localizedMessage ?: "Profile save nahi hui."
+                        }
+                }
+            },
+            enabled = !saving && !loading,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (saving) "Saving..." else "Save Profile") }
+        if (message.isNotBlank()) {
+            Text(message, color = if (isError) MaterialTheme.colorScheme.error else NeonCyan)
+        }
     }
 }
 
