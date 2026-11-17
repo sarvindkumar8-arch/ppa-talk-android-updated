@@ -47,10 +47,10 @@ import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
 
-private val DarkNavy = Color(0xFF081426)
-private val SurfaceNavy = Color(0xFF11243D)
+private val DarkNavy = Color(0xFFF0F2F5)
+private val SurfaceNavy = Color(0xFFFFFFFF)
 private val ElectricBlue = Color(0xFF168BFF)
-private val NeonCyan = Color(0xFF00D5FF)
+private val NeonCyan = Color(0xFF087EBD)
 private val Orange = Color(0xFFFF7A1A)
 
 class MainActivity : ComponentActivity() {
@@ -63,14 +63,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PPATalkApp() {
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-    MaterialTheme(colorScheme = darkColorScheme(
+    MaterialTheme(colorScheme = lightColorScheme(
         primary = ElectricBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
         tertiary = NeonCyan, onTertiary = DarkNavy,
-        background = DarkNavy, onBackground = Color.White,
-        surface = SurfaceNavy, onSurface = Color.White,
-        surfaceVariant = Color(0xFF1A3452), onSurfaceVariant = Color(0xFFD5E5F5),
-        outline = NeonCyan, error = Color(0xFFFF6B6B)
+        background = DarkNavy, onBackground = Color(0xFF1C1E21),
+        surface = SurfaceNavy, onSurface = Color(0xFF1C1E21),
+        surfaceVariant = Color(0xFFE4E6EB), onSurfaceVariant = Color(0xFF65676B),
+        outline = Color(0xFFCED0D4), error = Color(0xFFB3261E)
     )) {
         Surface(modifier = Modifier.fillMaxSize(), color = DarkNavy) {
             if (user == null) {
@@ -181,7 +181,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     val authFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = Color.White,
         unfocusedTextColor = Color.White,
-        disabledTextColor = Color.LightGray,
+        disabledTextColor = Color(0xFF65676B),
         cursorColor = NeonCyan,
         focusedBorderColor = ElectricBlue,
         unfocusedBorderColor = NeonCyan,
