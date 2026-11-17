@@ -181,7 +181,31 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Login" else "New here? Create account")
         }
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+        if (!isSignUp) {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    message = ""
+                    if (email.isBlank()) {
+                        message = "Enter your email address first."
+                    } else {
+                        busy = true
+                        FirebaseAuth.getInstance().sendPasswordResetEmail(email.trim())
+                            .addOnSuccessListener {
+                                busy = false
+                                message = "Password reset link sent to your email. Check your inbox and spam folder."
+                            }
+                            .addOnFailureListener { exception ->
+                                busy = false
+                                message = exception.localizedMessage ?: "Could not send password reset email."
+                            }
+                    }
+                }
+            ) {
+                Text("Forgot password?")
+            }
+        }
+        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) NeonCyan else MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
         Text("Public community • Be respectful and stay safe",
             style = MaterialTheme.typography.bodySmall, color = Color.Gray)
