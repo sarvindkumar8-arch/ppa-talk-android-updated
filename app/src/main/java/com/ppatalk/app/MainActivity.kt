@@ -170,7 +170,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("PPA Talk", color = Navy, fontWeight = FontWeight.Bold) },
+                title = { Text("PPA Talk", color = ElectricBlue, fontWeight = FontWeight.Bold) },
                 actions = { IconButton(onClick = onSignOut) {
                     Icon(Icons.Default.Logout, contentDescription = "Sign out")
                 } }
@@ -247,7 +247,7 @@ fun HomeFeed(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text("Your Feed", style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, color = Navy)
+                fontWeight = FontWeight.Bold, color = ElectricBlue)
             Text("Latest public posts from the PPA Talk community", color = Color.Gray)
         }
         if (loading) item { CircularProgressIndicator() }
@@ -259,7 +259,7 @@ fun HomeFeed(modifier: Modifier = Modifier) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Navy)
+                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue)
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text(post.authorName, fontWeight = FontWeight.SemiBold)
@@ -286,7 +286,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Create a post", style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold, color = Navy)
+            fontWeight = FontWeight.Bold, color = ElectricBlue)
         Text("Share something with the PPA Talk community.", color = Color.Gray)
         OutlinedTextField(
             value = postText,
@@ -461,7 +461,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 fun SimplePage(title: String, detail: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = Navy)
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = ElectricBlue)
             Spacer(Modifier.height(8.dp))
             Text(detail, color = Color.Gray)
         }
