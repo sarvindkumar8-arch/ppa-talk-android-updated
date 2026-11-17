@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
@@ -357,6 +359,12 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
     var displayName by remember { mutableStateOf(initialName) }
     var bio by remember { mutableStateOf("") }
+    var dateOfBirth by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
+    var hobby by remember { mutableStateOf("") }
+    var school by remember { mutableStateOf("") }
+    var favoritePlace by remember { mutableStateOf("") }
+    var hometown by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
@@ -373,6 +381,12 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 } else if (snapshot != null) {
                     displayName = snapshot.getString("displayName") ?: initialName
                     bio = snapshot.getString("bio") ?: ""
+                    dateOfBirth = snapshot.getString("dateOfBirth") ?: ""
+                    phoneNumber = snapshot.getString("phoneNumber") ?: ""
+                    hobby = snapshot.getString("hobby") ?: ""
+                    school = snapshot.getString("school") ?: ""
+                    favoritePlace = snapshot.getString("favoritePlace") ?: ""
+                    hometown = snapshot.getString("hometown") ?: ""
                     photoUrl = snapshot.getString("photoUrl") ?: ""
                     loading = false
                 }
@@ -416,7 +430,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     }
 
     Column(
-        modifier = modifier.fillMaxSize().padding(20.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -443,6 +457,30 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
             placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
             minLines = 3, maxLines = 4)
+        Text("Personal details", style = MaterialTheme.typography.titleMedium,
+            color = Orange, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
+            label = { Text("Date of birth") }, placeholder = { Text("DD/MM/YYYY") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it },
+            label = { Text("Phone number") }, placeholder = { Text("Enter phone number") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+        OutlinedTextField(value = hobby, onValueChange = { hobby = it },
+            label = { Text("Hobby") }, placeholder = { Text("Your hobbies") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = school, onValueChange = { school = it },
+            label = { Text("School / College") }, placeholder = { Text("School or college name") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = favoritePlace, onValueChange = { favoritePlace = it },
+            label = { Text("Favorite place") }, placeholder = { Text("Your favorite place") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = hometown, onValueChange = { hometown = it },
+            label = { Text("Hometown") }, placeholder = { Text("Your hometown") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Text("Email is linked to your login account. Avoid sharing private details publicly.",
+            style = MaterialTheme.typography.bodySmall, color = Color.LightGray,
+            modifier = Modifier.fillMaxWidth())
         Button(
             onClick = {
                 val cleanName = displayName.trim()
@@ -456,6 +494,12 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     val updates = mapOf(
                         "displayName" to cleanName,
                         "bio" to bio.trim(),
+                        "dateOfBirth" to dateOfBirth.trim(),
+                        "phoneNumber" to phoneNumber.trim(),
+                        "hobby" to hobby.trim(),
+                        "school" to school.trim(),
+                        "favoritePlace" to favoritePlace.trim(),
+                        "hometown" to hometown.trim(),
                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                     )
                     FirebaseFirestore.getInstance().collection("users").document(uid)
