@@ -1,6 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Phone/password credentials are server-only; never expose password hashes to clients.
+    match /phoneAuthCredentials/{credentialId} {
+      allow read, write: if false;
+    }
     match /users/{userId} {
       allow read: if true;
       allow create: if request.auth != null
