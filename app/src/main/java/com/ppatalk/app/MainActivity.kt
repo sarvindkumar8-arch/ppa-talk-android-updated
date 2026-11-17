@@ -355,6 +355,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
     var displayName by remember { mutableStateOf(initialName) }
