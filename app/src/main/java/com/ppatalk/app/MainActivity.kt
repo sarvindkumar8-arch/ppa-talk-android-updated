@@ -1,6 +1,7 @@
 package com.ppatalk.app
 
 import android.os.Bundle
+import android.app.Activity
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,7 +27,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
@@ -85,6 +91,68 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val googleSignInClient = remember(context) {
+        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .build()
+        GoogleSignIn.getClient(context, options)
+    }
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            try {
+                val account = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                    .getResult(ApiException::class.java)
+                val idToken = account.idToken
+                if (idToken.isNullOrBlank()) {
+                    busy = false
+                    message = "Google sign-in token missing. Check Firebase OAuth setup."
+                } else {
+                    val credential = GoogleAuthProvider.getCredential(idToken, null)
+                    FirebaseAuth.getInstance().signInWithCredential(credential)
+                        .addOnSuccessListener { authResult ->
+                            val firebaseUser = authResult.user
+                            if (firebaseUser == null) {
+                                busy = false
+                                message = "Google login succeeded but user details were unavailable."
+                            } else {
+                                val profile = hashMapOf(
+                                    "uid" to firebaseUser.uid,
+                                    "displayName" to (firebaseUser.displayName ?: account.displayName ?: "PPA Talk user"),
+                                    "email" to (firebaseUser.email ?: account.email.orEmpty()),
+                                    "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
+                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )
+                                FirebaseFirestore.getInstance().collection("users")
+                                    .document(firebaseUser.uid)
+                                    .set(profile, com.google.firebase.firestore.SetOptions.merge())
+                                    .addOnSuccessListener {
+                                        busy = false
+                                        onAuthenticated()
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        busy = false
+                                        message = exception.localizedMessage ?: "Could not save Google profile."
+                                    }
+                            }
+                        }
+                        .addOnFailureListener { exception ->
+                            busy = false
+                            message = exception.localizedMessage ?: "Google authentication failed."
+                        }
+                }
+            } catch (exception: ApiException) {
+                busy = false
+                message = exception.localizedMessage ?: "Google sign-in was cancelled or failed."
+            }
+        } else {
+            busy = false
+            message = "Google sign-in cancelled."
+        }
+    }
 
     val authFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = Color.White,
@@ -177,6 +245,17 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Login")
+        }
+        OutlinedButton(
+            onClick = {
+                message = ""
+                busy = true
+                googleSignInLauncher.launch(googleSignInClient.signInIntent)
+            },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (busy) "Please wait..." else "Continue with Google")
         }
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Login" else "New here? Create account")
