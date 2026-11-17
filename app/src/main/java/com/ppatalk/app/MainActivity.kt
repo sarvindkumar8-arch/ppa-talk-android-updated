@@ -48,19 +48,29 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PPATalkApp() {
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-    MaterialTheme(colorScheme = darkColorScheme(primary = ElectricBlue, secondary = Orange, tertiary = NeonCyan, background = DarkNavy, surface = SurfaceNavy, onPrimary = Color.White, onSecondary = Color.White, onBackground = Color.White, onSurface = Color.White)) {
-        if (user == null) {
-            AuthScreen(onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
-        } else {
-            MainSocialApp(
-                uid = user!!.uid,
-                email = user?.email.orEmpty(),
-                displayName = user?.displayName?.takeIf { it.isNotBlank() } ?: user?.email?.substringBefore("@").orEmpty(),
-                onSignOut = {
-                    FirebaseAuth.getInstance().signOut()
-                    user = null
-                }
-            )
+    MaterialTheme(colorScheme = darkColorScheme(
+        primary = ElectricBlue, onPrimary = Color.White,
+        secondary = Orange, onSecondary = Color.White,
+        tertiary = NeonCyan, onTertiary = DarkNavy,
+        background = DarkNavy, onBackground = Color.White,
+        surface = SurfaceNavy, onSurface = Color.White,
+        surfaceVariant = Color(0xFF1A3452), onSurfaceVariant = Color(0xFFD5E5F5),
+        outline = NeonCyan, error = Color(0xFFFF6B6B)
+    )) {
+        Surface(modifier = Modifier.fillMaxSize(), color = DarkNavy) {
+            if (user == null) {
+                AuthScreen(onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
+            } else {
+                MainSocialApp(
+                    uid = user!!.uid,
+                    email = user?.email.orEmpty(),
+                    displayName = user?.displayName?.takeIf { it.isNotBlank() } ?: user?.email?.substringBefore("@").orEmpty(),
+                    onSignOut = {
+                        FirebaseAuth.getInstance().signOut()
+                        user = null
+                    }
+                )
+            }
         }
     }
 }
@@ -181,8 +191,10 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
 fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: () -> Unit) {
     var selected by remember { mutableStateOf("Home") }
     Scaffold(
+        containerColor = DarkNavy,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceNavy, titleContentColor = ElectricBlue, actionIconContentColor = NeonCyan),
                 title = { Text("PPA Talk", color = ElectricBlue, fontWeight = FontWeight.Bold) },
                 actions = { IconButton(onClick = onSignOut) {
                     Icon(Icons.Default.Logout, contentDescription = "Sign out")
@@ -190,7 +202,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = SurfaceNavy, contentColor = NeonCyan) {
                 listOf(
                     "Home" to Icons.Default.Home,
                     "Search" to Icons.Default.Search,
@@ -202,7 +214,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
                         selected = selected == label,
                         onClick = { selected = label },
                         icon = { Icon(icon, contentDescription = label) },
-                        label = { Text(label) }
+                        label = { Text(label) },
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = NeonCyan, selectedTextColor = NeonCyan, indicatorColor = ElectricBlue.copy(alpha = 0.20f), unselectedIconColor = Color.LightGray, unselectedTextColor = Color.LightGray)
                     )
                 }
             }
@@ -269,7 +282,7 @@ fun HomeFeed(modifier: Modifier = Modifier) {
             item { Text("No posts yet. Be the first to share something!") }
         }
         items(posts, key = { it.id }) { post ->
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SurfaceNavy, contentColor = Color.White)) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue)
