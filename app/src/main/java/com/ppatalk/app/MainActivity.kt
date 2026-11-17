@@ -360,6 +360,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var displayName by remember { mutableStateOf(initialName) }
     var bio by remember { mutableStateOf("") }
     var dateOfBirth by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var hobby by remember { mutableStateOf("") }
     var school by remember { mutableStateOf("") }
@@ -382,6 +383,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     displayName = snapshot.getString("displayName") ?: initialName
                     bio = snapshot.getString("bio") ?: ""
                     dateOfBirth = snapshot.getString("dateOfBirth") ?: ""
+                    gender = snapshot.getString("gender") ?: ""
                     phoneNumber = snapshot.getString("phoneNumber") ?: ""
                     hobby = snapshot.getString("hobby") ?: ""
                     school = snapshot.getString("school") ?: ""
@@ -462,6 +464,34 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
             label = { Text("Date of birth") }, placeholder = { Text("DD/MM/YYYY") },
             modifier = Modifier.fillMaxWidth(), singleLine = true)
+        var genderMenuExpanded by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded = genderMenuExpanded,
+            onExpandedChange = { genderMenuExpanded = !genderMenuExpanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = gender,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Gender") },
+                placeholder = { Text("Select gender") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = genderMenuExpanded) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                singleLine = true
+            )
+            ExposedDropdownMenu(
+                expanded = genderMenuExpanded,
+                onDismissRequest = { genderMenuExpanded = false }
+            ) {
+                listOf("Male", "Female", "Other", "Prefer not to say").forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
+                        onClick = { gender = option; genderMenuExpanded = false }
+                    )
+                }
+            }
+        }
         OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it },
             label = { Text("Phone number") }, placeholder = { Text("Enter phone number") },
             modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -495,6 +525,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         "displayName" to cleanName,
                         "bio" to bio.trim(),
                         "dateOfBirth" to dateOfBirth.trim(),
+                        "gender" to gender,
                         "phoneNumber" to phoneNumber.trim(),
                         "hobby" to hobby.trim(),
                         "school" to school.trim(),
