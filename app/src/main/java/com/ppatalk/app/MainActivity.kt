@@ -43,6 +43,7 @@ import com.google.android.gms.common.api.ApiException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.functions.FirebaseFunctions
 import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
@@ -94,13 +95,16 @@ fun PPATalkApp() {
 @Composable
 fun AuthScreen(onAuthenticated: () -> Unit) {
     var isSignUp by remember { mutableStateOf(true) }
+    var usePhone by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var usePhoneLogin by remember { mutableStateOf(false) }
     var phoneNumber by remember { mutableStateOf("") }
     var countryCode by remember { mutableStateOf("+91") }
     var countryMenuExpanded by remember { mutableStateOf(false) }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val context = LocalContext.current
     val countryCodes = listOf(
         "India (+91)" to "+91", "United States (+1)" to "+1", "United Kingdom (+44)" to "+44",
         "United Arab Emirates (+971)" to "+971", "Canada (+1)" to "+1", "Australia (+61)" to "+61",
@@ -111,11 +115,6 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         "China (+86)" to "+86", "Qatar (+974)" to "+974", "Kuwait (+965)" to "+965",
         "Oman (+968)" to "+968"
     )
-    var otp by remember { mutableStateOf("") }
-    var verificationId by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
-    val context = LocalContext.current
     val googleSignInClient = remember(context) {
         val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -151,12 +150,8 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                 )
                                 FirebaseFirestore.getInstance().collection("users")
-                                    .document(firebaseUser.uid)
-                                    .set(profile, com.google.firebase.firestore.SetOptions.merge())
-                                    .addOnSuccessListener {
-                                        busy = false
-                                        onAuthenticated()
-                                    }
+                                    .document(firebaseUser.uid).set(profile, com.google.firebase.firestore.SetOptions.merge())
+                                    .addOnSuccessListener { busy = false; onAuthenticated() }
                                     .addOnFailureListener { exception ->
                                         busy = false
                                         message = exception.localizedMessage ?: "Could not save Google profile."
@@ -179,56 +174,49 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     }
 
     val authFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
+        focusedTextColor = Color(0xFF1C1E21),
+        unfocusedTextColor = Color(0xFF1C1E21),
         disabledTextColor = Color(0xFF65676B),
-        cursorColor = NeonCyan,
+        cursorColor = ElectricBlue,
         focusedBorderColor = ElectricBlue,
-        unfocusedBorderColor = NeonCyan,
-        focusedLabelColor = NeonCyan,
-        unfocusedLabelColor = Color.LightGray,
-        focusedContainerColor = SurfaceNavy,
-        unfocusedContainerColor = SurfaceNavy
+        unfocusedBorderColor = Color(0xFFCED0D4),
+        focusedLabelColor = ElectricBlue,
+        unfocusedLabelColor = Color(0xFF65676B),
+        focusedContainerColor = Color.White,
+        unfocusedContainerColor = Color.White
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding(),
+        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("PPA Talk", style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.ExtraBold, color = ElectricBlue)
         Text("Create. Connect. Share.", color = Orange)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
         Text(if (isSignUp) "Create your account" else "Welcome back",
             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
 
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
+                label = { Text("Email") }, modifier = Modifier.weight(1f))
+            FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
+                label = { Text("Mobile") }, modifier = Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(10.dp))
+
         if (isSignUp) {
-            OutlinedTextField(name, { name = it }, label = { Text("Full name") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true, colors = authFieldColors)
+            OutlinedTextField(
+                value = name, onValueChange = { name = it },
+                label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(),
+                singleLine = true, colors = authFieldColors
+            )
             Spacer(Modifier.height(8.dp))
         }
-        if (!isSignUp) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !usePhoneLogin, onClick = {
-                    usePhoneLogin = false; verificationId = null; otp = ""; message = ""
-                }, label = { Text("Email") })
-                FilterChip(selected = usePhoneLogin, onClick = {
-                    usePhoneLogin = true; verificationId = null; otp = ""; message = ""
-                }, label = { Text("Mobile") })
-            }
-        }
-        if (isSignUp || !usePhoneLogin) {
-            OutlinedTextField(email, { email = it }, label = { Text("Email address") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), colors = authFieldColors)
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(password, { password = it }, label = { Text("Password") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
-        } else {
+
+        if (usePhone) {
             ExposedDropdownMenuBox(
                 expanded = countryMenuExpanded,
                 onExpandedChange = { countryMenuExpanded = !countryMenuExpanded },
@@ -236,182 +224,181 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             ) {
                 OutlinedTextField(
                     value = countryCodes.firstOrNull { it.second == countryCode }?.first ?: "Country code ($countryCode)",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Country code") },
+                    onValueChange = {}, readOnly = true, label = { Text("Country code") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryMenuExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    singleLine = true,
-                    colors = authFieldColors
+                    modifier = Modifier.menuAnchor().fillMaxWidth(), singleLine = true, colors = authFieldColors
                 )
-                ExposedDropdownMenu(
-                    expanded = countryMenuExpanded,
-                    onDismissRequest = { countryMenuExpanded = false }
-                ) {
+                ExposedDropdownMenu(expanded = countryMenuExpanded,
+                    onDismissRequest = { countryMenuExpanded = false }) {
                     countryCodes.forEach { (country, code) ->
-                        DropdownMenuItem(
-                            text = { Text(country) },
-                            onClick = { countryCode = code; countryMenuExpanded = false }
-                        )
+                        DropdownMenuItem(text = { Text(country) },
+                            onClick = { countryCode = code; countryMenuExpanded = false })
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(phoneNumber, { phoneNumber = it.filter(Char::isDigit) }, label = { Text("Mobile number") },
-                placeholder = { Text("Enter mobile number") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors)
-            if (verificationId != null) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(otp, { otp = it.filter(Char::isDigit).take(6) }, label = { Text("6-digit OTP") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors)
-            }
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it.filter(Char::isDigit).take(14) },
+                label = { Text("Mobile number") }, placeholder = { Text("Enter mobile number") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors
+            )
+        } else {
+            OutlinedTextField(
+                value = email, onValueChange = { email = it.trim() },
+                label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(),
+                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                colors = authFieldColors
+            )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = password, onValueChange = { password = it },
+            label = { Text("Password") },
+            placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            colors = authFieldColors
+        )
+        Spacer(Modifier.height(14.dp))
 
         Button(
             onClick = {
                 message = ""
                 val auth = FirebaseAuth.getInstance()
-                if (isSignUp && (email.isBlank() || password.length < 6 || name.isBlank())) {
-                    message = "Enter valid name, email and password (minimum 6 characters)."
+                if (password.length < 8) {
+                    message = "Password must be at least 8 characters."
                     return@Button
                 }
-                if (!isSignUp && usePhoneLogin && verificationId == null) {
-                    val fullPhoneNumber = countryCode + phoneNumber.filter(Char::isDigit)
-                    if (phoneNumber.filter(Char::isDigit).length !in 6..14 ||
-                        !fullPhoneNumber.matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
-                        message = "Enter a valid mobile number for the selected country."
-                        return@Button
-                    }
-                    val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-                        override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
-                            auth.signInWithCredential(credential)
-                                .addOnSuccessListener { busy = false; onAuthenticated() }
-                                .addOnFailureListener { exception -> busy = false; message = exception.localizedMessage ?: "Mobile login failed." }
-                        }
-                        override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
-                            busy = false
-                            message = exception.localizedMessage ?: "Could not send OTP. Check Firebase Phone sign-in setup."
-                        }
-                        override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
-                            verificationId = id
-                            busy = false
-                            message = "OTP sent. Enter the 6-digit code received on your mobile."
-                        }
-                    }
-                    busy = true
-                    val options = PhoneAuthOptions.newBuilder(auth)
-                        .setPhoneNumber(fullPhoneNumber)
-                        .setTimeout(60L, TimeUnit.SECONDS)
-                        .setActivity(context as Activity)
-                        .setCallbacks(callbacks)
-                        .build()
-                    PhoneAuthProvider.verifyPhoneNumber(options)
+                if (isSignUp && name.isBlank()) {
+                    message = "Enter your full name."
                     return@Button
                 }
-                if (!isSignUp && usePhoneLogin && verificationId != null) {
-                    if (otp.length != 6) {
-                        message = "Enter the 6-digit OTP."
+                if (usePhone) {
+                    val fullPhone = countryCode + phoneNumber.filter(Char::isDigit)
+                    if (!fullPhone.matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
+                        message = "Enter a valid mobile number."
                         return@Button
                     }
                     busy = true
-                    val credential = PhoneAuthProvider.getCredential(verificationId!!, otp)
-                    auth.signInWithCredential(credential)
-                        .addOnSuccessListener { busy = false; onAuthenticated() }
-                        .addOnFailureListener { exception -> busy = false; message = exception.localizedMessage ?: "Invalid OTP. Try again." }
-                    return@Button
-                }
-                if (!isSignUp && !usePhoneLogin && (email.isBlank() || password.length < 6)) {
-                    message = "Enter a valid email and password (minimum 6 characters)."
-                    return@Button
-                }
-                busy = true
-                if (isSignUp) {
-                    auth.createUserWithEmailAndPassword(email.trim(), password)
+                    val functionName = if (isSignUp) "registerWithPhonePassword" else "loginWithPhonePassword"
+                    val payload = if (isSignUp) {
+                        hashMapOf("phoneNumber" to fullPhone, "password" to password, "displayName" to name.trim())
+                    } else {
+                        hashMapOf("phoneNumber" to fullPhone, "password" to password)
+                    }
+                    FirebaseFunctions.getInstance("asia-south1").getHttpsCallable(functionName).call(payload)
                         .addOnSuccessListener { result ->
-                            val firebaseUser = result.user
-                            val profileName = name.trim()
-                            firebaseUser?.updateProfile(
-                                com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                                    .setDisplayName(profileName).build()
-                            )?.addOnCompleteListener {
-                                if (firebaseUser != null) {
-                                    val profile = hashMapOf(
-                                        "uid" to firebaseUser.uid,
-                                        "displayName" to profileName,
-                                        "email" to email.trim(),
-                                        "visibility" to "public",
-                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                    )
-                                    FirebaseFirestore.getInstance().collection("users")
-                                        .document(firebaseUser.uid).set(profile)
-                                        .addOnCompleteListener { task ->
-                                            busy = false
-                                            if (task.isSuccessful) onAuthenticated()
-                                            else message = task.exception?.localizedMessage ?: "Profile setup failed."
-                                        }
-                                } else {
-                                    busy = false
-                                    message = "Account created, but profile setup failed."
-                                }
+                            val data = result.data as? Map<*, *>
+                            val token = data?.get("token") as? String
+                            if (token.isNullOrBlank()) {
+                                busy = false
+                                message = "Authentication server returned an invalid response."
+                            } else {
+                                auth.signInWithCustomToken(token)
+                                    .addOnSuccessListener { busy = false; onAuthenticated() }
+                                    .addOnFailureListener { exception ->
+                                        busy = false
+                                        message = exception.localizedMessage ?: "Mobile login failed."
+                                    }
                             }
                         }
-                        .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Sign up failed." }
+                        .addOnFailureListener { exception ->
+                            busy = false
+                            message = exception.localizedMessage ?: "Mobile authentication failed. Check backend setup."
+                        }
                 } else {
-                    auth.signInWithEmailAndPassword(email.trim(), password)
-                        .addOnSuccessListener { busy = false; onAuthenticated() }
-                        .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                        message = "Enter a valid email address."
+                        return@Button
+                    }
+                    busy = true
+                    if (isSignUp) {
+                        auth.createUserWithEmailAndPassword(email.trim(), password)
+                            .addOnSuccessListener { result ->
+                                val firebaseUser = result.user
+                                val profileName = name.trim()
+                                firebaseUser?.updateProfile(
+                                    com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                        .setDisplayName(profileName).build()
+                                )?.addOnCompleteListener {
+                                    if (firebaseUser != null) {
+                                        val profile = hashMapOf(
+                                            "uid" to firebaseUser.uid,
+                                            "displayName" to profileName,
+                                            "email" to email.trim(),
+                                            "visibility" to "public",
+                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        )
+                                        FirebaseFirestore.getInstance().collection("users")
+                                            .document(firebaseUser.uid).set(profile)
+                                            .addOnCompleteListener { task ->
+                                                busy = false
+                                                if (task.isSuccessful) onAuthenticated()
+                                                else message = task.exception?.localizedMessage ?: "Profile setup failed."
+                                            }
+                                    } else {
+                                        busy = false
+                                        message = "Account created, but profile setup failed."
+                                    }
+                                }
+                            }
+                            .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Sign up failed." }
+                    } else {
+                        auth.signInWithEmailAndPassword(email.trim(), password)
+                            .addOnSuccessListener { busy = false; onAuthenticated() }
+                            .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
+                    }
                 }
             },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else if (usePhoneLogin && verificationId != null) "Verify OTP" else if (usePhoneLogin) "Send OTP" else "Login")
+            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Login")
         }
+
         OutlinedButton(
             onClick = {
                 message = ""
                 busy = true
                 googleSignInLauncher.launch(googleSignInClient.signInIntent)
             },
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (busy) "Please wait..." else "Continue with Google")
-        }
+            enabled = !busy, modifier = Modifier.fillMaxWidth()
+        ) { Text(if (busy) "Please wait..." else "Continue with Google") }
+
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Login" else "New here? Create account")
         }
-        if (!isSignUp && !usePhoneLogin) {
+        if (!isSignUp && !usePhone) {
             TextButton(
                 enabled = !busy,
                 onClick = {
                     message = ""
-                    if (email.isBlank()) {
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                         message = "Enter your email address first."
                     } else {
                         busy = true
-                        FirebaseAuth.getInstance().sendPasswordResetEmail(email.trim())
-                            .addOnSuccessListener {
-                                busy = false
-                                message = "Password reset link sent to your email. Check your inbox and spam folder."
-                            }
-                            .addOnFailureListener { exception ->
-                                busy = false
-                                message = exception.localizedMessage ?: "Could not send password reset email."
-                            }
+                        authSendPasswordReset(email.trim()) { success, detail ->
+                            busy = false
+                            message = detail
+                        }
                     }
                 }
-            ) {
-                Text("Forgot password?")
-            }
+            ) { Text("Forgot password?") }
         }
-        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) NeonCyan else MaterialTheme.colorScheme.error)
+        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) ElectricBlue else MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
         Text("Public community • Be respectful and stay safe",
             style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
+}
+
+private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> Unit) {
+    FirebaseAuth.getInstance().sendPasswordResetEmail(email)
+        .addOnSuccessListener { onResult(true, "Password reset link sent to your email. Check your inbox and spam folder.") }
+        .addOnFailureListener { exception -> onResult(false, exception.localizedMessage ?: "Could not send password reset email.") }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
