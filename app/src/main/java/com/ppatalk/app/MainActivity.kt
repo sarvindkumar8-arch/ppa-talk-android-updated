@@ -418,19 +418,33 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
         containerColor = DarkNavy,
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceNavy, titleContentColor = ElectricBlue, actionIconContentColor = NeonCyan),
-                title = { Text("PPA Talk", color = ElectricBlue, fontWeight = FontWeight.Bold) },
-                actions = { IconButton(onClick = onSignOut) {
-                    Icon(Icons.Default.Logout, contentDescription = "Sign out")
-                } }
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = SurfaceNavy,
+                    titleContentColor = ElectricBlue,
+                    actionIconContentColor = NeonCyan
+                ),
+                title = {
+                    Column {
+                        Text("PPA Talk", color = ElectricBlue, fontWeight = FontWeight.ExtraBold)
+                        Text("Create. Connect. Share.", color = Orange, style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { selected = "Search" }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
+                    IconButton(onClick = onSignOut) {
+                        Icon(Icons.Default.Logout, contentDescription = "Sign out")
+                    }
+                }
             )
         },
         bottomBar = {
             NavigationBar(containerColor = SurfaceNavy, contentColor = NeonCyan) {
                 listOf(
                     "Home" to Icons.Default.Home,
-                    "Search" to Icons.Default.Search,
-                    "Create" to Icons.Default.AddCircle,
+                    "Friends" to Icons.Default.PeopleAlt,
+                    "Reels" to Icons.Default.PlayCircle,
                     "Notifications" to Icons.Default.Notifications,
                     "Profile" to Icons.Default.Person
                 ).forEach { (label, icon) ->
@@ -438,18 +452,26 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
                         selected = selected == label,
                         onClick = { selected = label },
                         icon = { Icon(icon, contentDescription = label) },
-                        label = { Text(label) },
-                        colors = NavigationBarItemDefaults.colors(selectedIconColor = NeonCyan, selectedTextColor = NeonCyan, indicatorColor = ElectricBlue.copy(alpha = 0.20f), unselectedIconColor = Color.LightGray, unselectedTextColor = Color.LightGray)
+                        label = { Text(label, maxLines = 1) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = NeonCyan,
+                            selectedTextColor = NeonCyan,
+                            indicatorColor = ElectricBlue.copy(alpha = 0.20f),
+                            unselectedIconColor = Color.LightGray,
+                            unselectedTextColor = Color.LightGray
+                        )
                     )
                 }
             }
         }
     ) { padding ->
         when (selected) {
-            "Home" -> HomeFeed(uid, Modifier.padding(padding))
+            "Home" -> HomeFeed(uid, Modifier.padding(padding)) { selected = "Create" }
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
-            "Search" -> SimplePage("Discover", "Find people and public posts", Modifier.padding(padding))
+            "Search" -> SimplePage("Search", "Find people and public posts", Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
+            "Friends" -> SimplePage("Friends", "Friend requests and your friends will appear here.", Modifier.padding(padding))
+            "Reels" -> SimplePage("Reels", "Short videos from the PPA Talk community.", Modifier.padding(padding))
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
     }
@@ -459,7 +481,7 @@ data class FeedPost(val id: String, val uid: String, val authorName: String, val
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
 
 @Composable
-fun HomeFeed(currentUid: String, modifier: Modifier = Modifier) {
+fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: () -> Unit = {}) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
@@ -486,8 +508,17 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier) {
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Your Feed", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ElectricBlue)
-            Text("Latest public posts from the PPA Talk community", color = Color.Gray)
+            HomeComposerCard(onCreatePost = onCreatePost)
+        }
+        item {
+            StoriesStrip()
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ElectricBlue)
+                Spacer(Modifier.weight(1f))
+                Text("For You", color = NeonCyan, style = MaterialTheme.typography.labelMedium)
+            }
         }
         if (loading) item { CircularProgressIndicator() }
         if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
@@ -497,6 +528,85 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier) {
         }
     }
     selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
+}
+
+
+@Composable
+fun HomeComposerCard(onCreatePost: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SurfaceNavy)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue, modifier = Modifier.size(38.dp))
+                Spacer(Modifier.width(10.dp))
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                    color = DarkNavy,
+                    onClick = onCreatePost
+                ) {
+                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = Color.LightGray)
+                }
+            }
+            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TextButton(onClick = onCreatePost) {
+                    Icon(Icons.Default.Photo, contentDescription = null, tint = NeonCyan)
+                    Spacer(Modifier.width(5.dp))
+                    Text("Photo")
+                }
+                TextButton(onClick = onCreatePost) {
+                    Icon(Icons.Default.VideoCall, contentDescription = null, tint = Orange)
+                    Spacer(Modifier.width(5.dp))
+                    Text("Video")
+                }
+                TextButton(onClick = onCreatePost) {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = ElectricBlue)
+                    Spacer(Modifier.width(5.dp))
+                    Text("Write")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StoriesStrip() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Card(
+                modifier = Modifier.weight(1f).height(104.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfaceNavy)
+            ) {
+                Column(
+                    Modifier.fillMaxSize().padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Default.AddCircle, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(32.dp))
+                    Text("Create story", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+            listOf("Friends", "Community", "Explore").forEachIndexed { index, title ->
+                Card(
+                    modifier = Modifier.weight(1f).height(104.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = listOf(ElectricBlue.copy(alpha = 0.28f), Orange.copy(alpha = 0.24f), NeonCyan.copy(alpha = 0.18f))[index]
+                    )
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+                        Text(title, modifier = Modifier.padding(8.dp), color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
