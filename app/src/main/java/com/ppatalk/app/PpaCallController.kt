@@ -15,7 +15,8 @@ class PpaCallController(
     private val uid: String,
     private val friendUid: String,
     private val onStatus: (String) -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val onRemoteCallEnded: () -> Unit = {}
 ) {
     private val db = FirebaseFirestore.getInstance()
     private val egl = EglBase.create()
@@ -255,8 +256,14 @@ class PpaCallController(
                         }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
                     }
                 }
-                "rejected" -> onStatus("Call declined")
-                "ended", "missed" -> onStatus("Call ended")
+                "rejected" -> {
+                    onStatus("Call declined")
+                    onRemoteCallEnded()
+                }
+                "ended", "missed" -> {
+                    onStatus("Call ended")
+                    onRemoteCallEnded()
+                }
                 "ringing" -> if (caller) onStatus("Calling…")
             }
         }
@@ -343,6 +350,22 @@ class PpaCallController(
                 track.addSink(renderer)
             }
         }
+    }
+
+    fun switchCamera() {
+        val capturer = cameraCapturer
+        if (capturer == null || released) {
+            onError("Camera switch is not available.")
+            return
+        }
+        capturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
+            override fun onCameraSwitchDone(isFrontCamera: Boolean) {
+                onStatus(if (isFrontCamera) "Front camera" else "Back camera")
+            }
+            override fun onCameraSwitchError(errorDescription: String?) {
+                onError(errorDescription ?: "Could not switch camera.")
+            }
+        })
     }
 
     fun setMuted(value: Boolean) {
