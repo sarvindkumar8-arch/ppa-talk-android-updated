@@ -421,36 +421,51 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var selected by remember { mutableStateOf("Home") }
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
+    var menuExpanded by remember { mutableStateOf(false) }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = RoyalBlue,
-                    actionIconContentColor = RoyalBlue
-                ),
-                title = {
-                    Column {
-                        Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold)
-                        Text("Create. Connect. Share.", color = Orange, style = MaterialTheme.typography.labelSmall)
+            Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = RoyalBlue,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    title = {
+                        Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.headlineSmall)
+                    },
+                    actions = {
+                        IconButton(onClick = { selected = "Search" }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search",
+                                modifier = Modifier.size(27.dp))
+                        }
+                        IconButton(onClick = { selected = "Friends" }) {
+                            Icon(Icons.Default.Chat, contentDescription = "Messenger",
+                                modifier = Modifier.size(25.dp))
+                        }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                DropdownMenuItem(text = { Text("Settings") },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = { menuExpanded = false; selected = "Settings" })
+                                DropdownMenuItem(text = { Text("Log out") },
+                                    leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
+                                    onClick = { menuExpanded = false; onSignOut() })
+                            }
+                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = { selected = "Search" }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
-                    IconButton(onClick = { selected = "Settings" }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                    IconButton(onClick = onSignOut) {
-                        Icon(Icons.Default.Logout, contentDescription = "Sign out")
-                    }
-                }
-            )
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+            }
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, contentColor = RoyalBlue) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, contentColor = RoyalBlue,
+                tonalElevation = 3.dp) {
                 listOf(
                     "Home" to Icons.Default.Home,
                     "Friends" to Icons.Default.PeopleAlt,
@@ -461,12 +476,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     NavigationBarItem(
                         selected = selected == label,
                         onClick = { selected = label },
-                        icon = { Icon(icon, contentDescription = label) },
-                        label = { Text(label, maxLines = 1) },
+                        icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(25.dp)) },
+                        label = { Text(label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = RoyalBlue,
                             selectedTextColor = RoyalBlue,
-                            indicatorColor = RoyalBlue.copy(alpha = 0.20f),
+                            indicatorColor = RoyalBlue.copy(alpha = 0.14f),
                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -523,7 +538,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
             }
         onDispose { registration.remove() }
     }
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         item {
             HomeComposerCard(onCreatePost = onCreatePost)
         }
@@ -554,7 +569,7 @@ fun HomeComposerCard(onCreatePost: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(38.dp))
                 Spacer(Modifier.width(10.dp))
