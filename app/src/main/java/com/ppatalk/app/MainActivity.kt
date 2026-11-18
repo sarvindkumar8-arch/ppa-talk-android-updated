@@ -97,7 +97,8 @@ fun PPATalkApp() {
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
-    var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
+    var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser?.takeIf { it.phoneNumber != null || it.isEmailVerified }) }
+    LaunchedEffect(Unit) { if (FirebaseAuth.getInstance().currentUser != null && user == null) FirebaseAuth.getInstance().signOut() }
     val lightColors = lightColorScheme(
         primary = RoyalBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
@@ -137,6 +138,36 @@ fun PPATalkApp() {
     }
 }
 
+
+private fun finishPhoneSignup(
+    auth: FirebaseAuth,
+    credential: com.google.firebase.auth.PhoneAuthCredential,
+    phoneNumber: String,
+    password: String,
+    displayName: String,
+    onResult: (Boolean, String) -> Unit
+) {
+    auth.signInWithCredential(credential)
+        .addOnSuccessListener {
+            val payload = hashMapOf(
+                "phoneNumber" to phoneNumber,
+                "password" to password,
+                "displayName" to displayName
+            )
+            FirebaseFunctions.getInstance("asia-south1")
+                .getHttpsCallable("registerWithPhonePassword").call(payload)
+                .addOnSuccessListener { result ->
+                    val token = (result.getData() as? Map<*, *>)?.get("token") as? String
+                    if (token.isNullOrBlank()) onResult(false, "Authentication server returned an invalid response.")
+                    else auth.signInWithCustomToken(token)
+                        .addOnSuccessListener { onResult(true, "") }
+                        .addOnFailureListener { onResult(false, it.localizedMessage ?: "Mobile account sign-in failed.") }
+                }
+                .addOnFailureListener { onResult(false, it.localizedMessage ?: "Mobile account registration failed.") }
+        }
+        .addOnFailureListener { onResult(false, it.localizedMessage ?: "OTP verification failed.") }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(onAuthenticated: () -> Unit) {
@@ -150,6 +181,10 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var phoneVerificationId by remember { mutableStateOf<String?>(null) }
+    var phoneOtp by remember { mutableStateOf("") }
+    var phoneOtpSent by remember { mutableStateOf(false) }
+    var phoneResendToken by remember { mutableStateOf<PhoneAuthProvider.ForceResendingToken?>(null) }
     val context = LocalContext.current
     val countryCodes = listOf(
         "India (+91)" to "+91", "United States (+1)" to "+1", "United Kingdom (+44)" to "+44",
@@ -307,6 +342,15 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             )
         }
         Spacer(Modifier.height(8.dp))
+        if (usePhone && isSignUp && phoneOtpSent) {
+            Spacer(Modifier.height(8.dp))
+            Text("Enter the 6-digit SMS code sent to your mobile number", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(
+                value = phoneOtp, onValueChange = { phoneOtp = it.filter(Char::isDigit).take(6) },
+                label = { Text("SMS OTP") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors
+            )
+        }
         OutlinedTextField(
             value = password, onValueChange = { password = it },
             label = { Text("Password") },
@@ -336,33 +380,76 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         message = "Enter a valid mobile number."
                         return@Button
                     }
-                    busy = true
-                    val functionName = if (isSignUp) "registerWithPhonePassword" else "loginWithPhonePassword"
-                    val payload = if (isSignUp) {
-                        hashMapOf("phoneNumber" to fullPhone, "password" to password, "displayName" to name.trim())
-                    } else {
-                        hashMapOf("phoneNumber" to fullPhone, "password" to password)
-                    }
-                    FirebaseFunctions.getInstance("asia-south1").getHttpsCallable(functionName).call(payload)
-                        .addOnSuccessListener { result ->
-                            val data = result.getData() as? Map<*, *>
-                            val token = data?.get("token") as? String
-                            if (token.isNullOrBlank()) {
-                                busy = false
-                                message = "Authentication server returned an invalid response."
-                            } else {
-                                auth.signInWithCustomToken(token)
-                                    .addOnSuccessListener { busy = false; onAuthenticated() }
-                                    .addOnFailureListener { exception ->
-                                        busy = false
-                                        message = exception.localizedMessage ?: "Mobile login failed."
-                                    }
+                    if (isSignUp) {
+                        if (phoneOtpSent) {
+                            if (phoneOtp.length != 6 || phoneVerificationId.isNullOrBlank()) {
+                                message = "Enter the 6-digit SMS OTP."
+                                return@Button
                             }
+                            busy = true
+                            val credential = PhoneAuthProvider.getCredential(phoneVerificationId!!, phoneOtp)
+                            finishPhoneSignup(auth, credential, fullPhone, password, name.trim()) { success, detail ->
+                                busy = false
+                                if (success) onAuthenticated() else message = detail
+                            }
+                        } else {
+                            val activity = context as? Activity
+                            if (activity == null) {
+                                message = "Unable to start phone verification on this screen."
+                                return@Button
+                            }
+                            busy = true
+                            val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                                override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                                    finishPhoneSignup(auth, credential, fullPhone, password, name.trim()) { success, detail ->
+                                        busy = false
+                                        if (success) onAuthenticated() else message = detail
+                                    }
+                                }
+                                override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
+                                    busy = false
+                                    message = exception.localizedMessage ?: "Could not send SMS OTP. Check Firebase Phone Auth setup."
+                                }
+                                override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                                    phoneVerificationId = id
+                                    phoneResendToken = token
+                                    phoneOtpSent = true
+                                    busy = false
+                                    message = "OTP sent. Please verify your mobile number."
+                                }
+                            }
+                            val optionsBuilder = PhoneAuthOptions.newBuilder(auth)
+                                .setPhoneNumber(fullPhone)
+                                .setTimeout(60L, TimeUnit.SECONDS)
+                                .setActivity(activity)
+                                .setCallbacks(callbacks)
+                            phoneResendToken?.let { optionsBuilder.setForceResendingToken(it) }
+                            PhoneAuthProvider.verifyPhoneNumber(optionsBuilder.build())
                         }
-                        .addOnFailureListener { exception ->
-                            busy = false
-                            message = exception.localizedMessage ?: "Mobile authentication failed. Check backend setup."
-                        }
+                    } else {
+                        busy = true
+                        val payload = hashMapOf("phoneNumber" to fullPhone, "password" to password)
+                        FirebaseFunctions.getInstance("asia-south1").getHttpsCallable("loginWithPhonePassword").call(payload)
+                            .addOnSuccessListener { result ->
+                                val data = result.getData() as? Map<*, *>
+                                val token = data?.get("token") as? String
+                                if (token.isNullOrBlank()) {
+                                    busy = false
+                                    message = "Authentication server returned an invalid response."
+                                } else {
+                                    auth.signInWithCustomToken(token)
+                                        .addOnSuccessListener { busy = false; onAuthenticated() }
+                                        .addOnFailureListener { exception ->
+                                            busy = false
+                                            message = exception.localizedMessage ?: "Mobile login failed."
+                                        }
+                                }
+                            }
+                            .addOnFailureListener { exception ->
+                                busy = false
+                                message = exception.localizedMessage ?: "Mobile authentication failed. Check backend setup."
+                            }
+                    }
                 } else {
                     if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                         message = "Enter a valid email address."
@@ -379,22 +466,17 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                         .setDisplayName(profileName).build()
                                 )?.addOnCompleteListener {
                                     if (firebaseUser != null) {
-                                        val db = FirebaseFirestore.getInstance()
-                                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        val batch = db.batch()
-                                        batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
-                                            "uid" to firebaseUser.uid, "email" to email.trim(),
-                                            "createdAt" to timestamp
-                                        ))
-                                        batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
-                                            "uid" to firebaseUser.uid, "displayName" to profileName,
-                                            "createdAt" to timestamp
-                                        ))
-                                        batch.commit().addOnCompleteListener { task ->
-                                            busy = false
-                                            if (task.isSuccessful) onAuthenticated()
-                                            else message = task.exception?.localizedMessage ?: "Profile setup failed."
-                                        }
+                                        firebaseUser.sendEmailVerification()
+                                            .addOnSuccessListener {
+                                                auth.signOut()
+                                                busy = false
+                                                message = "Verification email sent. Open the link in your inbox, then sign in."
+                                            }
+                                            .addOnFailureListener { exception ->
+                                                auth.signOut()
+                                                busy = false
+                                                message = exception.localizedMessage ?: "Could not send verification email. Try signing in to resend."
+                                            }
                                     } else {
                                         busy = false
                                         message = "Account created, but profile setup failed."
@@ -409,6 +491,13 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                 if (signedInUser == null) {
                                     busy = false
                                     message = "Login succeeded but account details were unavailable."
+                                } else if (!signedInUser.isEmailVerified) {
+                                    signedInUser.sendEmailVerification()
+                                        .addOnCompleteListener {
+                                            auth.signOut()
+                                            busy = false
+                                            message = "Please verify your email first. A fresh verification link has been sent."
+                                        }
                                 } else {
                                     val db = FirebaseFirestore.getInstance()
                                     val profileName = signedInUser.displayName?.takeIf { it.isNotBlank() }
