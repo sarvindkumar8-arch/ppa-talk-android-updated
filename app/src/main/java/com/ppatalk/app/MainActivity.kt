@@ -2252,15 +2252,25 @@ fun FriendsScreen(
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text(screenTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
+            Column(Modifier.weight(1f)) {
+                Text("Friends", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                Text("${friends.size} friends • ${onlineFriends.intersect(friends.map { it.uid }.toSet()).size} active now",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = { search = "" }) { Icon(Icons.Default.PersonAddAlt1, contentDescription = "Find friends") }
         }
         OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
-            singleLine = true, label = { Text("Search people by name") },
+            singleLine = true, shape = CircleShape, label = { Text("Search friends") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
-        if (status.isNotBlank()) Text(status, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = search.isBlank(), onClick = { search = "" }, label = { Text("All friends") })
+            FilterChip(selected = search == "__online__", onClick = { search = "__online__" }, label = { Text("Online") })
+            FilterChip(selected = search == "__requests__", onClick = { search = "__requests__" }, label = { Text("Requests ${requests.size}") })
+        }
+        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         Text("Friend requests (${requests.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (requests.isEmpty()) Text("No new friend requests.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        requests.forEach { request ->
+        if (requests.isEmpty() && search != "__requests__") Text("No new friend requests.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (search.isBlank() || search == "__requests__") requests.forEach { request ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { onOpenProfile(request["fromUid"].orEmpty()) },
@@ -2294,9 +2304,12 @@ fun FriendsScreen(
                 }
             }
         }
-        Text("Your friends (${friends.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (friends.isEmpty()) Text("Your accepted friends will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        friends.forEach { friend ->
+        if (search != "__requests__") Text("Your friends (${friends.size})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        if (friends.isEmpty() && search != "__requests__") Text("Your accepted friends will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        friends.filter { friend ->
+            (search != "__online__" || friend.uid in onlineFriends) &&
+            (search.isBlank() || search == "__online__" || friend.name.contains(search, true))
+        }.forEach { friend ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(48.dp)) {
