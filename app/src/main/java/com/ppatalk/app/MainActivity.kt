@@ -115,6 +115,9 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var countryCode by remember { mutableStateOf("+91") }
     var countryMenuExpanded by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
+    var otpCode by remember { mutableStateOf("") }
+    var verificationId by remember { mutableStateOf<String?>(null) }
+    var otpRequested by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -221,9 +224,9 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
+            FilterChip(selected = !usePhone, onClick = { usePhone = false; otpRequested = false; verificationId = null; message = "" },
                 label = { Text("Email") }, modifier = Modifier.weight(1f))
-            FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
+            FilterChip(selected = usePhone, onClick = { usePhone = true; otpRequested = false; verificationId = null; message = "" },
                 label = { Text("Mobile") }, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
@@ -273,23 +276,30 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 colors = authFieldColors
             )
         }
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password, onValueChange = { password = it },
-            label = { Text("Password") },
-            placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            colors = authFieldColors
-        )
+        if (usePhone && otpRequested) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = otpCode, onValueChange = { otpCode = it.filter(Char::isDigit).take(6) },
+                label = { Text("SMS verification code") }, placeholder = { Text("Enter 6-digit OTP") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors)
+            Text("We sent a verification code to $countryCode$phoneNumber",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else if (!usePhone) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = password, onValueChange = { password = it },
+                label = { Text("Password") },
+                placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
+        }
         Spacer(Modifier.height(14.dp))
 
         Button(
             onClick = {
                 message = ""
                 val auth = FirebaseAuth.getInstance()
-                if (password.length < 8) {
+                if (!usePhone && password.length < 8) {
                     message = "Password must be at least 8 characters."
                     return@Button
                 }
@@ -303,33 +313,103 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         message = "Enter a valid mobile number."
                         return@Button
                     }
-                    busy = true
-                    val functionName = if (isSignUp) "registerWithPhonePassword" else "loginWithPhonePassword"
-                    val payload = if (isSignUp) {
-                        hashMapOf("phoneNumber" to fullPhone, "password" to password, "displayName" to name.trim())
-                    } else {
-                        hashMapOf("phoneNumber" to fullPhone, "password" to password)
-                    }
-                    FirebaseFunctions.getInstance("asia-south1").getHttpsCallable(functionName).call(payload)
-                        .addOnSuccessListener { result ->
-                            val data = result.getData() as? Map<*, *>
-                            val token = data?.get("token") as? String
-                            if (token.isNullOrBlank()) {
+                    if (!otpRequested) {
+                        busy = true
+                        val activity = context as? Activity
+                        if (activity == null) {
+                            busy = false
+                            message = "Phone verification is not available on this screen."
+                            return@Button
+                        }
+                        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                            override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                                verificationId = credential.verificationId
+                                otpCode = credential.smsCode.orEmpty()
+                                otpRequested = true
                                 busy = false
-                                message = "Authentication server returned an invalid response."
-                            } else {
-                                auth.signInWithCustomToken(token)
-                                    .addOnSuccessListener { busy = false; onAuthenticated() }
-                                    .addOnFailureListener { exception ->
-                                        busy = false
-                                        message = exception.localizedMessage ?: "Mobile login failed."
-                                    }
+                                message = "Code received. Tap Verify OTP to continue."
+                            }
+                            override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
+                                busy = false
+                                message = exception.localizedMessage ?: "Could not send OTP. Check Firebase Phone sign-in settings."
+                            }
+                            override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                                verificationId = id
+                                otpRequested = true
+                                busy = false
+                                message = "OTP sent. Please check your SMS."
+                            }
+                            override fun onCodeAutoRetrievalTimeOut(id: String) {
+                                verificationId = id
+                                otpRequested = true
+                                busy = false
+                                message = "Enter the OTP from your SMS."
                             }
                         }
-                        .addOnFailureListener { exception ->
-                            busy = false
-                            message = exception.localizedMessage ?: "Mobile authentication failed. Check backend setup."
+                        val options = PhoneAuthOptions.newBuilder(auth)
+                            .setPhoneNumber(fullPhone)
+                            .setTimeout(60L, TimeUnit.SECONDS)
+                            .setActivity(activity)
+                            .setCallbacks(callbacks)
+                            .build()
+                        PhoneAuthProvider.verifyPhoneNumber(options)
+                    } else {
+                        val id = verificationId
+                        if (id.isNullOrBlank() || otpCode.length != 6) {
+                            message = "Enter the 6-digit OTP sent to your mobile."
+                            return@Button
                         }
+                        busy = true
+                        val credential = PhoneAuthProvider.getCredential(id, otpCode)
+                        auth.signInWithCredential(credential)
+                            .addOnSuccessListener { result ->
+                                val firebaseUser = result.user
+                                if (firebaseUser == null) {
+                                    busy = false
+                                    message = "Phone verified, but account details were unavailable."
+                                } else if (isSignUp && result.additionalUserInfo?.isNewUser == false) {
+                                    auth.signOut()
+                                    busy = false
+                                    message = "This mobile number is already registered. Please Sign In."
+                                } else if (!isSignUp && result.additionalUserInfo?.isNewUser == true) {
+                                    firebaseUser.delete().addOnCompleteListener {
+                                        auth.signOut()
+                                        busy = false
+                                        message = "No account found for this number. Please Create account."
+                                    }
+                                } else {
+                                    val profileName = if (isSignUp) name.trim()
+                                        else firebaseUser.displayName?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                                    firebaseUser.updateProfile(
+                                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                            .setDisplayName(profileName).build()
+                                    ).addOnCompleteListener {
+                                        val db = FirebaseFirestore.getInstance()
+                                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        val batch = db.batch()
+                                        batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
+                                            "uid" to firebaseUser.uid,
+                                            "phoneNumber" to (firebaseUser.phoneNumber ?: fullPhone),
+                                            "createdAt" to timestamp,
+                                            "updatedAt" to timestamp
+                                        ), com.google.firebase.firestore.SetOptions.merge())
+                                        batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
+                                            "uid" to firebaseUser.uid, "displayName" to profileName,
+                                            "updatedAt" to timestamp
+                                        ), com.google.firebase.firestore.SetOptions.merge())
+                                        batch.commit().addOnCompleteListener { task ->
+                                            busy = false
+                                            if (task.isSuccessful) onAuthenticated()
+                                            else message = task.exception?.localizedMessage ?: "Phone verified, but profile setup failed."
+                                        }
+                                    }
+                                }
+                            }
+                            .addOnFailureListener { exception ->
+                                busy = false
+                                message = exception.localizedMessage ?: "Incorrect or expired OTP."
+                            }
+                    }
                 } else {
                     if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                         message = "Enter a valid email address."
@@ -404,7 +484,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Sign In")
+            Text(if (busy) "Please wait..." else if (usePhone && !otpRequested) "Send OTP" else if (usePhone) "Verify OTP" else if (isSignUp) "Sign Up" else "Sign In")
         }
 
         OutlinedButton(
@@ -418,6 +498,14 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
 
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
+        }
+        if (usePhone && otpRequested) {
+            TextButton(enabled = !busy, onClick = {
+                otpRequested = false
+                verificationId = null
+                otpCode = ""
+                message = "Enter your number and request a new OTP."
+            }) { Text("Change mobile number") }
         }
         if (!isSignUp && !usePhone) {
             TextButton(
