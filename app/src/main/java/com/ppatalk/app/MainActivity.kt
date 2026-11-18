@@ -606,6 +606,8 @@ fun StoriesStrip() {
 @Composable
 fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit) {
     var liked by remember(post.id, currentUid) { mutableStateOf(false) }
+    var selectedReaction by remember(post.id, currentUid) { mutableStateOf("") }
+    var showReactionPicker by remember(post.id, currentUid) { mutableStateOf(false) }
     var likeCount by remember(post.id) { mutableIntStateOf(0) }
     var commentCount by remember(post.id) { mutableIntStateOf(0) }
     var actionBusy by remember(post.id) { mutableStateOf(false) }
@@ -615,7 +617,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
         val likeListener = likesRef.addSnapshotListener { snapshot, _ ->
             if (snapshot != null) {
                 likeCount = snapshot.size()
-                liked = snapshot.documents.any { it.id == currentUid }
+                val myLike = snapshot.documents.firstOrNull { it.id == currentUid }
+                liked = myLike != null
+                selectedReaction = myLike?.getString("reaction") ?: if (myLike != null) "👍" else ""
             }
         }
         val commentsListener = db.collection("posts").document(post.id).collection("comments")
@@ -652,17 +656,46 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
                 )
             }
             Spacer(Modifier.height(8.dp))
+            if (showReactionPicker) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf("👍" to "Like", "❤️" to "Love", "😂" to "Haha", "😢" to "Sad", "😡" to "Angry").forEach { (emoji, label) ->
+                        TextButton(
+                            enabled = !actionBusy,
+                            onClick = {
+                                actionBusy = true
+                                val ref = db.collection("posts").document(post.id).collection("likes").document(currentUid)
+                                if (selectedReaction == emoji) {
+                                    ref.delete().addOnCompleteListener { actionBusy = false; showReactionPicker = false }
+                                } else {
+                                    ref.set(
+                                        mapOf(
+                                            "uid" to currentUid,
+                                            "reaction" to emoji,
+                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        )
+                                    ).addOnCompleteListener { actionBusy = false; showReactionPicker = false }
+                                }
+                            }
+                        ) {
+                            Text(emoji, style = MaterialTheme.typography.titleLarge)
+                        }
+                    }
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(enabled = !actionBusy, onClick = {
-                    actionBusy = true
-                    val ref = db.collection("posts").document(post.id).collection("likes").document(currentUid)
-                    if (liked) ref.delete().addOnCompleteListener { actionBusy = false }
-                    else ref.set(mapOf("uid" to currentUid, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
-                        .addOnCompleteListener { actionBusy = false }
-                }) {
-                    Icon(if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Like", tint = if (liked) Orange else NeonCyan)
-                    Spacer(Modifier.width(5.dp)); Text(if (liked) "Liked" else "Like"); Spacer(Modifier.width(5.dp)); Text(likeCount.toString())
+                TextButton(enabled = !actionBusy, onClick = { showReactionPicker = !showReactionPicker }) {
+                    if (liked) {
+                        Text(selectedReaction.ifBlank { "👍" }, style = MaterialTheme.typography.titleMedium)
+                    } else {
+                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Reactions", tint = NeonCyan)
+                    }
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (liked) "Reacted" else "Like")
+                    Spacer(Modifier.width(5.dp)); Text(likeCount.toString())
                 }
                 TextButton(onClick = onCommentsClick) {
                     Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = NeonCyan)
