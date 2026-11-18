@@ -1980,30 +1980,57 @@ fun NotificationsScreen(uid: String, modifier: Modifier = Modifier, onOpenFriend
     var error by remember(uid) { mutableStateOf("") }
 
     DisposableEffect(uid) {
-        val registration = db.collection("friendRequests")
-            .whereEqualTo("toUid", uid)
+        var incoming = emptyList<Map<String, Any?>>()
+        var outgoing = emptyList<Map<String, Any?>>()
+        fun publish() {
+            notifications = (incoming + outgoing).sortedByDescending {
+                (it["createdAt"] as? Date)?.time ?: 0L
+            }
+            loading = false
+        }
+        val incomingRegistration = db.collection("friendRequests").whereEqualTo("toUid", uid)
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
                     error = exception.localizedMessage ?: "Notifications load nahi ho payi."
                     loading = false
                 } else if (snapshot != null) {
-                    notifications = snapshot.documents
-                        .filter { it.getString("status") in listOf("pending", "accepted", "rejected") }
-                        .sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
-                        .map { doc ->
-                            mapOf(
-                                "id" to doc.id,
-                                "fromUid" to doc.getString("fromUid").orEmpty(),
-                                "fromName" to doc.getString("fromName").orEmpty().ifBlank { "PPA Talk user" },
-                                "status" to doc.getString("status").orEmpty(),
-                                "createdAt" to doc.getTimestamp("createdAt")?.toDate()
-                            )
-                        }
-                    loading = false
-                    error = ""
+                    incoming = snapshot.documents.filter {
+                        it.getString("status") in listOf("pending", "accepted", "rejected")
+                    }.map { doc ->
+                        mapOf(
+                            "fromName" to doc.getString("fromName").orEmpty().ifBlank { "PPA Talk user" },
+                            "toName" to doc.getString("toName").orEmpty(),
+                            "status" to doc.getString("status").orEmpty(),
+                            "direction" to "incoming",
+                            "createdAt" to doc.getTimestamp("createdAt")?.toDate()
+                        )
+                    }
+                    publish()
                 }
             }
-        onDispose { registration.remove() }
+        val outgoingRegistration = db.collection("friendRequests").whereEqualTo("fromUid", uid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Sent notifications load nahi ho payi."
+                    loading = false
+                } else if (snapshot != null) {
+                    outgoing = snapshot.documents.filter {
+                        it.getString("status") in listOf("pending", "accepted", "rejected")
+                    }.map { doc ->
+                        mapOf(
+                            "toName" to doc.getString("toName").orEmpty().ifBlank { "PPA Talk user" },
+                            "status" to doc.getString("status").orEmpty(),
+                            "direction" to "outgoing",
+                            "createdAt" to doc.getTimestamp("createdAt")?.toDate()
+                        )
+                    }
+                    publish()
+                }
+            }
+        onDispose {
+            incomingRegistration.remove()
+            outgoingRegistration.remove()
+        }
     }
 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2016,29 +2043,32 @@ fun NotificationsScreen(uid: String, modifier: Modifier = Modifier, onOpenFriend
             Text("Abhi koi notification nahi hai.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         notifications.forEach { item ->
+            val incoming = item["direction"] == "incoming"
+            val otherName = if (incoming) item["fromName"] as? String ?: "PPA Talk user"
+                else item["toName"] as? String ?: "PPA Talk user"
+            val status = item["status"] as? String ?: ""
+            val label = when {
+                incoming && status == "pending" -> "$otherName sent you a friend request"
+                incoming && status == "accepted" -> "You accepted $otherName's friend request"
+                incoming -> "You declined $otherName's friend request"
+                status == "pending" -> "Friend request sent to $otherName"
+                status == "accepted" -> "$otherName accepted your friend request"
+                else -> "$otherName declined your friend request"
+            }
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Notifications, contentDescription = null, tint = RoyalBlue,
                         modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        val name = item["fromName"] as? String ?: "PPA Talk user"
-                        val status = item["status"] as? String ?: ""
-                        Text(
-                            when (status) {
-                                "pending" -> "$name sent you a friend request"
-                                "accepted" -> "$name accepted your friend request"
-                                else -> "Friend request from $name was declined"
-                            },
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Text(label, fontWeight = FontWeight.SemiBold)
                         (item["createdAt"] as? Date)?.let {
                             Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(it),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    if (item["status"] == "pending") {
+                    if (incoming && status == "pending") {
                         TextButton(onClick = onOpenFriends) { Text("View") }
                     }
                 }
