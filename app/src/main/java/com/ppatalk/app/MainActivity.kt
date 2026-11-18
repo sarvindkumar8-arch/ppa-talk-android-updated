@@ -1396,23 +1396,25 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(enabled = !actionBusy, onClick = { showReactionPicker = !showReactionPicker }) {
-                    if (liked) {
-                        Text(selectedReaction.ifBlank { "👍" }, style = MaterialTheme.typography.titleMedium)
-                    } else {
-                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Reactions", tint = RoyalBlue)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(enabled = !actionBusy, onClick = { showReactionPicker = !showReactionPicker }) {
+                        if (liked) {
+                            Text(selectedReaction.ifBlank { "👍" }, style = MaterialTheme.typography.titleLarge)
+                        } else {
+                            Icon(Icons.Default.FavoriteBorder, contentDescription = "Like", tint = RoyalBlue)
+                        }
                     }
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (liked) "Reacted" else "Like")
-                    Spacer(Modifier.width(5.dp)); Text(likeCount.toString())
+                    Text(likeCount.toString(), style = MaterialTheme.typography.labelMedium)
                 }
-                TextButton(onClick = onCommentsClick) {
-                    Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = RoyalBlue)
-                    Spacer(Modifier.width(5.dp)); Text("Comment"); Spacer(Modifier.width(5.dp)); Text(commentCount.toString())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onCommentsClick) {
+                        Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = RoyalBlue)
+                    }
+                    Text(commentCount.toString(), style = MaterialTheme.typography.labelMedium)
                 }
                 val context = LocalContext.current
-                TextButton(onClick = {
+                IconButton(onClick = {
                     val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\\n" + post.mediaUrl
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -1421,15 +1423,13 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
                 }) {
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Orange)
-                    Spacer(Modifier.width(4.dp)); Text("Share")
                 }
             }
             if (post.uid == currentUid) {
                 var menuExpanded by remember(post.id) { mutableStateOf(false) }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    TextButton(onClick = { menuExpanded = true }) {
+                    IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Post options")
-                        Text("Options")
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(
