@@ -66,8 +66,17 @@ service cloud.firestore {
     }
 
     match /friends/{userId}/list/{friendId} {
+      function hasAcceptedRequest() {
+        return (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId))
+                && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId)).data.status == 'accepted')
+            || (exists(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId))
+                && get(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId)).data.status == 'accepted');
+      }
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+                            && (request.auth.uid == userId || request.auth.uid == friendId)
+                            && hasAcceptedRequest();
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     match /chats/{chatId} {
