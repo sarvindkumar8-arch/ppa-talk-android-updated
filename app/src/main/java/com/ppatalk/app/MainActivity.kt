@@ -433,8 +433,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                         actionIconContentColor = MaterialTheme.colorScheme.onSurface
                     ),
                     title = {
-                        Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
-                            style = MaterialTheme.typography.headlineSmall)
+                        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                            Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.headlineSmall)
+                            Text("Create. Connect. Share.", color = Orange,
+                                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
                     },
                     actions = {
                         IconButton(onClick = { selected = "Search" }) {
@@ -461,6 +465,27 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf(
+                        "Home" to Icons.Default.Home,
+                        "Friends" to Icons.Default.PeopleAlt,
+                        "Reels" to Icons.Default.PlayCircle,
+                        "Marketplace" to Icons.Default.Storefront,
+                        "Notifications" to Icons.Default.Notifications,
+                        "Menu" to Icons.Default.Menu
+                    ).forEach { (label, icon) ->
+                        IconButton(onClick = { selected = label }, modifier = Modifier.weight(1f)) {
+                            Icon(icon, contentDescription = label,
+                                tint = if (selected == label) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(25.dp))
+                        }
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
             }
         },
         bottomBar = {
@@ -470,8 +495,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     "Home" to Icons.Default.Home,
                     "Friends" to Icons.Default.PeopleAlt,
                     "Reels" to Icons.Default.PlayCircle,
+                    "Marketplace" to Icons.Default.Storefront,
                     "Notifications" to Icons.Default.Notifications,
-                    "Profile" to Icons.Default.Person
+                    "Menu" to Icons.Default.Person
                 ).forEach { (label, icon) ->
                     NavigationBarItem(
                         selected = selected == label,
@@ -495,6 +521,15 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         } else when (selected) {
             "Home" -> HomeFeed(uid, Modifier.padding(padding)) { selected = "Create" }
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
+            "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Menu", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
+                listOf("Profile", "Settings", "Search").forEach { item ->
+                    OutlinedButton(onClick = { selected = item }, modifier = Modifier.fillMaxWidth()) { Text(item) }
+                }
+                OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Log out") }
+            }
+            "Marketplace" -> SimplePage("Marketplace", "Discover products and community listings", Modifier.padding(padding))
             "Search" -> SimplePage("Search", "Find people and public posts", Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
