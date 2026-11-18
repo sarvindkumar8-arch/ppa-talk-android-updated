@@ -559,9 +559,16 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
-    DisposableEffect(Unit) {
+    var refreshKey by remember { mutableIntStateOf(0) }
+
+    // A bounded live query prevents the home screen from downloading the entire
+    // posts collection. Reopening the listener also gives users a manual refresh.
+    DisposableEffect(refreshKey) {
+        loading = true
+        error = ""
         val registration = FirebaseFirestore.getInstance().collection("posts")
             .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(30)
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
                     error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
@@ -580,23 +587,70 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
             }
         onDispose { registration.remove() }
     }
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        item { HomeComposerCard(onCreatePost = onCreatePost) }
+        item { StoriesStrip() }
         item {
-            HomeComposerCard(onCreatePost = onCreatePost)
-        }
-        item {
-            StoriesStrip()
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue)
-                Spacer(Modifier.weight(1f))
-                Text("For You", color = RoyalBlue, style = MaterialTheme.typography.labelMedium)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("News Feed", style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold, color = RoyalBlue)
+                    Text("Latest community posts", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = { refreshKey++ }, enabled = !loading) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh feed", tint = RoyalBlue)
+                }
             }
         }
-        if (loading) item { CircularProgressIndicator() }
-        if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
-        if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
+        if (loading) {
+            item {
+                Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = RoyalBlue)
+                }
+            }
+        }
+        if (error.isNotBlank()) {
+            item {
+                Column(
+                    Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Feed load nahi ho payi", color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold)
+                    Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { refreshKey++ }) { Text("Try again") }
+                }
+            }
+        }
+        if (!loading && posts.isEmpty() && error.isBlank()) {
+            item {
+                Column(
+                    Modifier.fillMaxWidth().padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.DynamicFeed, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(40.dp))
+                    Text("Abhi koi post nahi hai", fontWeight = FontWeight.SemiBold)
+                    Text("Aap apni pehli post share kar sakte hain.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = onCreatePost) { Text("Create post") }
+                }
+            }
+        }
         items(posts, key = { it.id }) { post ->
             FeedPostCard(post, currentUid) { selectedPost = post }
         }
