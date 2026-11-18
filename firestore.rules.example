@@ -120,5 +120,51 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+    // WebRTC call signalling. Firestore stores call metadata, SDP and ICE
+    // candidates; audio/video media is not stored in Firestore.
+    match /callSessions/{callId} {
+      function isParticipant() {
+        return signedIn()
+          && (request.auth.uid == resource.data.callerUid
+            || request.auth.uid == resource.data.calleeUid);
+      }
+      allow create: if signedIn()
+        && request.resource.data.callerUid == request.auth.uid
+        && request.resource.data.calleeUid is string
+        && request.resource.data.calleeUid != request.auth.uid
+        && request.resource.data.status == 'ringing'
+        && request.resource.data.callType in ['audio', 'video'];
+      allow read: if isParticipant();
+      allow update: if isParticipant()
+        && request.resource.data.callerUid == resource.data.callerUid
+        && request.resource.data.calleeUid == resource.data.calleeUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'offer', 'answer', 'updatedAt', 'endedAt', 'acceptedAt'
+        ])
+        && request.resource.data.status in ['ringing', 'accepted', 'rejected', 'ended', 'missed'];
+      allow delete: if false;
+
+      match /callerCandidates/{candidateId} {
+        function callParticipant() {
+          let call = get(/databases/$(database)/documents/callSessions/$(callId)).data;
+          return signedIn() && (request.auth.uid == call.callerUid || request.auth.uid == call.calleeUid);
+        }
+        allow read: if callParticipant();
+        allow create: if callParticipant()
+          && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt']);
+        allow update, delete: if false;
+      }
+      match /calleeCandidates/{candidateId} {
+        function callParticipant() {
+          let call = get(/databases/$(database)/documents/callSessions/$(callId)).data;
+          return signedIn() && (request.auth.uid == call.callerUid || request.auth.uid == call.calleeUid);
+        }
+        allow read: if callParticipant();
+        allow create: if callParticipant()
+          && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt']);
+        allow update, delete: if false;
+      }
+    }
+
   }
 }
