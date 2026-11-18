@@ -566,8 +566,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                                 modifier = Modifier.size(27.dp))
                         }
                         IconButton(onClick = { navigateTo("Friends") }) {
-                            Icon(Icons.Default.Chat, contentDescription = "Messenger",
-                                modifier = Modifier.size(25.dp))
+                            Surface(shape = CircleShape, color = RoyalBlue, modifier = Modifier.size(36.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Forum, contentDescription = "Messenger",
+                                        tint = Color.White, modifier = Modifier.size(21.dp))
+                                }
+                            }
                         }
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
@@ -612,7 +616,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         if (activeChatUid != null) {
             ChatScreen(uid, activeChatUid!!, activeChatName, Modifier.padding(padding)) { activeChatUid = null }
         } else when (selected) {
-            "Home" -> HomeFeed(uid, Modifier.padding(padding)) { navigateTo("Create") }
+            "Home" -> HomeFeed(
+                uid,
+                Modifier.padding(padding),
+                onCreatePost = { navigateTo("Create") },
+                onOpenProfile = { navigateTo("Profile") }
+            )
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -640,7 +649,12 @@ data class FeedPost(val id: String, val uid: String, val authorName: String, val
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
 
 @Composable
-fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: () -> Unit = {}) {
+fun HomeFeed(
+    currentUid: String,
+    modifier: Modifier = Modifier,
+    onCreatePost: () -> Unit = {},
+    onOpenProfile: () -> Unit = {}
+) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
@@ -668,7 +682,11 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         item {
-            HomeComposerCard(onCreatePost = onCreatePost)
+            HomeComposerCard(
+                uid = currentUid,
+                onCreatePost = onCreatePost,
+                onOpenProfile = onOpenProfile
+            )
         }
         item {
             StoriesStrip()
@@ -692,14 +710,46 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
 
 
 @Composable
-fun HomeComposerCard(onCreatePost: () -> Unit) {
+fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () -> Unit) {
+    var profilePhotoUrl by remember(uid) { mutableStateOf("") }
+
+    DisposableEffect(uid) {
+        val registration = FirebaseFirestore.getInstance()
+            .collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                profilePhotoUrl = snapshot?.getString("photoUrl").orEmpty()
+            }
+        onDispose { registration.remove() }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(38.dp))
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    onClick = onOpenProfile
+                ) {
+                    if (profilePhotoUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = profilePhotoUrl,
+                            contentDescription = "Open your profile",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = "Open your profile",
+                            tint = RoyalBlue,
+                            modifier = Modifier.padding(5.dp)
+                        )
+                    }
+                }
                 Spacer(Modifier.width(10.dp))
                 Surface(
                     modifier = Modifier.weight(1f),
