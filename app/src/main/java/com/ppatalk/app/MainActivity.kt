@@ -12,6 +12,7 @@ import android.content.Intent
 import android.widget.VideoView
 import android.widget.MediaController
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -488,6 +489,29 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
+    val backStack = remember { mutableStateListOf<String>() }
+
+    fun navigateTo(destination: String) {
+        if (selected != destination) {
+            backStack.add(selected)
+            selected = destination
+        }
+        activeChatUid = null
+    }
+
+    fun handleBack() {
+        if (activeChatUid != null) {
+            activeChatUid = null
+        } else if (backStack.isNotEmpty()) {
+            selected = backStack.removeAt(backStack.lastIndex)
+        } else if (selected != "Home") {
+            selected = "Home"
+        }
+    }
+
+    BackHandler(enabled = activeChatUid != null || selected != "Home" || backStack.isNotEmpty()) {
+        handleBack()
+    }
 
     DisposableEffect(uid) {
         val db = FirebaseFirestore.getInstance()
@@ -537,11 +561,11 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                         }
                     },
                     actions = {
-                        IconButton(onClick = { selected = "Search" }) {
+                        IconButton(onClick = { navigateTo("Search") }) {
                             Icon(Icons.Default.Search, contentDescription = "Search",
                                 modifier = Modifier.size(27.dp))
                         }
-                        IconButton(onClick = { selected = "Friends" }) {
+                        IconButton(onClick = { navigateTo("Friends") }) {
                             Icon(Icons.Default.Chat, contentDescription = "Messenger",
                                 modifier = Modifier.size(25.dp))
                         }
@@ -552,7 +576,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                                 DropdownMenuItem(text = { Text("Settings") },
                                     leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = { menuExpanded = false; selected = "Settings" })
+                                    onClick = { menuExpanded = false; navigateTo("Settings") })
                                 DropdownMenuItem(text = { Text("Log out") },
                                     leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
                                     onClick = { menuExpanded = false; onSignOut() })
@@ -574,7 +598,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                         "Notifications" to Icons.Default.Notifications,
                         "Menu" to Icons.Default.Menu
                     ).forEach { (label, icon) ->
-                        IconButton(onClick = { selected = label }, modifier = Modifier.weight(1f)) {
+                        IconButton(onClick = { navigateTo(label) }, modifier = Modifier.weight(1f)) {
                             Icon(icon, contentDescription = label,
                                 tint = if (selected == label) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(25.dp))
@@ -588,13 +612,13 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         if (activeChatUid != null) {
             ChatScreen(uid, activeChatUid!!, activeChatName, Modifier.padding(padding)) { activeChatUid = null }
         } else when (selected) {
-            "Home" -> HomeFeed(uid, Modifier.padding(padding)) { selected = "Create" }
+            "Home" -> HomeFeed(uid, Modifier.padding(padding)) { navigateTo("Create") }
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Menu", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
                 listOf("Profile", "Settings", "Search").forEach { item ->
-                    OutlinedButton(onClick = { selected = item }, modifier = Modifier.fillMaxWidth()) { Text(item) }
+                    OutlinedButton(onClick = { navigateTo(item) }, modifier = Modifier.fillMaxWidth()) { Text(item) }
                 }
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Log out") }
             }
