@@ -2391,11 +2391,28 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
         }
         onDispose { presenceRegistration.remove() }
     }
+    var friendsLoadError by remember(uid) { mutableStateOf("") }
     DisposableEffect(uid) {
         val registration = db.collection("friends").document(uid).collection("list")
-            .addSnapshotListener { snapshot, _ ->
-                if (snapshot != null) people = snapshot.documents.map { doc ->
-                    PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user", doc.getString("photoUrl") ?: "")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    friendsLoadError = error.localizedMessage ?: "Friend list sync failed. Firestore rules check karein."
+                } else if (snapshot != null) {
+                    friendsLoadError = ""
+                    val base = snapshot.documents.map { doc ->
+                        PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user", doc.getString("photoUrl") ?: "")
+                    }
+                    people = base
+                    base.filter { it.photoUrl.isBlank() || it.name == "PPA Talk user" }.forEach { friend ->
+                        db.collection("publicProfiles").document(friend.uid).get().addOnSuccessListener { profile ->
+                            people = people.map { current ->
+                                if (current.uid == friend.uid) current.copy(
+                                    name = profile.getString("displayName")?.takeIf { it.isNotBlank() } ?: current.name,
+                                    photoUrl = profile.getString("photoUrl")?.takeIf { it.isNotBlank() } ?: current.photoUrl
+                                ) else current
+                            }
+                        }
+                    }
                 }
             }
         onDispose { registration.remove() }
@@ -2428,6 +2445,10 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                 }
             }
         }
+        if (friendsLoadError.isNotBlank()) Text(friendsLoadError, color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
+        if (people.isEmpty() && !loading && friendsLoadError.isBlank()) Text("Abhi koi accepted friend sync nahi hua. Friends tab mein friend list check karein.",
+            modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Inbox", "Unread", "Marketplace", "Communities").forEach { tab ->
                 FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) })
