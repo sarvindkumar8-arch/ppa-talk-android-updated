@@ -48,11 +48,8 @@ import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
 
-private val DarkNavy = Color(0xFFF0F2F5)
-private val SurfaceNavy = Color(0xFFFFFFFF)
-private val ElectricBlue = Color(0xFF168BFF)
-private val NeonCyan = Color(0xFF087EBD)
-private val Orange = Color(0xFFFF7A1A)
+private val RoyalBlue = Color(0xFF2457D6)
+private val Orange = Color(0xFFF27A21)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,17 +60,30 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PPATalkApp() {
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
+    var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-    MaterialTheme(colorScheme = lightColorScheme(
-        primary = ElectricBlue, onPrimary = Color.White,
+    val lightColors = lightColorScheme(
+        primary = RoyalBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
-        tertiary = NeonCyan, onTertiary = DarkNavy,
-        background = DarkNavy, onBackground = Color(0xFF1C1E21),
-        surface = SurfaceNavy, onSurface = Color(0xFF1C1E21),
-        surfaceVariant = Color(0xFFE4E6EB), onSurfaceVariant = Color(0xFF65676B),
-        outline = Color(0xFFCED0D4), error = Color(0xFFB3261E)
-    )) {
-        Surface(modifier = Modifier.fillMaxSize(), color = DarkNavy) {
+        tertiary = Color(0xFF345FCB), onTertiary = Color.White,
+        background = Color(0xFFF3F5F9), onBackground = Color(0xFF172033),
+        surface = Color.White, onSurface = Color(0xFF172033),
+        surfaceVariant = Color(0xFFE8ECF3), onSurfaceVariant = Color(0xFF667085),
+        outline = Color(0xFFD5DCE7), error = Color(0xFFB3261E)
+    )
+    val darkColors = darkColorScheme(
+        primary = Color(0xFF8AA8FF), onPrimary = Color(0xFF10265C),
+        secondary = Color(0xFFFFA45C), onSecondary = Color(0xFF4A2100),
+        tertiary = Color(0xFFB8C8FF), onTertiary = Color(0xFF17264A),
+        background = Color(0xFF101827), onBackground = Color(0xFFF3F5FA),
+        surface = Color(0xFF1B2638), onSurface = Color(0xFFF3F5FA),
+        surfaceVariant = Color(0xFF29364B), onSurfaceVariant = Color(0xFFB8C2D3),
+        outline = Color(0xFF46546B), error = Color(0xFFFFB4AB)
+    )
+    MaterialTheme(colorScheme = if (isDarkMode) darkColors else lightColors) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (user == null) {
                 AuthScreen(onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
             } else {
@@ -81,6 +91,8 @@ fun PPATalkApp() {
                     uid = user!!.uid,
                     email = user?.email.orEmpty(),
                     displayName = user?.displayName?.takeIf { it.isNotBlank() } ?: user?.email?.substringBefore("@").orEmpty(),
+                    isDarkMode = isDarkMode,
+                    onThemeModeChange = { enabled -> isDarkMode = enabled; preferences.edit().putBoolean("dark_mode", enabled).apply() },
                     onSignOut = {
                         FirebaseAuth.getInstance().signOut()
                         user = null
@@ -174,18 +186,18 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     }
 
     val authFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.Black,
-        unfocusedTextColor = Color.Black,
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
         focusedPlaceholderColor = Color(0xFF65676B),
         unfocusedPlaceholderColor = Color(0xFF65676B),
         disabledTextColor = Color(0xFF65676B),
-        cursorColor = ElectricBlue,
-        focusedBorderColor = ElectricBlue,
+        cursorColor = RoyalBlue,
+        focusedBorderColor = RoyalBlue,
         unfocusedBorderColor = Color(0xFFCED0D4),
-        focusedLabelColor = ElectricBlue,
+        focusedLabelColor = RoyalBlue,
         unfocusedLabelColor = Color(0xFF65676B),
-        focusedContainerColor = Color.White,
-        unfocusedContainerColor = Color.White
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface
     )
 
     Column(
@@ -194,7 +206,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("PPA Talk", style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.ExtraBold, color = ElectricBlue)
+            fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
         Text("Create. Connect. Share.", color = Orange)
         Spacer(Modifier.height(24.dp))
         Text(if (isSignUp) "Create your account" else "Welcome back",
@@ -213,7 +225,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
                 label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, textStyle = LocalTextStyle.current.copy(color = Color.Black), colors = authFieldColors
+                singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface), colors = authFieldColors
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -390,10 +402,10 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 }
             ) { Text("Forgot password?") }
         }
-        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) ElectricBlue else MaterialTheme.colorScheme.error)
+        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) RoyalBlue else MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
         Text("Public community • Be respectful and stay safe",
-            style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -405,26 +417,29 @@ private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: () -> Unit) {
+fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, onSignOut: () -> Unit) {
     var selected by remember { mutableStateOf("Home") }
     Scaffold(
-        containerColor = DarkNavy,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SurfaceNavy,
-                    titleContentColor = ElectricBlue,
-                    actionIconContentColor = NeonCyan
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = RoyalBlue,
+                    actionIconContentColor = RoyalBlue
                 ),
                 title = {
                     Column {
-                        Text("PPA Talk", color = ElectricBlue, fontWeight = FontWeight.ExtraBold)
+                        Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold)
                         Text("Create. Connect. Share.", color = Orange, style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 actions = {
                     IconButton(onClick = { selected = "Search" }) {
                         Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
+                    IconButton(onClick = { selected = "Settings" }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                     IconButton(onClick = onSignOut) {
                         Icon(Icons.Default.Logout, contentDescription = "Sign out")
@@ -433,7 +448,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = SurfaceNavy, contentColor = NeonCyan) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, contentColor = RoyalBlue) {
                 listOf(
                     "Home" to Icons.Default.Home,
                     "Friends" to Icons.Default.PeopleAlt,
@@ -447,11 +462,11 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
                         icon = { Icon(icon, contentDescription = label) },
                         label = { Text(label, maxLines = 1) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = NeonCyan,
-                            selectedTextColor = NeonCyan,
-                            indicatorColor = ElectricBlue.copy(alpha = 0.20f),
-                            unselectedIconColor = Color.LightGray,
-                            unselectedTextColor = Color.LightGray
+                            selectedIconColor = RoyalBlue,
+                            selectedTextColor = RoyalBlue,
+                            indicatorColor = RoyalBlue.copy(alpha = 0.20f),
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
                 }
@@ -463,6 +478,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, onSignOut: ()
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Search" -> SimplePage("Search", "Find people and public posts", Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
+            "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
             "Friends" -> SimplePage("Friends", "Friend requests and your friends will appear here.", Modifier.padding(padding))
             "Reels" -> SimplePage("Reels", "Short videos from the PPA Talk community.", Modifier.padding(padding))
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
@@ -509,9 +525,9 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
         }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ElectricBlue)
+                Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue)
                 Spacer(Modifier.weight(1f))
-                Text("For You", color = NeonCyan, style = MaterialTheme.typography.labelMedium)
+                Text("For You", color = RoyalBlue, style = MaterialTheme.typography.labelMedium)
             }
         }
         if (loading) item { CircularProgressIndicator() }
@@ -529,25 +545,25 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
 fun HomeComposerCard(onCreatePost: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = SurfaceNavy)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue, modifier = Modifier.size(38.dp))
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(38.dp))
                 Spacer(Modifier.width(10.dp))
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
-                    color = DarkNavy,
+                    color = MaterialTheme.colorScheme.background,
                     onClick = onCreatePost
                 ) {
-                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = Color.LightGray)
+                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 TextButton(onClick = onCreatePost) {
-                    Icon(Icons.Default.Photo, contentDescription = null, tint = NeonCyan)
+                    Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue)
                     Spacer(Modifier.width(5.dp))
                     Text("Photo")
                 }
@@ -557,7 +573,7 @@ fun HomeComposerCard(onCreatePost: () -> Unit) {
                     Text("Video")
                 }
                 TextButton(onClick = onCreatePost) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = ElectricBlue)
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = RoyalBlue)
                     Spacer(Modifier.width(5.dp))
                     Text("Write")
                 }
@@ -576,14 +592,14 @@ fun StoriesStrip() {
         ) {
             Card(
                 modifier = Modifier.weight(1f).height(104.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceNavy)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     Modifier.fillMaxSize().padding(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(Icons.Default.AddCircle, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Default.AddCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(32.dp))
                     Text("Create story", style = MaterialTheme.typography.labelSmall, color = Color.White)
                 }
             }
@@ -591,7 +607,7 @@ fun StoriesStrip() {
                 Card(
                     modifier = Modifier.weight(1f).height(104.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = listOf(ElectricBlue.copy(alpha = 0.28f), Orange.copy(alpha = 0.24f), NeonCyan.copy(alpha = 0.18f))[index]
+                        containerColor = listOf(RoyalBlue.copy(alpha = 0.28f), Orange.copy(alpha = 0.24f), RoyalBlue.copy(alpha = 0.18f))[index]
                     )
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
@@ -626,15 +642,15 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
             .addSnapshotListener { snapshot, _ -> if (snapshot != null) commentCount = snapshot.size() }
         onDispose { likeListener.remove(); commentsListener.remove() }
     }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SurfaceNavy, contentColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = Color.White)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = ElectricBlue)
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue)
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(post.authorName, fontWeight = FontWeight.SemiBold)
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
-                        style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -691,14 +707,14 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
                     if (liked) {
                         Text(selectedReaction.ifBlank { "👍" }, style = MaterialTheme.typography.titleMedium)
                     } else {
-                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Reactions", tint = NeonCyan)
+                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Reactions", tint = RoyalBlue)
                     }
                     Spacer(Modifier.width(5.dp))
                     Text(if (liked) "Reacted" else "Like")
                     Spacer(Modifier.width(5.dp)); Text(likeCount.toString())
                 }
                 TextButton(onClick = onCommentsClick) {
-                    Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = NeonCyan)
+                    Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = RoyalBlue)
                     Spacer(Modifier.width(5.dp)); Text("Comment"); Spacer(Modifier.width(5.dp)); Text(commentCount.toString())
                 }
                 val context = LocalContext.current
@@ -766,16 +782,16 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
         title = { Text("Comments") },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 440.dp)) {
-                Text(post.text, style = MaterialTheme.typography.bodySmall, color = Color.LightGray, maxLines = 3)
+                Text(post.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3)
                 Spacer(Modifier.height(10.dp))
                 LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val topLevel = comments.filter { it.parentId.isBlank() }
                     if (topLevel.isEmpty()) item { Text("No comments yet. Start the conversation!") }
                     items(topLevel, key = { it.id }) { comment ->
                         Column(Modifier.fillMaxWidth()) {
-                            Card(colors = CardDefaults.cardColors(containerColor = SurfaceNavy)) {
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                                    Text(comment.authorName, fontWeight = FontWeight.Bold, color = NeonCyan)
+                                    Text(comment.authorName, fontWeight = FontWeight.Bold, color = RoyalBlue)
                                     Text(comment.text)
                                     TextButton(onClick = { replyTo = comment }) { Text("Reply") }
                                 }
@@ -785,7 +801,7 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
                                     Icon(Icons.Default.SubdirectoryArrowRight, contentDescription = null, tint = Orange,
                                         modifier = Modifier.padding(end = 6.dp))
                                     Column {
-                                        Text(reply.authorName, fontWeight = FontWeight.SemiBold, color = NeonCyan)
+                                        Text(reply.authorName, fontWeight = FontWeight.SemiBold, color = RoyalBlue)
                                         Text(reply.text)
                                     }
                                 }
@@ -844,8 +860,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Create a post", style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold, color = ElectricBlue)
-        Text("Share a photo, video or update with the PPA Talk community.", color = Color.Gray)
+            fontWeight = FontWeight.Bold, color = RoyalBlue)
+        Text("Share a photo, video or update with the PPA Talk community.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = postText,
             onValueChange = { postText = it; success = false; message = "" },
@@ -862,11 +878,11 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
             }
         }
         selectedMedia?.let { uri ->
-            Text(if (mediaType == "video") "Video selected" else "Photo selected", color = NeonCyan)
+            Text(if (mediaType == "video") "Video selected" else "Photo selected", color = RoyalBlue)
             if (mediaType == "image") {
                 AsyncImage(model = uri, contentDescription = "Selected photo", modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), contentScale = ContentScale.Crop)
             } else {
-                Text("Video ready to upload. You can publish it as a Reel.", color = Color.LightGray)
+                Text("Video ready to upload. You can publish it as a Reel.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = { selectedMedia = null; mediaType = "" }) { Text("Remove attachment") }
         }
@@ -920,7 +936,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (busy) "Uploading..." else "Publish Post / Reel") }
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
-        if (message.isNotBlank()) Text(message, color = if (success) NeonCyan else MaterialTheme.colorScheme.error)
+        if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
     }
 }
 
@@ -1044,7 +1060,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("My Profile", style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold, color = ElectricBlue,
+            fontWeight = FontWeight.Bold, color = RoyalBlue,
             modifier = Modifier.padding(start = 20.dp, top = 16.dp))
 
         // Facebook-style cover banner with an upload/change control.
@@ -1054,7 +1070,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             Card(
                 modifier = Modifier.fillMaxSize(),
                 shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = SurfaceNavy)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (coverPhotoUrl.isNotBlank()) {
@@ -1067,8 +1083,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Photo, contentDescription = null,
-                                tint = NeonCyan, modifier = Modifier.size(38.dp))
-                            Text("Your cover photo", color = Color.LightGray)
+                                tint = RoyalBlue, modifier = Modifier.size(38.dp))
+                            Text("Your cover photo", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1078,7 +1094,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 enabled = !saving,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = ElectricBlue, contentColor = Color.White
+                    containerColor = RoyalBlue, contentColor = Color.White
                 )
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = "Change cover photo")
@@ -1100,14 +1116,14 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         contentScale = ContentScale.Crop)
                 } else {
                     Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo placeholder",
-                        modifier = Modifier.size(104.dp), tint = NeonCyan)
+                        modifier = Modifier.size(104.dp), tint = RoyalBlue)
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(displayName.ifBlank { "PPA Talk user" },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold, color = Color.White)
-                Text("PPA Talk member", style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                Text("PPA Talk member", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !saving) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
@@ -1170,7 +1186,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 label = { Text("Hometown") }, placeholder = { Text("Your hometown") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
             Text("Email is linked to your login account. Avoid sharing private details publicly.",
-                style = MaterialTheme.typography.bodySmall, color = Color.LightGray,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth())
             Button(
                 onClick = {
@@ -1214,7 +1230,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 modifier = Modifier.fillMaxWidth()
             ) { Text(if (saving) "Saving..." else "Save Profile") }
             if (message.isNotBlank()) {
-                Text(message, color = if (isError) MaterialTheme.colorScheme.error else NeonCyan)
+                Text(message, color = if (isError) MaterialTheme.colorScheme.error else RoyalBlue)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -1222,12 +1238,32 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 }
 
 @Composable
+fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary)
+        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Dark mode", fontWeight = FontWeight.SemiBold)
+                    Text(if (isDarkMode) "Dark appearance is enabled" else "Royal White appearance is enabled",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = isDarkMode, onCheckedChange = onThemeModeChange)
+            }
+        }
+        Text("Your theme choice is saved on this device.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 fun SimplePage(title: String, detail: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = ElectricBlue)
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = RoyalBlue)
             Spacer(Modifier.height(8.dp))
-            Text(detail, color = Color.Gray)
+            Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
