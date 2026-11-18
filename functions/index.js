@@ -251,3 +251,66 @@ exports.notifyFriendRequest = onDocumentWritten({
     await batch.commit();
   }
 });
+
+
+// Mint short-lived LiveKit room tokens only for authenticated participants in an active PPA Talk call.
+const { defineSecret } = require("firebase-functions/params");
+const { AccessToken } = require("livekit-server-sdk");
+const LIVEKIT_API_KEY = defineSecret("LIVEKIT_API_KEY");
+const LIVEKIT_API_SECRET = defineSecret("LIVEKIT_API_SECRET");
+const LIVEKIT_URL = defineSecret("LIVEKIT_URL");
+
+exports.createLiveKitToken = onCall({
+  region: REGION,
+  enforceAppCheck: false,
+  maxInstances: 20,
+  secrets: [LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL]
+}, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in before joining a call.");
+
+  const callId = typeof request.data?.callId === "string" ? request.data.callId.trim() : "";
+  if (!/^[A-Za-z0-9_-]{10,128}$/.test(callId)) {
+    throw new HttpsError("invalid-argument", "A valid call ID is required.");
+  }
+
+  const callRef = db.collection("callSessions").doc(callId);
+  const callSnapshot = await callRef.get();
+  if (!callSnapshot.exists) throw new HttpsError("not-found", "Call session was not found.");
+
+  const call = callSnapshot.data();
+  const isParticipant = call.callerUid === uid || call.calleeUid === uid;
+  if (!isParticipant) throw new HttpsError("permission-denied", "You are not a participant in this call.");
+  if (!["accepting", "accepted"].includes(call.status)) {
+    throw new HttpsError("failed-precondition", "This call is not active.");
+  }
+  if (!["audio", "video"].includes(call.callType)) {
+    throw new HttpsError("failed-precondition", "This call type is not supported.");
+  }
+
+  const apiKey = LIVEKIT_API_KEY.value();
+  const apiSecret = LIVEKIT_API_SECRET.value();
+  const serverUrl = LIVEKIT_URL.value();
+  if (!apiKey || !apiSecret || !serverUrl || !/^wss:\/\//.test(serverUrl)) {
+    throw new HttpsError("failed-precondition", "LiveKit server configuration is incomplete.");
+  }
+
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity: uid,
+    ttl: "10m"
+  });
+  token.addGrant({
+    roomJoin: true,
+    room: callId,
+    canPublish: true,
+    canSubscribe: true,
+    canPublishData: true
+  });
+
+  return {
+    serverUrl,
+    token: await token.toJwt(),
+    roomName: callId,
+    identity: uid
+  };
+});
