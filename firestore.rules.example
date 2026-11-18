@@ -6,8 +6,10 @@ service cloud.firestore {
 
     // Private account/profile data: only the account owner can access it.
     match /users/{userId} {
-      allow read, create, update, delete: if owns(userId)
-        && (!('uid' in request.resource.data) || request.resource.data.uid == userId);
+      allow read: if owns(userId);
+      allow create: if owns(userId) && request.resource.data.uid == userId;
+      allow update: if owns(userId) && request.resource.data.uid == resource.data.uid;
+      allow delete: if owns(userId);
     }
 
     // Public directory contains only fields safe to show to signed-in users.
