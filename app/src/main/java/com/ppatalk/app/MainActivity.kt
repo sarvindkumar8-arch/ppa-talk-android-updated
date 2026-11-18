@@ -419,6 +419,8 @@ private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> 
 @Composable
 fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, onSignOut: () -> Unit) {
     var selected by remember { mutableStateOf("Home") }
+    var activeChatUid by remember { mutableStateOf<String?>(null) }
+    var activeChatName by remember { mutableStateOf("") }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -473,13 +475,18 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             }
         }
     ) { padding ->
-        when (selected) {
+        if (activeChatUid != null) {
+            ChatScreen(uid, activeChatUid!!, activeChatName, Modifier.padding(padding)) { activeChatUid = null }
+        } else when (selected) {
             "Home" -> HomeFeed(uid, Modifier.padding(padding)) { selected = "Create" }
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Search" -> SimplePage("Search", "Find people and public posts", Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
-            "Friends" -> SimplePage("Friends", "Friend requests and your friends will appear here.", Modifier.padding(padding))
+            "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
+                activeChatUid = friendUid
+                activeChatName = friendName
+            }, Modifier.padding(padding))
             "Reels" -> SimplePage("Reels", "Short videos from the PPA Talk community.", Modifier.padding(padding))
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
@@ -1234,6 +1241,179 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
         }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+
+data class PPAUser(val uid: String, val name: String, val email: String = "", val photoUrl: String = "")
+
+@Composable
+fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) -> Unit, modifier: Modifier = Modifier) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var search by remember { mutableStateOf("") }
+    var users by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
+    var requests by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
+    var friends by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
+    var sentRequests by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var status by remember { mutableStateOf("") }
+
+    DisposableEffect(uid) {
+        val usersListener = db.collection("users").addSnapshotListener { snap, _ ->
+            if (snap != null) users = snap.documents.mapNotNull { doc ->
+                if (doc.id == uid) null else PPAUser(doc.id,
+                    doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: doc.getString("email")?.substringBefore("@") ?: "PPA Talk user",
+                    doc.getString("email") ?: "", doc.getString("photoUrl") ?: "")
+            }
+        }
+        val requestsListener = db.collection("friendRequests").whereEqualTo("toUid", uid)
+            .whereEqualTo("status", "pending").addSnapshotListener { snap, _ ->
+                if (snap != null) requests = snap.documents.map { doc ->
+                    mapOf("id" to doc.id, "fromUid" to (doc.getString("fromUid") ?: ""),
+                        "fromName" to (doc.getString("fromName") ?: "PPA Talk user"))
+                }
+            }
+        val sentListener = db.collection("friendRequests").whereEqualTo("fromUid", uid)
+            .whereEqualTo("status", "pending").addSnapshotListener { snap, _ ->
+                if (snap != null) sentRequests = snap.documents.mapNotNull { it.getString("toUid") }.toSet()
+            }
+        val friendsListener = db.collection("friends").document(uid).collection("list")
+            .addSnapshotListener { snap, _ ->
+                if (snap != null) friends = snap.documents.map { doc ->
+                    PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user",
+                        doc.getString("email") ?: "", doc.getString("photoUrl") ?: "")
+                }
+            }
+        onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
+    }
+
+    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Friends", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
+        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
+            singleLine = true, label = { Text("Search people by name or email") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
+        if (status.isNotBlank()) Text(status, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+        Text("Friend requests (${requests.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (requests.isEmpty()) Text("No new friend requests.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        requests.forEach { request ->
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(request["fromName"] ?: "PPA Talk user", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = {
+                        val fromUid = request["fromUid"].orEmpty()
+                        db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "accepted")
+                            .addOnSuccessListener {
+                                db.collection("friends").document(uid).collection("list").document(fromUid)
+                                    .set(mapOf("displayName" to currentName, "uid" to uid, "email" to ""))
+                                db.collection("friends").document(fromUid).collection("list").document(uid)
+                                    .set(mapOf("displayName" to (request["fromName"] ?: "PPA Talk user"), "uid" to fromUid))
+                                status = "Friend request accepted."
+                            }.addOnFailureListener { status = it.localizedMessage ?: "Could not accept request." }
+                    }) { Text("Accept") }
+                    TextButton(onClick = {
+                        db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "rejected")
+                            .addOnSuccessListener { status = "Request declined." }
+                    }) { Text("Reject", color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        }
+        Text("Your friends (${friends.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (friends.isEmpty()) Text("Your accepted friends will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        friends.forEach { friend ->
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(36.dp))
+                    Text(friend.name, modifier = Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold)
+                    Button(onClick = { onMessage(friend.uid, friend.name) }) {
+                        Icon(Icons.Default.Chat, contentDescription = null)
+                        Spacer(Modifier.width(5.dp)); Text("Message")
+                    }
+                }
+            }
+        }
+        Text("Find people", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        val matches = users.filter { (it.name.contains(search, true) || it.email.contains(search, true)) && friends.none { f -> f.uid == it.uid } }.take(30)
+        if (matches.isEmpty()) Text("No people found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        matches.forEach { person ->
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
+                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text(person.name, fontWeight = FontWeight.SemiBold)
+                        if (person.email.isNotBlank()) Text(person.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else OutlinedButton(onClick = {
+                        val data = hashMapOf("fromUid" to uid, "toUid" to person.uid, "fromName" to currentName,
+                            "toName" to person.name, "status" to "pending",
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                        db.collection("friendRequests").document("${uid}_${person.uid}").set(data)
+                            .addOnSuccessListener { status = "Friend request sent to ${person.name}." }
+                            .addOnFailureListener { status = it.localizedMessage ?: "Could not send friend request." }
+                    }) { Text("Add Friend") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    val chatId = remember(currentUid, friendUid) { listOf(currentUid, friendUid).sorted().joinToString("_") }
+    var messages by remember(chatId) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var draft by remember(chatId) { mutableStateOf("") }
+    var sending by remember(chatId) { mutableStateOf(false) }
+    var error by remember(chatId) { mutableStateOf("") }
+
+    DisposableEffect(chatId) {
+        val registration = db.collection("chats").document(chatId).collection("messages")
+            .orderBy("createdAt", Query.Direction.ASCENDING).addSnapshotListener { snap, exception ->
+                if (exception != null) error = exception.localizedMessage ?: "Messages could not load."
+                else if (snap != null) messages = snap.documents.map { doc ->
+                    mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""), "text" to (doc.getString("text") ?: ""))
+                }
+            }
+        onDispose { registration.remove() }
+    }
+    Column(modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            Text(friendName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+        HorizontalDivider()
+        if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
+            contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (messages.isEmpty()) item { Text("Say hello to ${friendName} 👋", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            items(messages, key = { it["id"] as String }) { msg ->
+                val mine = msg["uid"] == currentUid
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+                    Surface(color = if (mine) RoyalBlue else MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.large) {
+                        Text(msg["text"] as? String ?: "", modifier = Modifier.widthIn(max = 280.dp).padding(12.dp),
+                            color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(value = draft, onValueChange = { draft = it }, modifier = Modifier.weight(1f),
+                placeholder = { Text("Type a message...") }, maxLines = 4)
+            Spacer(Modifier.width(8.dp))
+            IconButton(enabled = draft.isNotBlank() && !sending, onClick = {
+                val messageText = draft.trim()
+                if (messageText.isNotBlank()) {
+                    sending = true; error = ""
+                    val chatRef = db.collection("chats").document(chatId)
+                    chatRef.set(mapOf("participantIds" to listOf(currentUid, friendUid).sorted(),
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                        com.google.firebase.firestore.SetOptions.merge()).continueWithTask {
+                        chatRef.collection("messages").add(mapOf("uid" to currentUid, "text" to messageText,
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                    }.addOnSuccessListener { draft = ""; sending = false }
+                        .addOnFailureListener { sending = false; error = it.localizedMessage ?: "Message send failed. Check Firestore rules." }
+                }
+            }) { Icon(Icons.Default.Send, contentDescription = "Send message", tint = RoyalBlue) }
+        }
     }
 }
 
