@@ -155,15 +155,21 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                 busy = false
                                 message = "Google login succeeded but user details were unavailable."
                             } else {
-                                val profile = hashMapOf(
+                                val db = FirebaseFirestore.getInstance()
+                                val name = firebaseUser.displayName ?: account.displayName ?: "PPA Talk user"
+                                val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                val batch = db.batch()
+                                batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
                                     "uid" to firebaseUser.uid,
-                                    "displayName" to (firebaseUser.displayName ?: account.displayName ?: "PPA Talk user"),
                                     "email" to (firebaseUser.email ?: account.email.orEmpty()),
+                                    "updatedAt" to timestamp
+                                ), com.google.firebase.firestore.SetOptions.merge())
+                                batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
+                                    "uid" to firebaseUser.uid, "displayName" to name,
                                     "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
-                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )
-                                FirebaseFirestore.getInstance().collection("users")
-                                    .document(firebaseUser.uid).set(profile, com.google.firebase.firestore.SetOptions.merge())
+                                    "updatedAt" to timestamp
+                                ), com.google.firebase.firestore.SetOptions.merge())
+                                batch.commit()
                                     .addOnSuccessListener { busy = false; onAuthenticated() }
                                     .addOnFailureListener { exception ->
                                         busy = false
@@ -340,20 +346,22 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                         .setDisplayName(profileName).build()
                                 )?.addOnCompleteListener {
                                     if (firebaseUser != null) {
-                                        val profile = hashMapOf(
-                                            "uid" to firebaseUser.uid,
-                                            "displayName" to profileName,
-                                            "email" to email.trim(),
-                                            "visibility" to "public",
-                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        )
-                                        FirebaseFirestore.getInstance().collection("users")
-                                            .document(firebaseUser.uid).set(profile)
-                                            .addOnCompleteListener { task ->
-                                                busy = false
-                                                if (task.isSuccessful) onAuthenticated()
-                                                else message = task.exception?.localizedMessage ?: "Profile setup failed."
-                                            }
+                                        val db = FirebaseFirestore.getInstance()
+                                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        val batch = db.batch()
+                                        batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
+                                            "uid" to firebaseUser.uid, "email" to email.trim(),
+                                            "createdAt" to timestamp
+                                        ))
+                                        batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
+                                            "uid" to firebaseUser.uid, "displayName" to profileName,
+                                            "createdAt" to timestamp
+                                        ))
+                                        batch.commit().addOnCompleteListener { task ->
+                                            busy = false
+                                            if (task.isSuccessful) onAuthenticated()
+                                            else message = task.exception?.localizedMessage ?: "Profile setup failed."
+                                        }
                                     } else {
                                         busy = false
                                         message = "Account created, but profile setup failed."
@@ -992,28 +1000,35 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var isError by remember { mutableStateOf(false) }
 
     DisposableEffect(uid) {
-        val registration = FirebaseFirestore.getInstance().collection("users").document(uid)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    message = error.localizedMessage ?: "Profile load nahi ho paya."
-                    isError = true
-                    loading = false
-                } else if (snapshot != null) {
-                    displayName = snapshot.getString("displayName") ?: initialName
-                    bio = snapshot.getString("bio") ?: ""
-                    dateOfBirth = snapshot.getString("dateOfBirth") ?: ""
-                    gender = snapshot.getString("gender") ?: ""
-                    phoneNumber = snapshot.getString("phoneNumber") ?: ""
-                    hobby = snapshot.getString("hobby") ?: ""
-                    school = snapshot.getString("school") ?: ""
-                    favoritePlace = snapshot.getString("favoritePlace") ?: ""
-                    hometown = snapshot.getString("hometown") ?: ""
-                    photoUrl = snapshot.getString("photoUrl") ?: ""
-                    coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
-                    loading = false
-                }
+        val db = FirebaseFirestore.getInstance()
+        val privateRegistration = db.collection("users").document(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                message = error.localizedMessage ?: "Private profile load nahi ho paya."
+                isError = true
+                loading = false
+            } else if (snapshot != null) {
+                dateOfBirth = snapshot.getString("dateOfBirth") ?: ""
+                gender = snapshot.getString("gender") ?: ""
+                phoneNumber = snapshot.getString("phoneNumber") ?: ""
+                hobby = snapshot.getString("hobby") ?: ""
+                school = snapshot.getString("school") ?: ""
+                favoritePlace = snapshot.getString("favoritePlace") ?: ""
+                hometown = snapshot.getString("hometown") ?: ""
+                loading = false
             }
-        onDispose { registration.remove() }
+        }
+        val publicRegistration = db.collection("publicProfiles").document(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                message = error.localizedMessage ?: "Public profile load nahi ho paya."
+                isError = true
+            } else if (snapshot != null) {
+                displayName = snapshot.getString("displayName") ?: initialName
+                bio = snapshot.getString("bio") ?: ""
+                photoUrl = snapshot.getString("photoUrl") ?: ""
+                coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+            }
+        }
+        onDispose { privateRegistration.remove(); publicRegistration.remove() }
     }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -1025,8 +1040,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             imageRef.putFile(uri)
                 .addOnSuccessListener {
                     imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("users").document(uid)
-                            .set(mapOf("photoUrl" to downloadUri.toString()), com.google.firebase.firestore.SetOptions.merge())
+                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                            .set(mapOf("photoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
                             .addOnSuccessListener {
                                 saving = false
                                 photoUrl = downloadUri.toString()
@@ -1060,8 +1075,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             imageRef.putFile(uri)
                 .addOnSuccessListener {
                     imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("users").document(uid)
-                            .set(mapOf("coverPhotoUrl" to downloadUri.toString()), com.google.firebase.firestore.SetOptions.merge())
+                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                            .set(mapOf("coverPhotoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
                             .addOnSuccessListener {
                                 saving = false
                                 coverPhotoUrl = downloadUri.toString()
@@ -1229,20 +1244,24 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         saving = true
                         message = ""
                         isError = false
-                        val updates = mapOf(
-                            "displayName" to cleanName,
-                            "bio" to bio.trim(),
-                            "dateOfBirth" to dateOfBirth.trim(),
-                            "gender" to gender,
-                            "phoneNumber" to phoneNumber.trim(),
-                            "hobby" to hobby.trim(),
-                            "school" to school.trim(),
-                            "favoritePlace" to favoritePlace.trim(),
-                            "hometown" to hometown.trim(),
-                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        val db = FirebaseFirestore.getInstance()
+                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        val privateUpdates = mapOf(
+                            "uid" to uid, "email" to email,
+                            "dateOfBirth" to dateOfBirth.trim(), "gender" to gender,
+                            "phoneNumber" to phoneNumber.trim(), "hobby" to hobby.trim(),
+                            "school" to school.trim(), "favoritePlace" to favoritePlace.trim(),
+                            "hometown" to hometown.trim(), "updatedAt" to timestamp
                         )
-                        FirebaseFirestore.getInstance().collection("users").document(uid)
-                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                        val publicUpdates = mapOf(
+                            "uid" to uid, "displayName" to cleanName, "bio" to bio.trim(),
+                            "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                            "updatedAt" to timestamp
+                        )
+                        val batch = db.batch()
+                        batch.set(db.collection("users").document(uid), privateUpdates, com.google.firebase.firestore.SetOptions.merge())
+                        batch.set(db.collection("publicProfiles").document(uid), publicUpdates, com.google.firebase.firestore.SetOptions.merge())
+                        batch.commit()
                             .addOnSuccessListener {
                                 FirebaseAuth.getInstance().currentUser
                                     ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
@@ -1269,7 +1288,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 }
 
 
-data class PPAUser(val uid: String, val name: String, val email: String = "", val photoUrl: String = "")
+data class PPAUser(val uid: String, val name: String, val photoUrl: String = "")
 
 @Composable
 fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) -> Unit, modifier: Modifier = Modifier) {
@@ -1282,11 +1301,11 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(uid) {
-        val usersListener = db.collection("users").addSnapshotListener { snap, _ ->
+        val usersListener = db.collection("publicProfiles").addSnapshotListener { snap, _ ->
             if (snap != null) users = snap.documents.mapNotNull { doc ->
                 if (doc.id == uid) null else PPAUser(doc.id,
-                    doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: doc.getString("email")?.substringBefore("@") ?: "PPA Talk user",
-                    doc.getString("email") ?: "", doc.getString("photoUrl") ?: "")
+                    doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user",
+                    doc.getString("photoUrl") ?: "")
             }
         }
         val requestsListener = db.collection("friendRequests").whereEqualTo("toUid", uid).addSnapshotListener { snap, _ ->
@@ -1302,7 +1321,7 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
             .addSnapshotListener { snap, _ ->
                 if (snap != null) friends = snap.documents.map { doc ->
                     PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user",
-                        doc.getString("email") ?: "", doc.getString("photoUrl") ?: "")
+                        doc.getString("photoUrl") ?: "")
                 }
             }
         onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
@@ -1311,7 +1330,7 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Friends", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
         OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
-            singleLine = true, label = { Text("Search people by name or email") },
+            singleLine = true, label = { Text("Search people by name") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
         if (status.isNotBlank()) Text(status, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
         Text("Friend requests (${requests.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1325,7 +1344,7 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
                         db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "accepted")
                             .addOnSuccessListener {
                                 db.collection("friends").document(uid).collection("list").document(fromUid)
-                                    .set(mapOf("displayName" to currentName, "uid" to uid, "email" to ""))
+                                    .set(mapOf("displayName" to currentName, "uid" to uid))
                                 db.collection("friends").document(fromUid).collection("list").document(uid)
                                     .set(mapOf("displayName" to (request["fromName"] ?: "PPA Talk user"), "uid" to fromUid))
                                 status = "Friend request accepted."
@@ -1353,7 +1372,7 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
             }
         }
         Text("Find people", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        val matches = users.filter { (it.name.contains(search, true) || it.email.contains(search, true)) && friends.none { f -> f.uid == it.uid } }.take(30)
+        val matches = users.filter { it.name.contains(search, true) && friends.none { f -> f.uid == it.uid } }.take(30)
         if (matches.isEmpty()) Text("No people found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         matches.forEach { person ->
             Card(Modifier.fillMaxWidth()) {
@@ -1361,7 +1380,7 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
                     Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(person.name, fontWeight = FontWeight.SemiBold)
-                        if (person.email.isNotBlank()) Text(person.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                     }
                     if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else OutlinedButton(onClick = {
