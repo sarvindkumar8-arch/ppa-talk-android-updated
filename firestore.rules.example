@@ -95,12 +95,18 @@ service cloud.firestore {
         && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
         && request.resource.data.status == 'pending';
-      allow update: if signedIn()
-        && resource.data.toUid == request.auth.uid
-        && request.resource.data.fromUid == resource.data.fromUid
-        && request.resource.data.toUid == resource.data.toUid
-        && request.resource.data.status in ['accepted', 'rejected']
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow update: if signedIn() && (
+        (resource.data.toUid == request.auth.uid
+          && request.resource.data.fromUid == resource.data.fromUid
+          && request.resource.data.toUid == resource.data.toUid
+          && request.resource.data.status in ['accepted', 'rejected']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+        || (resource.data.fromUid == request.auth.uid
+          && resource.data.status == 'rejected'
+          && request.resource.data.fromUid == resource.data.fromUid
+          && request.resource.data.toUid == resource.data.toUid
+          && request.resource.data.status == 'pending')
+      );
       allow delete: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
