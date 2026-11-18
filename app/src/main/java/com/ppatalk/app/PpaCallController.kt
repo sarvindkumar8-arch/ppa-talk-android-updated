@@ -1,6 +1,7 @@
 package com.ppatalk.app
 
 import android.content.Context
+import android.util.Log
 import org.webrtc.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -142,19 +143,24 @@ class PpaCallController(
             override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
             override fun onAddStream(stream: MediaStream?) {
                 // Compatibility fallback for peers that deliver a MediaStream callback.
+                Log.d("PPATalkWebRTC", "onAddStream: videoTracks=${stream?.videoTracks?.size ?: 0}")
                 stream?.videoTracks?.firstOrNull()?.let { attachRemoteVideoTrack(it) }
             }
             override fun onRemoveStream(stream: MediaStream?) {}
             override fun onDataChannel(channel: DataChannel?) {}
             override fun onRenegotiationNeeded() {}
             override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
-                val track = receiver?.track() as? VideoTrack
+                val receiverTrack = receiver?.track()
+                Log.d("PPATalkWebRTC", "onAddTrack: kind=${receiverTrack?.kind()}, streams=${streams?.size ?: 0}")
+                val track = receiverTrack as? VideoTrack
                     ?: streams?.firstNotNullOfOrNull { it.videoTracks.firstOrNull() }
                     ?: return
                 attachRemoteVideoTrack(track)
             }
             override fun onTrack(transceiver: RtpTransceiver?) {
-                val track = transceiver?.receiver?.track() as? VideoTrack ?: return
+                val receiverTrack = transceiver?.receiver?.track()
+                Log.d("PPATalkWebRTC", "onTrack: kind=${receiverTrack?.kind()}, mid=${transceiver?.mid}, direction=${transceiver?.currentDirection}")
+                val track = receiverTrack as? VideoTrack ?: return
                 attachRemoteVideoTrack(track)
             }
             override fun onRemoveTrack(receiver: RtpReceiver?) {
@@ -311,6 +317,7 @@ class PpaCallController(
     }
 
     private fun attachRemoteVideoTrack(track: VideoTrack) {
+        Log.d("PPATalkWebRTC", "Remote video track attached: id=${track.id()}, enabled=${track.enabled()}")
         track.setEnabled(true)
         // Track callbacks run on WebRTC threads while Compose creates the renderer
         // on the UI thread. Synchronize both paths so a track arriving at the same
