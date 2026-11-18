@@ -131,6 +131,56 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         "China (+86)" to "+86", "Qatar (+974)" to "+974", "Kuwait (+965)" to "+965",
         "Oman (+968)" to "+968"
     )
+    fun finishPhoneSignIn(credential: com.google.firebase.auth.PhoneAuthCredential, fullPhone: String) {
+        busy = true
+        auth.signInWithCredential(credential)
+            .addOnSuccessListener { result ->
+                val firebaseUser = result.user
+                if (firebaseUser == null) {
+                    busy = false
+                    message = "Phone verified, but account details were unavailable."
+                } else if (isSignUp && result.additionalUserInfo?.isNewUser == false) {
+                    auth.signOut()
+                    busy = false
+                    message = "This mobile number is already registered. Please Sign In."
+                } else if (!isSignUp && result.additionalUserInfo?.isNewUser == true) {
+                    firebaseUser.delete().addOnCompleteListener {
+                        auth.signOut()
+                        busy = false
+                        message = "No account found for this number. Please Create account."
+                    }
+                } else {
+                    val profileName = if (isSignUp) name.trim()
+                        else firebaseUser.displayName?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                    firebaseUser.updateProfile(
+                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                            .setDisplayName(profileName).build()
+                    ).addOnCompleteListener {
+                        val db = FirebaseFirestore.getInstance()
+                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        val batch = db.batch()
+                        batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
+                            "uid" to firebaseUser.uid, "phoneNumber" to (firebaseUser.phoneNumber ?: fullPhone),
+                            "updatedAt" to timestamp
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
+                            "uid" to firebaseUser.uid, "displayName" to profileName,
+                            "updatedAt" to timestamp
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        batch.commit().addOnCompleteListener { task ->
+                            busy = false
+                            if (task.isSuccessful) onAuthenticated()
+                            else message = task.exception?.localizedMessage ?: "Phone verified, but profile setup failed."
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener { exception ->
+                busy = false
+                message = exception.localizedMessage ?: "Incorrect or expired OTP."
+            }
+    }
+
     val googleSignInClient = remember(context) {
         val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -323,11 +373,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         }
                         val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                             override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
-                                verificationId = credential.verificationId
-                                otpCode = credential.smsCode.orEmpty()
-                                otpRequested = true
-                                busy = false
-                                message = "Code received. Tap Verify OTP to continue."
+                                finishPhoneSignIn(credential, fullPhone)
                             }
                             override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
                                 busy = false
@@ -361,54 +407,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         }
                         busy = true
                         val credential = PhoneAuthProvider.getCredential(id, otpCode)
-                        auth.signInWithCredential(credential)
-                            .addOnSuccessListener { result ->
-                                val firebaseUser = result.user
-                                if (firebaseUser == null) {
-                                    busy = false
-                                    message = "Phone verified, but account details were unavailable."
-                                } else if (isSignUp && result.additionalUserInfo?.isNewUser == false) {
-                                    auth.signOut()
-                                    busy = false
-                                    message = "This mobile number is already registered. Please Sign In."
-                                } else if (!isSignUp && result.additionalUserInfo?.isNewUser == true) {
-                                    firebaseUser.delete().addOnCompleteListener {
-                                        auth.signOut()
-                                        busy = false
-                                        message = "No account found for this number. Please Create account."
-                                    }
-                                } else {
-                                    val profileName = if (isSignUp) name.trim()
-                                        else firebaseUser.displayName?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
-                                    firebaseUser.updateProfile(
-                                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                                            .setDisplayName(profileName).build()
-                                    ).addOnCompleteListener {
-                                        val db = FirebaseFirestore.getInstance()
-                                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        val batch = db.batch()
-                                        batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
-                                            "uid" to firebaseUser.uid,
-                                            "phoneNumber" to (firebaseUser.phoneNumber ?: fullPhone),
-                                            "createdAt" to timestamp,
-                                            "updatedAt" to timestamp
-                                        ), com.google.firebase.firestore.SetOptions.merge())
-                                        batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
-                                            "uid" to firebaseUser.uid, "displayName" to profileName,
-                                            "updatedAt" to timestamp
-                                        ), com.google.firebase.firestore.SetOptions.merge())
-                                        batch.commit().addOnCompleteListener { task ->
-                                            busy = false
-                                            if (task.isSuccessful) onAuthenticated()
-                                            else message = task.exception?.localizedMessage ?: "Phone verified, but profile setup failed."
-                                        }
-                                    }
-                                }
-                            }
-                            .addOnFailureListener { exception ->
-                                busy = false
-                                message = exception.localizedMessage ?: "Incorrect or expired OTP."
-                            }
+                        finishPhoneSignIn(credential, fullPhone)
                     }
                 } else {
                     if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
