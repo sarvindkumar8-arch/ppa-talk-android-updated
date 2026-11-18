@@ -48,56 +48,46 @@ async function verifyPassword(password, saltHex, expectedHex) {
 }
 
 exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
+  // Registration is allowed only after Firebase Phone Auth has verified the SMS code.
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Verify your mobile number with SMS OTP before creating an account.");
+  }
   const phone = normalizePhone(request.data?.phoneNumber);
   const password = validatePassword(request.data?.password);
   const displayName = typeof request.data?.displayName === "string" ? request.data.displayName.trim().slice(0, 80) : "";
   if (!displayName) throw new HttpsError("invalid-argument", "Enter your full name.");
 
+  const verifiedUser = await getAuth().getUser(request.auth.uid);
+  if (!verifiedUser.phoneNumber || verifiedUser.phoneNumber !== phone) {
+    throw new HttpsError("permission-denied", "The verified mobile number does not match this signup.");
+  }
+
   const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
-  const existing = await docRef.get();
-  if (existing.exists) throw new HttpsError("already-exists", "This mobile number is already registered.");
-
-  let userRecord;
-  try {
-    userRecord = await getAuth().createUser({ phoneNumber: phone, displayName, disabled: false });
-  } catch (error) {
-    if (error.code === "auth/phone-number-already-exists") {
-      throw new HttpsError("already-exists", "This mobile number is already registered.");
-    }
-    throw new HttpsError("internal", "Could not create your account. Please try again.");
-  }
-
-  try {
-    const hash = await makePasswordHash(password);
-    await db.runTransaction(async (tx) => {
-      const current = await tx.get(docRef);
-      if (current.exists) throw new HttpsError("already-exists", "This mobile number is already registered.");
-      tx.create(docRef, {
-        uid: userRecord.uid,
-        phoneNumber: phone,
-        salt: hash.salt,
-        passwordHash: hash.passwordHash,
-        failedAttempts: 0,
-        createdAt: FieldValue.serverTimestamp()
-      });
-      tx.set(db.collection("users").doc(userRecord.uid), {
-        uid: userRecord.uid,
-        phoneNumber: phone,
-        createdAt: FieldValue.serverTimestamp()
-      });
-      tx.set(db.collection("publicProfiles").doc(userRecord.uid), {
-        uid: userRecord.uid,
-        displayName,
-        createdAt: FieldValue.serverTimestamp()
-      });
+  const hash = await makePasswordHash(password);
+  await db.runTransaction(async (tx) => {
+    const current = await tx.get(docRef);
+    if (current.exists) throw new HttpsError("already-exists", "This mobile number is already registered.");
+    tx.create(docRef, {
+      uid: request.auth.uid,
+      phoneNumber: phone,
+      salt: hash.salt,
+      passwordHash: hash.passwordHash,
+      failedAttempts: 0,
+      createdAt: FieldValue.serverTimestamp()
     });
-  } catch (error) {
-    await getAuth().deleteUser(userRecord.uid).catch(() => {});
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError("internal", "Could not finish account setup. Please try again.");
-  }
+    tx.set(db.collection("users").doc(request.auth.uid), {
+      uid: request.auth.uid,
+      phoneNumber: phone,
+      createdAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.set(db.collection("publicProfiles").doc(request.auth.uid), {
+      uid: request.auth.uid,
+      displayName,
+      createdAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
 
-  const token = await getAuth().createCustomToken(userRecord.uid);
+  const token = await getAuth().createCustomToken(request.auth.uid);
   return { token };
 });
 
