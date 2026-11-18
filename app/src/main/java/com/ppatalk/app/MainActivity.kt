@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
@@ -494,7 +495,20 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     }
                                 }
                             }
-                            .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
+                            .addOnFailureListener { exception ->
+                                busy = false
+                                val authCode = (exception as? FirebaseAuthException)?.errorCode
+                                message = when (authCode) {
+                                    "ERROR_INVALID_CREDENTIAL",
+                                    "ERROR_WRONG_PASSWORD",
+                                    "ERROR_USER_NOT_FOUND" -> "Wrong email or password. Please check your details and try again."
+                                    "ERROR_INVALID_EMAIL" -> "Please enter a valid email address."
+                                    "ERROR_USER_DISABLED" -> "This account has been disabled. Please contact support."
+                                    "ERROR_TOO_MANY_REQUESTS" -> "Too many login attempts. Please try again later."
+                                    "ERROR_NETWORK_REQUEST_FAILED" -> "Network error. Check your internet connection and try again."
+                                    else -> "Wrong email or password. Please check your details and try again."
+                                }
+                            }
                     }
                 }
             },
