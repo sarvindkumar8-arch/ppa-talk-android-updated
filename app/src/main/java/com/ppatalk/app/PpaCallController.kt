@@ -26,7 +26,6 @@ class PpaCallController(
     private var callType = "audio"
     private var localAudio: AudioTrack? = null
     private var localVideo: VideoTrack? = null
-    private var remoteVideo: VideoTrack? = null
     private var cameraCapturer: CameraVideoCapturer? = null
     private var videoSource: VideoSource? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
