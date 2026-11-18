@@ -785,7 +785,13 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Log out") }
             }
             "Marketplace" -> SimplePage("Marketplace", "Discover products and community listings", Modifier.padding(padding))
-            "Search" -> SimplePage("Search", "Find people and public posts", Modifier.padding(padding))
+            "Search" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
+                activeChatUid = friendUid
+                activeChatName = friendName
+            }, Modifier.padding(padding), onOpenProfile = { profileUid ->
+                viewedProfileUid = profileUid
+                navigateTo("Profile")
+            }, onBack = { handleBack() }, screenTitle = "Search Friends")
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
             "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
@@ -1996,7 +2002,8 @@ data class PPAUser(val uid: String, val name: String, val photoUrl: String = "")
 @Composable
 fun FriendsScreen(
     uid: String, currentName: String, onMessage: (String, String) -> Unit,
-    modifier: Modifier = Modifier, onOpenProfile: (String) -> Unit = {}, onBack: () -> Unit = {}
+    modifier: Modifier = Modifier, onOpenProfile: (String) -> Unit = {}, onBack: () -> Unit = {},
+    screenTitle: String = "Messenger"
 ) {
     val db = remember { FirebaseFirestore.getInstance() }
     var search by remember { mutableStateOf("") }
@@ -2056,7 +2063,7 @@ fun FriendsScreen(
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text("Messenger", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
+            Text(screenTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
         }
         OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
             singleLine = true, label = { Text("Search people by name") },
@@ -2229,15 +2236,29 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         }
     }
 
-    DisposableEffect(chatId) {
-        val registration = db.collection("chats").document(chatId).collection("messages")
-            .orderBy("createdAt", Query.Direction.ASCENDING).addSnapshotListener { snap, exception ->
-                if (exception != null) error = exception.localizedMessage ?: "Messages could not load."
-                else if (snap != null) messages = snap.documents.map { doc ->
-                    mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""), "text" to (doc.getString("text") ?: ""))
-                }
+    // Ensure the parent chat exists before subscribing to messages. Firestore
+    // rules authorize message reads only for participants in this parent document.
+    DisposableEffect(chatId, currentUid, friendUid) {
+        var registration: com.google.firebase.firestore.ListenerRegistration? = null
+        val chatRef = db.collection("chats").document(chatId)
+        chatRef.set(mapOf(
+            "participantIds" to listOf(currentUid, friendUid).sorted(),
+            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        ), com.google.firebase.firestore.SetOptions.merge())
+            .addOnSuccessListener {
+                registration = chatRef.collection("messages")
+                    .orderBy("createdAt", Query.Direction.ASCENDING)
+                    .addSnapshotListener { snap, exception ->
+                        if (exception != null) error = exception.localizedMessage ?: "Messages could not load. Check Firestore chat permissions."
+                        else if (snap != null) messages = snap.documents.map { doc ->
+                            mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""), "text" to (doc.getString("text") ?: ""))
+                        }
+                    }
             }
-        onDispose { registration.remove() }
+            .addOnFailureListener { exception ->
+                error = exception.localizedMessage ?: "Chat permission denied. Please check Firestore rules."
+            }
+        onDispose { registration?.remove() }
     }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
