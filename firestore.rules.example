@@ -128,7 +128,16 @@ service cloud.firestore {
           && (request.auth.uid == resource.data.callerUid
             || request.auth.uid == resource.data.calleeUid);
       }
+      function isCaller() {
+        return signedIn() && request.auth.uid == resource.data.callerUid;
+      }
+      function isCallee() {
+        return signedIn() && request.auth.uid == resource.data.calleeUid;
+      }
       allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'callerUid', 'calleeUid', 'status', 'callType', 'offer', 'createdAt', 'updatedAt'
+        ])
         && request.resource.data.callerUid == request.auth.uid
         && request.resource.data.calleeUid is string
         && request.resource.data.calleeUid != request.auth.uid
@@ -138,10 +147,23 @@ service cloud.firestore {
       allow update: if isParticipant()
         && request.resource.data.callerUid == resource.data.callerUid
         && request.resource.data.calleeUid == resource.data.calleeUid
+        && request.resource.data.callType == resource.data.callType
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'offer', 'answer', 'updatedAt', 'endedAt', 'acceptedAt'
         ])
-        && request.resource.data.status in ['ringing', 'accepted', 'rejected', 'ended', 'missed'];
+        && (
+          (isCaller()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['offer', 'status', 'updatedAt', 'endedAt'])
+            && (request.resource.data.status == resource.data.status
+              || request.resource.data.status == 'ended'))
+          ||
+          (isCallee()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['answer', 'status', 'updatedAt', 'acceptedAt', 'endedAt'])
+            && (request.resource.data.status == resource.data.status
+              || request.resource.data.status in ['accepted', 'rejected', 'ended', 'missed']))
+        );
       allow delete: if false;
 
       match /callerCandidates/{candidateId} {
@@ -150,8 +172,10 @@ service cloud.firestore {
           return signedIn() && (request.auth.uid == call.callerUid || request.auth.uid == call.calleeUid);
         }
         allow read: if callParticipant();
-        allow create: if callParticipant()
-          && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt']);
+        allow create: if signedIn()
+          && request.auth.uid == get(/databases/$(database)/documents/callSessions/$(callId)).data.callerUid
+          && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt'])
+          && request.resource.data.candidate is string;
         allow update, delete: if false;
       }
       match /calleeCandidates/{candidateId} {
@@ -160,8 +184,10 @@ service cloud.firestore {
           return signedIn() && (request.auth.uid == call.callerUid || request.auth.uid == call.calleeUid);
         }
         allow read: if callParticipant();
-        allow create: if callParticipant()
-          && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt']);
+        allow create: if signedIn()
+          && request.auth.uid == get(/databases/$(database)/documents/callSessions/$(callId)).data.calleeUid
+          && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt'])
+          && request.resource.data.candidate is string;
         allow update, delete: if false;
       }
     }
