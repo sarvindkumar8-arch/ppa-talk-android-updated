@@ -10,6 +10,17 @@ service cloud.firestore {
       allow create: if owns(userId) && request.resource.data.uid == userId;
       allow update: if owns(userId) && request.resource.data.uid == resource.data.uid;
       allow delete: if owns(userId);
+
+      // Each signed-in user can manage only their own device push tokens.
+      // Cloud Functions Admin SDK reads these tokens server-side.
+      match /fcmTokens/{tokenId} {
+        allow read: if owns(userId);
+        allow create, update: if owns(userId)
+          && request.resource.data.token == tokenId
+          && request.resource.data.platform == 'android'
+          && request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt']);
+        allow delete: if owns(userId);
+      }
     }
 
     // Public directory contains only fields safe to show to signed-in users.
