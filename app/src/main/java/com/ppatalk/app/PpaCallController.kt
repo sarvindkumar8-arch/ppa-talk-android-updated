@@ -33,6 +33,8 @@ class PpaCallController(
     private var callListener: ListenerRegistration? = null
     private var candidateListener: ListenerRegistration? = null
     private val receivedCandidates = mutableSetOf<String>()
+    private val pendingRemoteCandidates = mutableListOf<IceCandidate>()
+    private var released = false
     private var remoteDescriptionSet = false
     private var localRenderer: SurfaceViewRenderer? = null
     private var remoteRenderer: SurfaceViewRenderer? = null
@@ -108,6 +110,7 @@ class PpaCallController(
         val config = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         }
+        setSpeaker(true)
         peer = factory.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
@@ -263,13 +266,15 @@ class PpaCallController(
                         (data.getLong("sdpMLineIndex") ?: 0L).toInt(),
                         data.getString("candidate") ?: return@forEach
                     )
-                    if (remoteDescriptionSet) peer?.addIceCandidate(candidate)
+                    if (remoteDescriptionSet) peer?.addIceCandidate(candidate) else pendingRemoteCandidates.add(candidate)
                 }
             }
     }
 
     private fun flushRemoteCandidates() {
-        // Candidate snapshot listener adds newly arriving candidates after SDP is set.
+        pendingRemoteCandidates.forEach { peer?.addIceCandidate(it) }
+        pendingRemoteCandidates.clear()
+        // Fetch candidates that arrived before the snapshot listener was attached.
         val id = callId ?: return
         val collection = if (caller) "calleeCandidates" else "callerCandidates"
         db.collection("callSessions").document(id).collection(collection).get()
@@ -327,6 +332,8 @@ class PpaCallController(
     }
 
     fun release() {
+        if (released) return
+        released = true
         callListener?.remove()
         candidateListener?.remove()
         localVideo?.let { track -> localRenderer?.let { track.removeSink(it) } }
@@ -337,6 +344,10 @@ class PpaCallController(
         surfaceTextureHelper?.dispose()
         peer?.close()
         peer?.dispose()
+        localRenderer?.release()
+        remoteRenderer?.release()
+        localRenderer = null
+        remoteRenderer = null
         localAudio?.dispose()
         localVideo?.dispose()
         remoteVideo?.dispose()
