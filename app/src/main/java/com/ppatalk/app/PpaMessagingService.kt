@@ -24,6 +24,11 @@ class PpaMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         val title = message.data["title"] ?: message.notification?.title ?: "PPA Talk"
         val body = message.data["body"] ?: message.notification?.body ?: "Incoming call"
+        val type = message.data["type"].orEmpty()
+        if (type == "friend_request") {
+            showFriendRequestNotification(title, body, message.data["requestId"].orEmpty())
+            return
+        }
         val callId = message.data["callId"].orEmpty()
         val callerUid = message.data["callerUid"].orEmpty()
         val callType = message.data["callType"] ?: "audio"
@@ -36,6 +41,33 @@ class PpaMessagingService : FirebaseMessagingService() {
             .collection("fcmTokens").document(token)
             .set(mapOf("token" to token, "platform" to "android",
                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+    }
+
+    private fun showFriendRequestNotification(title: String, body: String, requestId: String) {
+        val channelId = "ppa_general_notifications"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(
+                channelId, "PPA Talk notifications", NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Friend requests and social activity"
+                enableVibration(true)
+            })
+        }
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pending = PendingIntent.getActivity(this, requestId.hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pending)
+            .build()
+        manager.notify(requestId.hashCode(), notification)
     }
 
     private fun showCallNotification(title: String, body: String, callId: String,
