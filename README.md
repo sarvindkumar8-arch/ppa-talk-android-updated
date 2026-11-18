@@ -29,19 +29,25 @@ Package: `com.ppatalk.app`
   moderation/reporting, robust security rules, privacy policy and testing.
 
 
-## Phone number + password authentication
+## Phone OTP + password authentication
 
-The Android sign-in screen supports Email or Mobile mode. Email accounts continue to use Firebase Email/Password Authentication. Mobile-number accounts use callable Cloud Functions and Firebase custom tokens; no OTP screen is shown.
+The mobile-number flow is:
+- Sign up: verify the phone with Firebase SMS OTP, then create a password.
+- Sign in: mobile number + password; no SMS is sent.
+- Forgot password: verify the phone with SMS OTP, then set a new password.
+- Email/password and Google sign-in remain available.
 
-### Backend deployment (required for mobile/password)
+The phone/password flow uses Firebase callable Cloud Functions in `asia-south1`. The Functions use Firebase Admin Auth custom tokens for password login and store only salted scrypt password hashes in the server-only `phoneAuthCredentials` collection. The Firestore client rules deny all client access to that collection. Never store passwords or password hashes in app preferences, client-readable Firestore documents, or public profiles.
 
-1. Install Node.js 20 and Firebase CLI: `npm install -g firebase-tools`.
-2. In the repository root, sign in and select the same Firebase project used by `app/google-services.json`: `firebase login` then `firebase use YOUR_FIREBASE_PROJECT_ID`.
-3. Install backend dependencies: `cd functions && npm install && cd ..`.
-4. Deploy the callable authentication backend: `firebase deploy --only functions`.
-5. Publish the updated Firestore rules: `firebase deploy --only firestore:rules`.
-6. In Firebase Console, enable the Phone provider in Authentication. Phone/password login itself does not send an OTP; the backend creates phone-number Auth users and verifies a salted scrypt password hash before issuing a Firebase custom token.
+### Required deployment
 
-The backend stores password hashes in the server-only `phoneAuthCredentials` collection. Firestore client rules deny all client access to this collection. Never add password or password-hash fields to public user profile documents.
+1. Confirm Firebase project `ppa-talk` is linked to this repository's `.firebaserc`.
+2. Enable Firebase Authentication > Phone provider and allow the countries you intend to support in SMS region policy.
+3. Deploy the callable backend: `firebase deploy --only functions`.
+4. Publish Firestore rules: `firebase deploy --only firestore:rules`.
+5. Build and install the new Android APK from the `security/phone-otp-auth` branch.
+6. Test new signup, password login after app restart, wrong-password rejection, forgot-password OTP, and login with the reset password.
 
-Before production release, configure Firebase App Check enforcement for callable functions, abuse monitoring, backups, and account recovery for mobile-only accounts. If the backend has not been deployed, mobile sign-up/login will return a backend setup error; email/password login remains available.
+The backend must be deployed before phone/password login or password creation can work. The Android code changes and a successful CI build do not themselves deploy Cloud Functions or verify real SMS delivery.
+
+Before public launch, enable and enforce Firebase App Check for callable functions after configuring the Android app, add stronger per-account/IP abuse throttling and monitoring, and review billing alerts. Firebase Phone Auth SMS charges apply to OTP sends during signup and password recovery; ordinary password login does not send an SMS.
