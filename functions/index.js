@@ -189,3 +189,64 @@ exports.notifyIncomingCall = onDocumentCreated({
   await Promise.all(stale);
   console.info("Incoming call push result", { successCount: result.successCount, failureCount: result.failureCount });
 });
+
+
+// Notify the recipient when a new friend request is created.
+exports.notifyFriendRequest = onDocumentCreated({
+  document: "friendRequests/{requestId}",
+  region: REGION,
+  maxInstances: 20
+}, async (event) => {
+  const request = event.data?.data();
+  if (!request || request.status !== "pending" ||
+      typeof request.fromUid !== "string" || typeof request.toUid !== "string" ||
+      request.fromUid === request.toUid) return;
+
+  const tokensSnapshot = await db.collection("users").doc(request.toUid)
+    .collection("fcmTokens").get();
+  const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
+  if (tokens.length === 0) {
+    console.info("No registered FCM tokens for friend-request recipient", request.toUid);
+    return;
+  }
+
+  const senderProfile = await db.collection("publicProfiles").doc(request.fromUid).get();
+  const senderName = senderProfile.get("displayName") || request.fromName || "PPA Talk user";
+  const result = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: "New friend request",
+      body: senderName + " sent you a friend request"
+    },
+    data: {
+      type: "friend_request",
+      requestId: event.params.requestId,
+      fromUid: request.fromUid,
+      title: "New friend request",
+      body: senderName + " sent you a friend request"
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "ppa_talk_calls",
+        sound: "default"
+      }
+    }
+  });
+
+  const staleTokens = [];
+  result.responses.forEach((response, index) => {
+    if (!response.success &&
+        ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"]
+          .includes(response.error?.code)) {
+      staleTokens.push(tokens[index]);
+    }
+  });
+  if (staleTokens.length) {
+    const batch = db.batch();
+    staleTokens.forEach((token) => batch.delete(
+      db.collection("users").doc(request.toUid).collection("fcmTokens").doc(token)
+    ));
+    await batch.commit();
+  }
+});
