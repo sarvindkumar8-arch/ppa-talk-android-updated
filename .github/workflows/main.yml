@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/chat-voice-video-calling
   workflow_dispatch:
 
 permissions:
