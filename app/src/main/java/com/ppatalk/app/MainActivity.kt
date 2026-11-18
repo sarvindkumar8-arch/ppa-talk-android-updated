@@ -1298,32 +1298,28 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
                 if (post.uid != currentUid) {
                     OutlinedButton(
-                        enabled = !friendBusy && friendState == "Add Friend",
+                        enabled = !friendBusy && friendState in listOf("Add Friend", "Respond"),
                         onClick = {
                             friendBusy = true
-                            val senderProfile = db.collection("publicProfiles").document(currentUid)
-                            senderProfile.get().addOnSuccessListener { profile ->
-                                val data = hashMapOf(
-                                    "fromUid" to currentUid,
-                                    "toUid" to post.uid,
-                                    "fromName" to (profile.getString("displayName") ?: "PPA Talk user"),
-                                    "toName" to post.authorName,
-                                    "status" to "pending",
-                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )
-                                db.collection("friendRequests").document("${currentUid}_${post.uid}").set(data)
-                                    .addOnSuccessListener {
-                                        friendState = "Requested"
-                                        friendMessage = "Friend request sent"
+                            if (friendState == "Respond") {
+                                acceptFriendRequestSafely(db, currentUid, post.uid, "PPA Talk user", post.authorName) { ok, detail ->
+                                    friendState = if (ok) "Friends" else "Respond"
+                                    friendMessage = detail
+                                    friendBusy = false
+                                }
+                            } else {
+                                db.collection("publicProfiles").document(currentUid).get()
+                                    .addOnSuccessListener { profile ->
+                                        sendFriendRequestSafely(db, currentUid, post.uid,
+                                            profile.getString("displayName") ?: "PPA Talk user", post.authorName) { ok, detail ->
+                                            if (ok) friendState = "Requested"
+                                            friendMessage = detail
+                                            friendBusy = false
+                                        }
+                                    }.addOnFailureListener { error ->
+                                        friendMessage = error.localizedMessage ?: "Could not load your profile"
                                         friendBusy = false
                                     }
-                                    .addOnFailureListener { error ->
-                                        friendMessage = error.localizedMessage ?: "Could not send request"
-                                        friendBusy = false
-                                    }
-                            }.addOnFailureListener { error ->
-                                friendMessage = error.localizedMessage ?: "Could not load your profile"
-                                friendBusy = false
                             }
                         }
                     ) {
@@ -1331,7 +1327,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         else Text(when (friendState) {
                             "Requested" -> "Requested"
                             "Friends" -> "Friends"
-                            "Respond" -> "Respond"
+                            "Respond" -> "Accept"
                             else -> "Add Friend"
                         })
                     }
