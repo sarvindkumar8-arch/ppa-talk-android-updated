@@ -628,6 +628,29 @@ private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, onSignOut: () -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(uid, lifecycleOwner) {
+        val db = FirebaseFirestore.getInstance()
+        fun setPresence(online: Boolean) {
+            db.collection("publicProfiles").document(uid).set(
+                mapOf("isOnline" to online, "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> setPresence(true)
+                Lifecycle.Event.ON_STOP -> setPresence(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) setPresence(true)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            setPresence(false)
+        }
+    }
     var selected by remember { mutableStateOf("Home") }
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
@@ -2170,6 +2193,7 @@ fun FriendsScreen(
     var requests by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
     var friends by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
     var sentRequests by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var onlineFriends by remember { mutableStateOf<Set<String>>(emptySet()) }
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(uid) {
@@ -2217,6 +2241,12 @@ fun FriendsScreen(
                 }
             }
         onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
+    }
+    DisposableEffect(uid) {
+        val registration = db.collection("publicProfiles").addSnapshotListener { snap, _ ->
+            if (snap != null) onlineFriends = snap.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
+        }
+        onDispose { registration.remove() }
     }
 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2269,18 +2299,29 @@ fun FriendsScreen(
         friends.forEach { friend ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(modifier = Modifier.size(40.dp), shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant, onClick = { onOpenProfile(friend.uid) }) {
-                        if (friend.photoUrl.isNotBlank()) AsyncImage(model = friend.photoUrl,
-                            contentDescription = "Open friend profile",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        else Icon(Icons.Default.AccountCircle, contentDescription = "Open profile", tint = RoyalBlue)
+                    Box(Modifier.size(48.dp)) {
+                        Surface(modifier = Modifier.size(44.dp).align(Alignment.TopStart), shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant, onClick = { onOpenProfile(friend.uid) }) {
+                            if (friend.photoUrl.isNotBlank()) AsyncImage(model = friend.photoUrl,
+                                contentDescription = "Open friend profile",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            else Icon(Icons.Default.AccountCircle, contentDescription = "Open profile", tint = RoyalBlue)
+                        }
+                        if (friend.uid in onlineFriends) Surface(
+                            modifier = Modifier.size(13.dp).align(Alignment.BottomEnd),
+                            shape = CircleShape, color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)
+                        ) {}
                     }
                     TextButton(onClick = { onOpenProfile(friend.uid) }, modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(start = 10.dp)) {
-                        Text(friend.name, fontWeight = FontWeight.SemiBold)
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(friend.name, fontWeight = FontWeight.SemiBold)
+                            Text(if (friend.uid in onlineFriends) "Active now" else "Offline",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (friend.uid in onlineFriends) Color(0xFF239B56) else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                    Button(onClick = { onMessage(friend.uid, friend.name) }) {
+                    Button(onClick = { onMessage(friend.uid, friend.name) })
                         Icon(Icons.Default.Chat, contentDescription = null)
                         Spacer(Modifier.width(5.dp)); Text("Message")
                     }
@@ -2343,6 +2384,13 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
         onDispose { registration.remove() }
     }
     var people by remember(uid) { mutableStateOf<List<PPAUser>>(emptyList()) }
+    var onlinePeople by remember(uid) { mutableStateOf<Set<String>>(emptySet()) }
+    DisposableEffect(uid) {
+        val presenceRegistration = db.collection("publicProfiles").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) onlinePeople = snapshot.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
+        }
+        onDispose { presenceRegistration.remove() }
+    }
     DisposableEffect(uid) {
         val registration = db.collection("friends").document(uid).collection("list")
             .addSnapshotListener { snapshot, _ ->
@@ -2368,9 +2416,13 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 14.dp, horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             people.forEach { person ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
-                    Surface(onClick = { onOpenChat(person.uid, person.name) }, modifier = Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                        if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                    Box(Modifier.size(66.dp)) {
+                        Surface(onClick = { onOpenChat(person.uid, person.name) }, modifier = Modifier.size(62.dp).align(Alignment.TopStart), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                            if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                        }
+                        if (person.uid in onlinePeople) Surface(Modifier.size(14.dp).align(Alignment.BottomEnd), shape = CircleShape,
+                            color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
                     }
                     Text(person.name, maxLines = 2, style = MaterialTheme.typography.labelMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
@@ -2387,9 +2439,13 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                 if (visible.isEmpty() && !loading) item { Text("Your conversations will appear here. Add friends to start chatting.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(visible, key = { it.uid }) { person ->
                     Row(Modifier.fillMaxWidth().clickable { onOpenChat(person.uid, person.name) }.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                            if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                            else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                        Box(Modifier.size(66.dp)) {
+                            Surface(Modifier.size(62.dp).align(Alignment.TopStart), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                                else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                            }
+                            if (person.uid in onlinePeople) Surface(Modifier.size(14.dp).align(Alignment.BottomEnd),
+                                shape = CircleShape, color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
                         }
                         Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
