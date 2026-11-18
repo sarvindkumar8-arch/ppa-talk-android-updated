@@ -229,7 +229,7 @@ exports.notifyFriendRequest = onDocumentWritten({
     android: {
       priority: "high",
       notification: {
-        channelId: "ppa_talk_calls",
+        channelId: "ppa_general_notifications",
         sound: "default"
       }
     }
