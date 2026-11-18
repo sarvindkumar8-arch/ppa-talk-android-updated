@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -38,12 +40,24 @@ class PpaMessagingService : FirebaseMessagingService() {
 
     private fun showCallNotification(title: String, body: String, callId: String,
                                      callerUid: String, callType: String) {
-        val channelId = "ppa_incoming_calls"
+        val channelId = "ppa_incoming_calls_v2"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            {
+            val ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             manager.createNotificationChannel(NotificationChannel(
                 channelId, "Incoming calls", NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = "Alerts for incoming PPA Talk calls" })
+            ).apply {
+                description = "Ringtone and alerts for incoming PPA Talk calls"
+                setSound(ringtone, AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build())
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 1000, 500, 1000)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            })
+        }
         }
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -59,7 +73,10 @@ class PpaMessagingService : FirebaseMessagingService() {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+             .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))
+            .setVibrate(longArrayOf(0, 1000, 500, 1000))
+            .setOngoing(true)
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
