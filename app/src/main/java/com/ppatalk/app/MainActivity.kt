@@ -463,13 +463,32 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var menuExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(uid) {
+        val db = FirebaseFirestore.getInstance()
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            FirebaseFirestore.getInstance().collection("users").document(uid)
+            db.collection("users").document(uid)
                 .collection("fcmTokens").document(token)
                 .set(mapOf("token" to token, "platform" to "android",
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
         }
-        onDispose { }
+
+        // Keep an app-wide listener so an incoming call can open its chat even
+        // when the receiver was on another tab when the push notification arrived.
+        val incomingRegistration = db.collection("callSessions")
+            .whereEqualTo("calleeUid", uid)
+            .whereEqualTo("status", "ringing")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                val incoming = snapshot?.documents?.firstOrNull {
+                    it.get("offer") is Map<*, *>
+                } ?: return@addSnapshotListener
+                val callerUid = incoming.getString("callerUid") ?: return@addSnapshotListener
+                activeChatUid = callerUid
+                db.collection("publicProfiles").document(callerUid).get()
+                    .addOnSuccessListener { profile ->
+                        activeChatName = profile.getString("displayName") ?: "PPA Talk user"
+                    }
+            }
+        onDispose { incomingRegistration.remove() }
     }
 
     Scaffold(
