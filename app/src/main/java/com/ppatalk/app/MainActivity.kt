@@ -16,6 +16,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
@@ -1680,6 +1681,21 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
+    var postCount by remember { mutableStateOf(0) }
+    var friendCount by remember { mutableStateOf(0) }
+    var profileTab by remember { mutableStateOf("All") }
+    var showStoryComposer by remember { mutableStateOf(false) }
+
+    DisposableEffect(uid) {
+        val db = FirebaseFirestore.getInstance()
+        val postsRegistration = db.collection("posts").whereEqualTo("uid", uid).addSnapshotListener { snap, _ ->
+            if (snap != null) postCount = snap.size()
+        }
+        val friendsRegistration = db.collection("friends").document(uid).collection("list").addSnapshotListener { snap, _ ->
+            if (snap != null) friendCount = snap.size()
+        }
+        onDispose { postsRegistration.remove(); friendsRegistration.remove() }
+    }
 
     DisposableEffect(uid) {
         val db = FirebaseFirestore.getInstance()
@@ -1860,6 +1876,29 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
         }
 
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(displayName.ifBlank { "PPA Talk user" }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(postCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Posts", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(friendCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Friends", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("—", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Followers", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { message = "Profile dashboard: $postCount posts and $friendCount friends." }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.BarChart, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Dashboard")
+                }
+                OutlinedButton(onClick = { showStoryComposer = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.AddCircle, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add to story")
+                }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Reels", "Photos", "More").forEach { tab ->
+                    FilterChip(selected = profileTab == tab, onClick = { profileTab = tab }, label = { Text(tab) })
+                }
+            }
+            Text("Personal details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -1967,6 +2006,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         }
         Spacer(Modifier.height(12.dp))
     }
+    if (showStoryComposer) CreateStoryDialog(uid, displayName, onDismiss = { showStoryComposer = false })
 }
 
 
