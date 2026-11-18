@@ -794,7 +794,10 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 viewedProfileUid = profileUid
                 navigateTo("Profile")
             }, onBack = { handleBack() })
-            "Reels" -> SimplePage("Reels", "Short videos from the PPA Talk community.", Modifier.padding(padding))
+            "Reels" -> ReelsScreen(uid, Modifier.padding(padding), onOpenUserProfile = { profileUid ->
+                viewedProfileUid = profileUid
+                navigateTo("Profile")
+            })
             "Notifications" -> NotificationsScreen(uid, Modifier.padding(padding), onOpenFriends = { navigateTo("Friends") })
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
@@ -803,6 +806,68 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
 
 data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
+@Composable
+fun ReelsScreen(
+    currentUid: String,
+    modifier: Modifier = Modifier,
+    onOpenUserProfile: (String) -> Unit = {}
+) {
+    var reels by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf("") }
+    var selectedReel by remember { mutableStateOf<FeedPost?>(null) }
+
+    DisposableEffect(Unit) {
+        val registration = FirebaseFirestore.getInstance().collection("posts")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Reels load nahi ho paayi."
+                    loading = false
+                } else if (snapshot != null) {
+                    reels = snapshot.documents.mapNotNull { doc ->
+                        val mediaType = doc.getString("mediaType").orEmpty()
+                        val postType = doc.getString("postType").orEmpty()
+                        if (mediaType != "video" && postType != "reel") return@mapNotNull null
+                        FeedPost(
+                            doc.id, doc.getString("uid").orEmpty(),
+                            doc.getString("authorName") ?: "PPA Talk user",
+                            doc.getString("text").orEmpty(),
+                            doc.getTimestamp("createdAt")?.toDate(),
+                            doc.getString("mediaUrl").orEmpty(), mediaType, postType
+                        )
+                    }
+                    loading = false
+                    error = ""
+                }
+            }
+        onDispose { registration.remove() }
+    }
+
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("Reels", style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold, color = RoyalBlue)
+        }
+        if (loading) item { CircularProgressIndicator() }
+        if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
+        if (!loading && reels.isEmpty() && error.isBlank()) {
+            item { Text("Abhi koi Reel nahi hai. Create Post mein Video / Reel select karke share karein.") }
+        }
+        items(reels, key = { it.id }) { reel ->
+            FeedPostCard(reel, currentUid,
+                onOpenAuthorProfile = { onOpenUserProfile(reel.uid) }) {
+                selectedReel = reel
+            }
+        }
+    }
+    selectedReel?.let { reel ->
+        PostCommentsDialog(reel, currentUid) { selectedReel = null }
+    }
+}
+
+
 
 @Composable
 fun HomeFeed(
@@ -977,15 +1042,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                 }
             }
             stories.forEach { story ->
-                Card(onClick = { viewingStory = story }, modifier = Modifier.width(92.dp).fillMaxHeight()) {
-                    Box(Modifier.fillMaxSize()) {
-                        AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story",
-                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        Text(story["authorName"] as? String ?: "PPA Talk user",
-                            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.55f)).padding(5.dp),
-                            color = Color.White, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                    }
-                }
+                StoryPreviewCard(story = story, onClick = { viewingStory = story })
             }
         }
     }
@@ -1001,6 +1058,40 @@ fun StoriesStrip(uid: String, displayName: String) {
             },
             confirmButton = { TextButton(onClick = { viewingStory = null }) { Text("Close") } }
         )
+    }
+}
+
+@Composable
+fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
+    var profilePhotoUrl by remember(story["uid"]) { mutableStateOf("") }
+    val storyUid = story["uid"] as? String ?: ""
+    DisposableEffect(storyUid) {
+        if (storyUid.isBlank()) return@DisposableEffect onDispose { }
+        val registration = FirebaseFirestore.getInstance().collection("publicProfiles")
+            .document(storyUid).addSnapshotListener { profile, _ ->
+                profilePhotoUrl = profile?.getString("photoUrl").orEmpty()
+            }
+        onDispose { registration.remove() }
+    }
+    Card(onClick = onClick, modifier = Modifier.width(92.dp).fillMaxHeight()) {
+        Box(Modifier.fillMaxSize()) {
+            AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story",
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Surface(
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(34.dp),
+                shape = CircleShape, color = RoyalBlue, border = BorderStroke(2.dp, Color.White)
+            ) {
+                if (profilePhotoUrl.isNotBlank()) AsyncImage(model = profilePhotoUrl,
+                    contentDescription = "Story author profile photo",
+                    modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                else Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo",
+                    tint = Color.White, modifier = Modifier.padding(3.dp))
+            }
+            Text(story["authorName"] as? String ?: "PPA Talk user",
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.55f)).padding(5.dp),
+                color = Color.White, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        }
     }
 }
 
