@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PPATalkApp() {
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
