@@ -171,8 +171,13 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         ), com.google.firebase.firestore.SetOptions.merge())
                         batch.commit().addOnCompleteListener { task ->
                             busy = false
-                            if (task.isSuccessful) onAuthenticated()
-                            else message = task.exception?.localizedMessage ?: "Phone verified, but profile setup failed."
+                            // Authentication is already successful. A profile write failure must not
+                            // lock the user out; surface it as a non-blocking warning.
+                            if (!task.isSuccessful) {
+                                message = "Phone verified. Profile sync pending: " +
+                                    (task.exception?.localizedMessage ?: "Firestore permission denied.")
+                            }
+                            onAuthenticated()
                         }
                     }
                 }
@@ -224,12 +229,14 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
                                     "updatedAt" to timestamp
                                 ), com.google.firebase.firestore.SetOptions.merge())
-                                batch.commit()
-                                    .addOnSuccessListener { busy = false; onAuthenticated() }
-                                    .addOnFailureListener { exception ->
-                                        busy = false
-                                        message = exception.localizedMessage ?: "Could not save Google profile."
+                                batch.commit().addOnCompleteListener { task ->
+                                    busy = false
+                                    if (!task.isSuccessful) {
+                                        message = "Google login successful. Profile sync pending: " +
+                                            (task.exception?.localizedMessage ?: "Firestore permission denied.")
                                     }
+                                    onAuthenticated()
+                                }
                             }
                         }
                         .addOnFailureListener { exception ->
@@ -473,8 +480,11 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     ), com.google.firebase.firestore.SetOptions.merge())
                                     batch.commit().addOnCompleteListener { task ->
                                         busy = false
-                                        if (task.isSuccessful) onAuthenticated()
-                                        else message = task.exception?.localizedMessage ?: "Profile setup failed."
+                                        if (!task.isSuccessful) {
+                                            message = "Login successful. Profile sync pending: " +
+                                                (task.exception?.localizedMessage ?: "Firestore permission denied.")
+                                        }
+                                        onAuthenticated()
                                     }
                                 }
                             }
