@@ -1,0 +1,359 @@
+package com.ppatalk.app
+
+import android.content.Context
+import org.webrtc.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+
+/**
+ * Firestore-signalled WebRTC peer call. Media travels peer-to-peer; Firestore
+ * carries only SDP and ICE metadata. A TURN server is required for reliable
+ * connectivity across restrictive mobile/carrier networks.
+ */
+class PpaCallController(
+    private val context: Context,
+    private val uid: String,
+    private val friendUid: String,
+    private val onStatus: (String) -> Unit,
+    private val onError: (String) -> Unit
+) {
+    private val db = FirebaseFirestore.getInstance()
+    private val egl = EglBase.create()
+    private var factory: PeerConnectionFactory
+    private var peer: PeerConnection? = null
+    private var callId: String? = null
+    private var caller = false
+    private var callType = "audio"
+    private var localAudio: AudioTrack? = null
+    private var localVideo: VideoTrack? = null
+    private var remoteVideo: VideoTrack? = null
+    private var cameraCapturer: CameraVideoCapturer? = null
+    private var videoSource: VideoSource? = null
+    private var surfaceTextureHelper: SurfaceTextureHelper? = null
+    private var callListener: ListenerRegistration? = null
+    private var candidateListener: ListenerRegistration? = null
+    private val receivedCandidates = mutableSetOf<String>()
+    private var remoteDescriptionSet = false
+    private var localRenderer: SurfaceViewRenderer? = null
+    private var remoteRenderer: SurfaceViewRenderer? = null
+    private var muted = false
+    private var speakerEnabled = true
+
+    init {
+        PeerConnectionFactory.initialize(
+            PeerConnectionFactory.InitializationOptions.builder(context.applicationContext).createInitializationOptions()
+        )
+        factory = PeerConnectionFactory.builder().createPeerConnectionFactory()
+    }
+
+    fun startOutgoing(type: String) {
+        callType = type
+        caller = true
+        val ref = db.collection("callSessions").document()
+        callId = ref.id
+        onStatus("Calling…")
+        val data = hashMapOf<String, Any>(
+            "callerUid" to uid,
+            "calleeUid" to friendUid,
+            "status" to "ringing",
+            "callType" to type,
+            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+        ref.set(data).addOnSuccessListener {
+            createPeer()
+            createOffer()
+            listenForCallUpdates()
+            listenForRemoteCandidates()
+        }.addOnFailureListener { onError(it.localizedMessage ?: "Could not start call. Check Firestore rules.") }
+    }
+
+    fun acceptIncoming(id: String) {
+        callId = id
+        caller = false
+        val ref = db.collection("callSessions").document(id)
+        ref.get().addOnSuccessListener { snapshot ->
+            if (!snapshot.exists() || snapshot.getString("calleeUid") != uid ||
+                snapshot.getString("status") != "ringing") {
+                onError("This call is no longer available.")
+                return@addOnSuccessListener
+            }
+            callType = snapshot.getString("callType") ?: "audio"
+            val offerMap = snapshot.get("offer") as? Map<*, *>
+            val sdp = offerMap?.get("sdp") as? String
+            if (sdp.isNullOrBlank()) {
+                onError("Caller offer is not ready. Please try again.")
+                return@addOnSuccessListener
+            }
+            createPeer()
+            val offer = SessionDescription(SessionDescription.Type.OFFER, sdp)
+            peer?.setRemoteDescription(object : SimpleSdpObserver() {
+                override fun onSetSuccess() {
+                    remoteDescriptionSet = true
+                    flushRemoteCandidates()
+                    createAnswer()
+                }
+                override fun onSetFailure(error: String) { onError("Could not accept call: $error") }
+            }, offer)
+            listenForCallUpdates()
+            listenForRemoteCandidates()
+        }.addOnFailureListener { onError(it.localizedMessage ?: "Could not load incoming call.") }
+    }
+
+    private fun createPeer() {
+        val iceServers = listOf(
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
+        )
+        val config = PeerConnection.RTCConfiguration(iceServers).apply {
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+        }
+        peer = factory.createPeerConnection(config, object : PeerConnection.Observer {
+            override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
+            override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
+                when (state) {
+                    PeerConnection.IceConnectionState.CONNECTED,
+                    PeerConnection.IceConnectionState.COMPLETED -> onStatus("Connected")
+                    PeerConnection.IceConnectionState.DISCONNECTED -> onStatus("Connection interrupted…")
+                    PeerConnection.IceConnectionState.FAILED -> onError("Connection failed. A TURN server may be required.")
+                    PeerConnection.IceConnectionState.CLOSED -> onStatus("Call ended")
+                    else -> {}
+                }
+            }
+            override fun onIceConnectionReceivingChange(receiving: Boolean) {}
+            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
+            override fun onIceCandidate(candidate: IceCandidate?) {
+                candidate ?: return
+                val id = callId ?: return
+                val collection = if (caller) "callerCandidates" else "calleeCandidates"
+                val data = hashMapOf<String, Any>(
+                    "candidate" to candidate.sdp,
+                    "sdpMid" to (candidate.sdpMid ?: ""),
+                    "sdpMLineIndex" to candidate.sdpMLineIndex,
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+                db.collection("callSessions").document(id).collection(collection).add(data)
+            }
+            override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
+            override fun onAddStream(stream: MediaStream?) {}
+            override fun onRemoveStream(stream: MediaStream?) {}
+            override fun onDataChannel(channel: DataChannel?) {}
+            override fun onRenegotiationNeeded() {}
+            override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
+                val track = receiver?.track() as? VideoTrack ?: return
+                remoteVideo = track
+                remoteRenderer?.let { track.addSink(it) }
+            }
+            override fun onTrack(transceiver: RtpTransceiver?) {
+                val track = transceiver?.receiver?.track() as? VideoTrack ?: return
+                remoteVideo = track
+                remoteRenderer?.let { track.addSink(it) }
+            }
+            override fun onRemoveTrack(receiver: RtpReceiver?) {}
+        }) ?: run {
+            onError("Could not create WebRTC connection.")
+            return
+        }
+
+        val audioSource = factory.createAudioSource(MediaConstraints())
+        localAudio = factory.createAudioTrack("ppa_audio_$uid", audioSource)
+        localAudio?.setEnabled(true)
+        peer?.addTrack(localAudio, listOf("ppa_stream"))
+
+        if (callType == "video") {
+            val enumerator = Camera2Enumerator(context)
+            val cameraName = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
+                ?: enumerator.deviceNames.firstOrNull()
+            if (cameraName == null) {
+                onError("No camera is available on this phone.")
+                return
+            }
+            cameraCapturer = enumerator.createCapturer(cameraName, null)
+            val capturer = cameraCapturer ?: return
+            surfaceTextureHelper = SurfaceTextureHelper.create("PPA-Camera", egl.eglBaseContext)
+            videoSource = factory.createVideoSource(false)
+            capturer.initialize(surfaceTextureHelper, context, videoSource?.capturerObserver)
+            capturer.startCapture(640, 480, 24)
+            localVideo = factory.createVideoTrack("ppa_video_$uid", videoSource)
+            localVideo?.setEnabled(true)
+            peer?.addTrack(localVideo, listOf("ppa_stream"))
+            localRenderer?.let { localVideo?.addSink(it) }
+        }
+    }
+
+    private fun createOffer() {
+        peer?.createOffer(object : SimpleSdpObserver() {
+            override fun onCreateSuccess(description: SessionDescription?) {
+                if (description == null) { onError("Could not create call offer."); return }
+                peer?.setLocalDescription(object : SimpleSdpObserver() {
+                    override fun onSetSuccess() {
+                        val id = callId ?: return
+                        db.collection("callSessions").document(id).update(
+                            mapOf("offer" to mapOf("type" to "offer", "sdp" to description.description),
+                                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                        ).addOnFailureListener { onError(it.localizedMessage ?: "Could not send call offer.") }
+                    }
+                    override fun onSetFailure(error: String) { onError("Could not set local offer: $error") }
+                }, description)
+            }
+            override fun onCreateFailure(error: String) { onError("Offer failed: $error") }
+        }, MediaConstraints())
+    }
+
+    private fun createAnswer() {
+        peer?.createAnswer(object : SimpleSdpObserver() {
+            override fun onCreateSuccess(description: SessionDescription?) {
+                if (description == null) { onError("Could not create answer."); return }
+                peer?.setLocalDescription(object : SimpleSdpObserver() {
+                    override fun onSetSuccess() {
+                        val id = callId ?: return
+                        db.collection("callSessions").document(id).update(
+                            mapOf("answer" to mapOf("type" to "answer", "sdp" to description.description),
+                                "status" to "accepted",
+                                "acceptedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                        ).addOnSuccessListener { onStatus("Connecting…") }
+                            .addOnFailureListener { onError(it.localizedMessage ?: "Could not send answer.") }
+                    }
+                    override fun onSetFailure(error: String) { onError("Could not set local answer: $error") }
+                }, description)
+            }
+            override fun onCreateFailure(error: String) { onError("Answer failed: $error") }
+        }, MediaConstraints())
+    }
+
+    private fun listenForCallUpdates() {
+        val id = callId ?: return
+        callListener?.remove()
+        callListener = db.collection("callSessions").document(id).addSnapshotListener { snapshot, error ->
+            if (error != null) { onError(error.localizedMessage ?: "Call listener failed."); return@addSnapshotListener }
+            if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
+            val status = snapshot.getString("status") ?: "ringing"
+            when (status) {
+                "accepted" -> {
+                    val answerMap = snapshot.get("answer") as? Map<*, *>
+                    val sdp = answerMap?.get("sdp") as? String
+                    if (caller && !sdp.isNullOrBlank() && !remoteDescriptionSet) {
+                        peer?.setRemoteDescription(object : SimpleSdpObserver() {
+                            override fun onSetSuccess() { remoteDescriptionSet = true; flushRemoteCandidates(); onStatus("Connecting…") }
+                            override fun onSetFailure(error: String) { onError("Could not read answer: $error") }
+                        }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
+                    }
+                }
+                "rejected" -> onStatus("Call declined")
+                "ended", "missed" -> onStatus("Call ended")
+                "ringing" -> if (caller) onStatus("Calling…")
+            }
+        }
+    }
+
+    private fun listenForRemoteCandidates() {
+        val id = callId ?: return
+        val collection = if (caller) "calleeCandidates" else "callerCandidates"
+        candidateListener?.remove()
+        candidateListener = db.collection("callSessions").document(id).collection(collection)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { onError(error.localizedMessage ?: "ICE candidate listener failed."); return@addSnapshotListener }
+                snapshot?.documentChanges?.forEach { change ->
+                    if (change.type != com.google.firebase.firestore.DocumentChange.Type.ADDED) return@forEach
+                    val data = change.document
+                    if (!receivedCandidates.add(data.id)) return@forEach
+                    val candidate = IceCandidate(
+                        data.getString("sdpMid") ?: "",
+                        (data.getLong("sdpMLineIndex") ?: 0L).toInt(),
+                        data.getString("candidate") ?: return@forEach
+                    )
+                    if (remoteDescriptionSet) peer?.addIceCandidate(candidate)
+                }
+            }
+    }
+
+    private fun flushRemoteCandidates() {
+        // Candidate snapshot listener adds newly arriving candidates after SDP is set.
+        val id = callId ?: return
+        val collection = if (caller) "calleeCandidates" else "callerCandidates"
+        db.collection("callSessions").document(id).collection(collection).get()
+            .addOnSuccessListener { snapshot ->
+                snapshot.documents.forEach { data ->
+                    if (!receivedCandidates.add(data.id)) return@forEach
+                    val candidateText = data.getString("candidate") ?: return@forEach
+                    peer?.addIceCandidate(IceCandidate(
+                        data.getString("sdpMid") ?: "",
+                        (data.getLong("sdpMLineIndex") ?: 0L).toInt(),
+                        candidateText
+                    ))
+                }
+            }
+    }
+
+    fun attachLocalRenderer(renderer: SurfaceViewRenderer) {
+        localRenderer = renderer
+        renderer.init(egl.eglBaseContext, null)
+        renderer.setEnableHardwareScaler(true)
+        renderer.setMirror(true)
+        localVideo?.addSink(renderer)
+    }
+
+    fun attachRemoteRenderer(renderer: SurfaceViewRenderer) {
+        remoteRenderer = renderer
+        renderer.init(egl.eglBaseContext, null)
+        renderer.setEnableHardwareScaler(true)
+        renderer.setMirror(false)
+        remoteVideo?.addSink(renderer)
+    }
+
+    fun setMuted(value: Boolean) {
+        muted = value
+        localAudio?.setEnabled(!value)
+    }
+
+    fun setSpeaker(value: Boolean) {
+        speakerEnabled = value
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        audioManager.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+        audioManager.isSpeakerphoneOn = value
+    }
+
+    fun endCall() {
+        val id = callId
+        if (id != null) {
+            db.collection("callSessions").document(id).update(
+                mapOf("status" to "ended", "endedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+            )
+        }
+        release()
+        onStatus("Call ended")
+    }
+
+    fun release() {
+        callListener?.remove()
+        candidateListener?.remove()
+        localVideo?.let { track -> localRenderer?.let { track.removeSink(it) } }
+        remoteVideo?.let { track -> remoteRenderer?.let { track.removeSink(it) } }
+        try { cameraCapturer?.stopCapture() } catch (_: Exception) {}
+        cameraCapturer?.dispose()
+        videoSource?.dispose()
+        surfaceTextureHelper?.dispose()
+        peer?.close()
+        peer?.dispose()
+        localAudio?.dispose()
+        localVideo?.dispose()
+        remoteVideo?.dispose()
+        factory.dispose()
+        egl.release()
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        audioManager.isSpeakerphoneOn = false
+        audioManager.mode = android.media.AudioManager.MODE_NORMAL
+    }
+
+    fun currentCallId(): String? = callId
+    fun eglContext(): EglBase.Context = egl.eglBaseContext
+}
+
+open class SimpleSdpObserver : SdpObserver {
+    override fun onCreateSuccess(description: SessionDescription?) {}
+    override fun onSetSuccess() {}
+    override fun onCreateFailure(error: String?) {}
+    override fun onSetFailure(error: String?) {}
+}
