@@ -1377,81 +1377,211 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
     var requests by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
     var friends by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
     var sentRequests by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var busyRequestIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var status by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
 
     DisposableEffect(uid) {
-        val usersListener = db.collection("publicProfiles").addSnapshotListener { snap, _ ->
-            if (snap != null) users = snap.documents.mapNotNull { doc ->
-                if (doc.id == uid) null else PPAUser(doc.id,
-                    doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user",
-                    doc.getString("photoUrl") ?: "")
+        val usersListener = db.collection("publicProfiles").addSnapshotListener { snap, error ->
+            if (error != null) {
+                status = error.localizedMessage ?: "People list load nahi hui."
+                isError = true
+            } else if (snap != null) {
+                users = snap.documents.mapNotNull { doc ->
+                    if (doc.id == uid) null else PPAUser(
+                        doc.id,
+                        doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user",
+                        doc.getString("photoUrl") ?: ""
+                    )
+                }
             }
         }
-        val requestsListener = db.collection("friendRequests").whereEqualTo("toUid", uid).addSnapshotListener { snap, _ ->
-                if (snap != null) requests = snap.documents.filter { it.getString("status") == "pending" }.map { doc ->
-                    mapOf("id" to doc.id, "fromUid" to (doc.getString("fromUid") ?: ""),
-                        "fromName" to (doc.getString("fromName") ?: "PPA Talk user"))
+        val requestsListener = db.collection("friendRequests")
+            .whereEqualTo("toUid", uid)
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    status = error.localizedMessage ?: "Friend requests load nahi hui."
+                    isError = true
+                } else if (snap != null) {
+                    requests = snap.documents
+                        .filter { it.getString("status") == "pending" }
+                        .map { doc ->
+                            mapOf(
+                                "id" to doc.id,
+                                "fromUid" to (doc.getString("fromUid") ?: ""),
+                                "fromName" to (doc.getString("fromName") ?: "PPA Talk user")
+                            )
+                        }
                 }
             }
-        val sentListener = db.collection("friendRequests").whereEqualTo("fromUid", uid).addSnapshotListener { snap, _ ->
-                if (snap != null) sentRequests = snap.documents.filter { it.getString("status") == "pending" }.mapNotNull { it.getString("toUid") }.toSet()
+        val sentListener = db.collection("friendRequests")
+            .whereEqualTo("fromUid", uid)
+            .addSnapshotListener { snap, error ->
+                if (error == null && snap != null) {
+                    sentRequests = snap.documents
+                        .filter { it.getString("status") == "pending" }
+                        .mapNotNull { it.getString("toUid") }
+                        .toSet()
+                }
             }
         val friendsListener = db.collection("friends").document(uid).collection("list")
-            .addSnapshotListener { snap, _ ->
-                if (snap != null) friends = snap.documents.map { doc ->
-                    PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user",
-                        doc.getString("photoUrl") ?: "")
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    status = error.localizedMessage ?: "Friends list load nahi hui."
+                    isError = true
+                } else if (snap != null) {
+                    friends = snap.documents.map { doc ->
+                        PPAUser(
+                            doc.id,
+                            doc.getString("displayName") ?: "PPA Talk user",
+                            doc.getString("photoUrl") ?: ""
+                        )
+                    }
                 }
             }
-        onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
+        onDispose {
+            usersListener.remove()
+            requestsListener.remove()
+            sentListener.remove()
+            friendsListener.remove()
+        }
+    }
+
+    fun finishRequest(requestId: String) {
+        busyRequestIds = busyRequestIds - requestId
     }
 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Friends", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
-        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
-            singleLine = true, label = { Text("Search people by name") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
-        if (status.isNotBlank()) Text(status, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
-        Text("Friend requests (${requests.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (requests.isEmpty()) Text("No new friend requests.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Friends", style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold, color = RoyalBlue)
+        OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search people by name") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+        )
+        if (status.isNotBlank()) {
+            Text(status, color = if (isError) MaterialTheme.colorScheme.error else RoyalBlue,
+                style = MaterialTheme.typography.bodySmall)
+        }
+
+        Text("Friend requests (${requests.size})", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold)
+        if (requests.isEmpty()) {
+            Text("No new friend requests.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         requests.forEach { request ->
+            val requestId = request["id"].orEmpty()
+            val fromUid = request["fromUid"].orEmpty()
+            val fromName = request["fromName"] ?: "PPA Talk user"
+            val busy = requestId in busyRequestIds
             Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(request["fromName"] ?: "PPA Talk user", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = {
-                        val fromUid = request["fromUid"].orEmpty()
-                        db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "accepted")
-                            .addOnSuccessListener {
-                                db.collection("friends").document(uid).collection("list").document(fromUid)
-                                    .set(mapOf("displayName" to currentName, "uid" to uid))
-                                db.collection("friends").document(fromUid).collection("list").document(uid)
-                                    .set(mapOf("displayName" to (request["fromName"] ?: "PPA Talk user"), "uid" to fromUid))
-                                status = "Friend request accepted."
-                            }.addOnFailureListener { status = it.localizedMessage ?: "Could not accept request." }
-                    }) { Text("Accept") }
-                    TextButton(onClick = {
-                        db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "rejected")
-                            .addOnSuccessListener { status = "Request declined." }
-                    }) { Text("Reject", color = MaterialTheme.colorScheme.error) }
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(fromName, fontWeight = FontWeight.SemiBold)
+                        Text("Wants to be your friend", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(
+                        enabled = !busy,
+                        onClick = {
+                            if (requestId.isBlank() || fromUid.isBlank()) return@TextButton
+                            busyRequestIds = busyRequestIds + requestId
+                            status = "Accepting request..."
+                            isError = false
+                            db.collection("friendRequests").document(requestId)
+                                .update("status", "accepted")
+                                .addOnSuccessListener {
+                                    // Add both friend-list entries together after the request is accepted.
+                                    val batch = db.batch()
+                                    val myFriendRef = db.collection("friends").document(uid)
+                                        .collection("list").document(fromUid)
+                                    val theirFriendRef = db.collection("friends").document(fromUid)
+                                        .collection("list").document(uid)
+                                    batch.set(myFriendRef, mapOf(
+                                        "uid" to uid,
+                                        "displayName" to currentName
+                                    ))
+                                    batch.set(theirFriendRef, mapOf(
+                                        "uid" to fromUid,
+                                        "displayName" to fromName
+                                    ))
+                                    batch.commit()
+                                        .addOnSuccessListener {
+                                            status = "Friend request accepted. You are now friends."
+                                            isError = false
+                                            finishRequest(requestId)
+                                        }
+                                        .addOnFailureListener { exception ->
+                                            status = "Request accepted, but friends list update failed: " +
+                                                (exception.localizedMessage ?: "Please retry.")
+                                            isError = true
+                                            finishRequest(requestId)
+                                        }
+                                }
+                                .addOnFailureListener { exception ->
+                                    status = exception.localizedMessage ?: "Could not accept request."
+                                    isError = true
+                                    finishRequest(requestId)
+                                }
+                        }
+                    ) { Text(if (busy) "Please wait..." else "Accept") }
+                    TextButton(
+                        enabled = !busy,
+                        onClick = {
+                            if (requestId.isBlank()) return@TextButton
+                            busyRequestIds = busyRequestIds + requestId
+                            status = "Declining request..."
+                            isError = false
+                            db.collection("friendRequests").document(requestId)
+                                .update("status", "rejected")
+                                .addOnSuccessListener {
+                                    status = "Friend request declined."
+                                    isError = false
+                                    finishRequest(requestId)
+                                }
+                                .addOnFailureListener { exception ->
+                                    status = exception.localizedMessage ?: "Could not decline request."
+                                    isError = true
+                                    finishRequest(requestId)
+                                }
+                        }
+                    ) { Text("Decline", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
-        Text("Your friends (${friends.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (friends.isEmpty()) Text("Your accepted friends will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Text("Your friends (${friends.size})", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold)
+        if (friends.isEmpty()) {
+            Text("Your accepted friends will appear here.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         friends.forEach { friend ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(36.dp))
-                    Text(friend.name, modifier = Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.AccountCircle, contentDescription = null,
+                        tint = RoyalBlue, modifier = Modifier.size(36.dp))
+                    Text(friend.name, modifier = Modifier.weight(1f).padding(start = 10.dp),
+                        fontWeight = FontWeight.SemiBold)
                     Button(onClick = { onMessage(friend.uid, friend.name) }) {
                         Icon(Icons.Default.Chat, contentDescription = null)
-                        Spacer(Modifier.width(5.dp)); Text("Message")
+                        Spacer(Modifier.width(5.dp))
+                        Text("Message")
                     }
                 }
             }
         }
+
         Text("Find people", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        val matches = users.filter { it.name.contains(search, true) && friends.none { f -> f.uid == it.uid } }.take(30)
+        val matches = users.filter {
+            it.name.contains(search, true) && friends.none { friend -> friend.uid == it.uid }
+        }.take(30)
         if (matches.isEmpty()) Text("No people found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         matches.forEach { person ->
             Card(Modifier.fillMaxWidth()) {
@@ -1459,17 +1589,32 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
                     Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(person.name, fontWeight = FontWeight.SemiBold)
-
                     }
-                    if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    else OutlinedButton(onClick = {
-                        val data = hashMapOf("fromUid" to uid, "toUid" to person.uid, "fromName" to currentName,
-                            "toName" to person.name, "status" to "pending",
-                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-                        db.collection("friendRequests").document("${uid}_${person.uid}").set(data)
-                            .addOnSuccessListener { status = "Friend request sent to ${person.name}." }
-                            .addOnFailureListener { status = it.localizedMessage ?: "Could not send friend request." }
-                    }) { Text("Add Friend") }
+                    if (sentRequests.contains(person.uid)) {
+                        Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                val data = hashMapOf(
+                                    "fromUid" to uid,
+                                    "toUid" to person.uid,
+                                    "fromName" to currentName,
+                                    "toName" to person.name,
+                                    "status" to "pending",
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )
+                                db.collection("friendRequests").document("${uid}_${person.uid}").set(data)
+                                    .addOnSuccessListener {
+                                        status = "Friend request sent to ${person.name}."
+                                        isError = false
+                                    }
+                                    .addOnFailureListener {
+                                        status = it.localizedMessage ?: "Could not send friend request."
+                                        isError = true
+                                    }
+                            }
+                        ) { Text("Add Friend") }
+                    }
                 }
             }
         }
