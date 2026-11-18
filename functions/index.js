@@ -81,9 +81,12 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: fa
       });
       tx.set(db.collection("users").doc(userRecord.uid), {
         uid: userRecord.uid,
-        displayName,
         phoneNumber: phone,
-        visibility: "public",
+        createdAt: FieldValue.serverTimestamp()
+      });
+      tx.set(db.collection("publicProfiles").doc(userRecord.uid), {
+        uid: userRecord.uid,
+        displayName,
         createdAt: FieldValue.serverTimestamp()
       });
     });
