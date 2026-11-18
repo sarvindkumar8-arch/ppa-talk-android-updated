@@ -713,7 +713,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                             Icon(Icons.Default.Search, contentDescription = "Search",
                                 modifier = Modifier.size(27.dp))
                         }
-                        IconButton(onClick = { navigateTo("Friends") }) {
+                        IconButton(onClick = { navigateTo("Messenger") }) {
                             Surface(shape = CircleShape, color = RoyalBlue, modifier = Modifier.size(36.dp)) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.Forum, contentDescription = "Messenger",
@@ -793,6 +793,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 viewedProfileUid = profileUid
                 navigateTo("Profile")
             }, onBack = { handleBack() }, screenTitle = "Search Friends")
+            "Messenger" -> MessengerScreen(uid, onOpenChat = { friendUid, friendName -> activeChatUid = friendUid; activeChatName = friendName }, modifier = Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
             "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
@@ -1552,25 +1553,35 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         message = ""
     }
 
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Create a post", style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold, color = RoyalBlue)
-        Text("Share a photo, video or update with the PPA Talk community.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(
-            value = postText,
-            onValueChange = { postText = it; success = false; message = "" },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 130.dp),
-            label = { Text("What's on your mind?") },
-            placeholder = { Text("Write your post...") }
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Photo, contentDescription = null); Spacer(Modifier.width(5.dp)); Text("Photo")
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { postText = ""; selectedMedia = null; mediaType = ""; message = "" }) {
+                Icon(Icons.Default.Close, contentDescription = "Close")
             }
-            OutlinedButton(onClick = { videoPicker.launch("video/*") }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.VideoCall, contentDescription = null); Spacer(Modifier.width(5.dp)); Text("Video / Reel")
+            Text("New post", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            TextButton(enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
+                onClick = { /* Publish using the existing button below. */ }) { Text("Next", color = if (postText.isNotBlank() || selectedMedia != null) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        HorizontalDivider()
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(52.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Icon(Icons.Default.AccountCircle, contentDescription = "Your profile", tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("♫  Music", "♙  Tag/collaborate", "⌖  Location", "☺  Feeling").forEach { item ->
+                SuggestionChip(onClick = { message = "$item option coming soon." }, label = { Text(item) })
             }
         }
+        OutlinedTextField(
+            value = postText, onValueChange = { postText = it; success = false; message = "" },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 280.dp).padding(horizontal = 18.dp),
+            placeholder = { Text("What's on your mind?", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            maxLines = 12, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color.Transparent, focusedBorderColor = Color.Transparent)
+        )
+        Spacer(Modifier.weight(1f, fill = false))
         selectedMedia?.let { uri ->
             Text(if (mediaType == "video") "Video selected" else "Photo selected", color = RoyalBlue)
             if (mediaType == "image") {
@@ -1579,6 +1590,22 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 Text("Video ready to upload. You can publish it as a Reel.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = { selectedMedia = null; mediaType = "" }) { Text("Remove attachment") }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.weight(1f), enabled = !busy) {
+                Icon(Icons.Default.Photo, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Gallery")
+            }
+            OutlinedButton(onClick = { message = "GIF picker coming soon." }, modifier = Modifier.weight(1f), enabled = !busy) {
+                Icon(Icons.Default.Gif, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("GIF")
+            }
+            OutlinedButton(onClick = { videoPicker.launch("video/*") }, modifier = Modifier.weight(1f), enabled = !busy) {
+                Icon(Icons.Default.Videocam, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Live")
+            }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(onClick = { message = "Audience: Public" }, label = { Text("🌐 Public") })
+            AssistChip(onClick = { message = "Instagram sharing option coming soon." }, label = { Text("◎ Instagram Off") })
+            AssistChip(onClick = { message = "Threads sharing option coming soon." }, label = { Text("@ Threads Off") })
         }
         Button(
             enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
@@ -1627,8 +1654,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                         .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media upload failed. Check Firebase Storage rules." }
                 }
             },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (busy) "Uploading..." else "Publish Post / Reel") }
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
+        ) { Text(if (busy) "Uploading..." else "Share") }
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
     }
@@ -2255,6 +2282,91 @@ fun FriendsScreen(
 }
 
 @Composable
+fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier: Modifier = Modifier) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var search by remember { mutableStateOf("") }
+    var chats by remember(uid) { mutableStateOf<List<Map<String, String>>>(emptyList()) }
+    var selectedTab by remember { mutableStateOf("Inbox") }
+    var loading by remember(uid) { mutableStateOf(true) }
+    DisposableEffect(uid) {
+        val registration = db.collection("chats").whereArrayContains("participantIds", uid)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    chats = snapshot.documents.mapNotNull { doc ->
+                        val participants = doc.get("participantIds") as? List<*> ?: return@mapNotNull null
+                        val otherUid = participants.filterIsInstance<String>().firstOrNull { it != uid } ?: return@mapNotNull null
+                        mapOf("uid" to otherUid, "lastMessage" to (doc.getString("lastMessage") ?: "Start a conversation"))
+                    }
+                    loading = false
+                }
+            }
+        onDispose { registration.remove() }
+    }
+    var people by remember(uid) { mutableStateOf<List<PPAUser>>(emptyList()) }
+    DisposableEffect(uid) {
+        val registration = db.collection("friends").document(uid).collection("list")
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) people = snapshot.documents.map { doc ->
+                    PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user", doc.getString("photoUrl") ?: "")
+                }
+            }
+        onDispose { registration.remove() }
+    }
+    val visible = (chats.mapNotNull { chat -> people.firstOrNull { it.uid == chat["uid"] }?.let { person ->
+        person.copy(name = person.name)
+    } } + people.filter { friend -> chats.none { it["uid"] == friend.uid } })
+        .distinctBy { it.uid }.filter { it.name.contains(search, true) }
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { }) { Icon(Icons.Default.ArrowBack, contentDescription = "Chats", tint = MaterialTheme.colorScheme.onSurface) }
+            Text("Chats", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            IconButton(onClick = { }) { Icon(Icons.Default.Settings, contentDescription = "Chat settings") }
+            IconButton(onClick = { }) { Icon(Icons.Default.Edit, contentDescription = "New message") }
+        }
+        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            singleLine = true, shape = CircleShape, placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 14.dp, horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            people.forEach { person ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
+                    Surface(Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
+                        onClick = { onOpenChat(person.uid, person.name) }) {
+                        if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                    }
+                    Text(person.name, maxLines = 2, style = MaterialTheme.typography.labelMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Inbox", "Unread", "Marketplace", "Communities").forEach { tab ->
+                FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) })
+            }
+        }
+        if (selectedTab == "Inbox" || selectedTab == "Unread") {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
+                if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                if (visible.isEmpty() && !loading) item { Text("Your conversations will appear here. Add friends to start chatting.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(visible, key = { it.uid }) { person ->
+                    Row(Modifier.fillMaxWidth().clickable { onOpenChat(person.uid, person.name) }.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                            if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                        }
+                        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(chats.firstOrNull { it["uid"] == person.uid }?.get("lastMessage") ?: "Tap to message", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        }
+                        Icon(Icons.Default.Circle, contentDescription = "Open chat", tint = RoyalBlue, modifier = Modifier.size(8.dp))
+                    }
+                }
+            }
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("$selectedTab coming soon", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
+}
+
+@Composable
 fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit) {
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
@@ -2401,7 +2513,9 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
                         com.google.firebase.firestore.SetOptions.merge()).onSuccessTask {
                         chatRef.collection("messages").add(mapOf("uid" to currentUid, "text" to messageText,
-                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())).addOnSuccessListener {
+                            chatRef.set(mapOf("lastMessage" to messageText, "lastMessageAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(), "lastSenderUid" to currentUid), com.google.firebase.firestore.SetOptions.merge())
+                        }
                     }.addOnSuccessListener { draft = ""; sending = false }
                         .addOnFailureListener { sending = false; error = it.localizedMessage ?: "Message send failed. Check Firestore rules." }
                 }
