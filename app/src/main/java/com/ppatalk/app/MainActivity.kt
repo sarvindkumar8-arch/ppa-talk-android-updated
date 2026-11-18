@@ -793,8 +793,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             }, Modifier.padding(padding), onOpenProfile = { profileUid ->
                 viewedProfileUid = profileUid
                 navigateTo("Profile")
-            })
+            }, onBack = { handleBack() })
             "Reels" -> SimplePage("Reels", "Short videos from the PPA Talk community.", Modifier.padding(padding))
+            "Notifications" -> NotificationsScreen(uid, Modifier.padding(padding), onOpenFriends = { navigateTo("Friends") })
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
     }
@@ -1823,12 +1824,87 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
         if (bio.isNotBlank()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { Column(Modifier.padding(16.dp)) { Text("About", style = MaterialTheme.typography.titleMedium, color = Orange, fontWeight = FontWeight.Bold); Text(bio) } }
     }
 }
+@Composable
+fun NotificationsScreen(uid: String, modifier: Modifier = Modifier, onOpenFriends: () -> Unit = {}) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var notifications by remember(uid) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var loading by remember(uid) { mutableStateOf(true) }
+    var error by remember(uid) { mutableStateOf("") }
+
+    DisposableEffect(uid) {
+        val registration = db.collection("friendRequests")
+            .whereEqualTo("toUid", uid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Notifications load nahi ho payi."
+                    loading = false
+                } else if (snapshot != null) {
+                    notifications = snapshot.documents
+                        .filter { it.getString("status") in listOf("pending", "accepted", "rejected") }
+                        .sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
+                        .map { doc ->
+                            mapOf(
+                                "id" to doc.id,
+                                "fromUid" to doc.getString("fromUid").orEmpty(),
+                                "fromName" to doc.getString("fromName").orEmpty().ifBlank { "PPA Talk user" },
+                                "status" to doc.getString("status").orEmpty(),
+                                "createdAt" to doc.getTimestamp("createdAt")?.toDate()
+                            )
+                        }
+                    loading = false
+                    error = ""
+                }
+            }
+        onDispose { registration.remove() }
+    }
+
+    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Notifications", style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold, color = RoyalBlue)
+        Text("Friend requests and account activity", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (loading) CircularProgressIndicator()
+        if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+        if (!loading && notifications.isEmpty() && error.isBlank()) {
+            Text("Abhi koi notification nahi hai.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        notifications.forEach { item ->
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Notifications, contentDescription = null, tint = RoyalBlue,
+                        modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        val name = item["fromName"] as? String ?: "PPA Talk user"
+                        val status = item["status"] as? String ?: ""
+                        Text(
+                            when (status) {
+                                "pending" -> "$name sent you a friend request"
+                                "accepted" -> "$name accepted your friend request"
+                                else -> "Friend request from $name was declined"
+                            },
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        (item["createdAt"] as? Date)?.let {
+                            Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(it),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (item["status"] == "pending") {
+                        TextButton(onClick = onOpenFriends) { Text("View") }
+                    }
+                }
+            }
+        }
+    }
+}
+
 data class PPAUser(val uid: String, val name: String, val photoUrl: String = "")
 
 @Composable
 fun FriendsScreen(
     uid: String, currentName: String, onMessage: (String, String) -> Unit,
-    modifier: Modifier = Modifier, onOpenProfile: (String) -> Unit = {}
+    modifier: Modifier = Modifier, onOpenProfile: (String) -> Unit = {}, onBack: () -> Unit = {}
 ) {
     val db = remember { FirebaseFirestore.getInstance() }
     var search by remember { mutableStateOf("") }
@@ -1886,7 +1962,10 @@ fun FriendsScreen(
     }
 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Friends", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            Text("Messenger", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
+        }
         OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
             singleLine = true, label = { Text("Search people by name") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
