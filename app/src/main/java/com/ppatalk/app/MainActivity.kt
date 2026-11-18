@@ -2368,8 +2368,7 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 14.dp, horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             people.forEach { person ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
-                    Surface(Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
-                        onClick = { onOpenChat(person.uid, person.name) }) {
+                    Surface(onClick = { onOpenChat(person.uid, person.name) }, modifier = Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
                         if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                         else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
                     }
