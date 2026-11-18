@@ -831,7 +831,18 @@ private fun sendFriendRequestSafely(
             )).addOnSuccessListener { onResult(true, "Friend request sent.") }
                 .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not send request.") }
         }
-    }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not check friend request.") }
+    }.addOnFailureListener {
+        // A missing deterministic request document may be unreadable under
+        // participant-only rules. Try the permitted create operation directly.
+        requestRef.set(hashMapOf(
+            "fromUid" to fromUid, "toUid" to toUid, "fromName" to fromName, "toName" to toName,
+            "status" to "pending",
+            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )).addOnSuccessListener { onResult(true, "Friend request sent.") }
+            .addOnFailureListener { createError ->
+                onResult(false, createError.localizedMessage ?: "Could not send friend request. Check Firestore rules.")
+            }
+    }
 }
 
 private fun acceptFriendRequestSafely(
@@ -2181,6 +2192,7 @@ fun FriendsScreen(
                     TextButton(onClick = {
                         db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "rejected")
                             .addOnSuccessListener { status = "Request declined." }
+                            .addOnFailureListener { status = it.localizedMessage ?: "Could not decline request. Check Firestore rules." }
                     }) { Text("Reject", color = MaterialTheme.colorScheme.error) }
                 }
             }
@@ -2380,7 +2392,7 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                     val chatRef = db.collection("chats").document(chatId)
                     chatRef.set(mapOf("participantIds" to listOf(currentUid, friendUid).sorted(),
                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
-                        com.google.firebase.firestore.SetOptions.merge()).continueWithTask {
+                        com.google.firebase.firestore.SetOptions.merge()).onSuccessTask {
                         chatRef.collection("messages").add(mapOf("uid" to currentUid, "text" to messageText,
                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
                     }.addOnSuccessListener { draft = ""; sending = false }
