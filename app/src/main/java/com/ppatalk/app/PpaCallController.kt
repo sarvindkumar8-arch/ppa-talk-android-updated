@@ -37,7 +37,9 @@ class PpaCallController(
     private var released = false
     private var remoteDescriptionSet = false
     private var localRenderer: SurfaceViewRenderer? = null
-    private var remoteRenderer: SurfaceViewRenderer? = null
+    @Volatile private var remoteRenderer: SurfaceViewRenderer? = null
+    @Volatile private var remoteVideo: VideoTrack? = null
+    private val remoteTrackLock = Any()
     private var muted = false
     private var speakerEnabled = true
 
@@ -303,12 +305,19 @@ class PpaCallController(
     }
 
     private fun attachRemoteVideoTrack(track: VideoTrack) {
-        remoteVideo = track
         track.setEnabled(true)
-        // The renderer may be attached after WebRTC delivers the track.
-        remoteRenderer?.let { renderer ->
-            track.removeSink(renderer)
-            track.addSink(renderer)
+        // Track callbacks run on WebRTC threads while Compose creates the renderer
+        // on the UI thread. Synchronize both paths so a track arriving at the same
+        // time as the renderer is attached can never be missed.
+        synchronized(remoteTrackLock) {
+            if (remoteVideo !== track) {
+                remoteVideo?.let { previous -> remoteRenderer?.let(previous::removeSink) }
+                remoteVideo = track
+            }
+            remoteRenderer?.let { renderer ->
+                track.removeSink(renderer)
+                track.addSink(renderer)
+            }
         }
         onStatus("Remote video stream received")
     }
@@ -323,12 +332,18 @@ class PpaCallController(
     }
 
     fun attachRemoteRenderer(renderer: SurfaceViewRenderer) {
-        remoteRenderer = renderer
         renderer.init(egl.eglBaseContext, null)
         renderer.setEnableHardwareScaler(true)
-        renderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+        renderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
         renderer.setMirror(false)
-        remoteVideo?.addSink(renderer)
+        synchronized(remoteTrackLock) {
+            remoteRenderer?.let { previous -> remoteVideo?.removeSink(previous) }
+            remoteRenderer = renderer
+            remoteVideo?.let { track ->
+                track.removeSink(renderer)
+                track.addSink(renderer)
+            }
+        }
     }
 
     fun setMuted(value: Boolean) {
@@ -361,7 +376,11 @@ class PpaCallController(
         callListener?.remove()
         candidateListener?.remove()
         localVideo?.let { track -> localRenderer?.let { track.removeSink(it) } }
-        remoteVideo?.let { track -> remoteRenderer?.let { track.removeSink(it) } }
+        synchronized(remoteTrackLock) {
+            remoteVideo?.let { track -> remoteRenderer?.let { track.removeSink(it) } }
+            remoteVideo = null
+            remoteRenderer = null
+        }
         try { cameraCapturer?.stopCapture() } catch (_: Exception) {}
         cameraCapturer?.dispose()
         videoSource?.dispose()
