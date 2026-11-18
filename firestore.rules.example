@@ -47,5 +47,52 @@ service cloud.firestore {
                               && resource.data.uid == request.auth.uid;
       }
     }
+
+    match /friendRequests/{requestId} {
+      allow read: if request.auth != null
+                  && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.fromUid == request.auth.uid
+                    && request.resource.data.toUid is string
+                    && request.resource.data.toUid != request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow update: if request.auth != null
+                    && resource.data.toUid == request.auth.uid
+                    && request.resource.data.fromUid == resource.data.fromUid
+                    && request.resource.data.toUid == resource.data.toUid
+                    && request.resource.data.status in ['accepted', 'rejected'];
+      allow delete: if request.auth != null
+                    && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+    match /friends/{userId}/list/{friendId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /chats/{chatId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.participantIds;
+      allow create: if request.auth != null
+                    && request.auth.uid in request.resource.data.participantIds
+                    && request.resource.data.participantIds is list
+                    && request.resource.data.participantIds.size() == 2;
+      allow update: if request.auth != null
+                    && request.auth.uid in resource.data.participantIds
+                    && request.resource.data.participantIds == resource.data.participantIds;
+
+      match /messages/{messageId} {
+        function isChatParticipant() {
+          return request.auth != null
+                 && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
+        }
+        allow read: if isChatParticipant();
+        allow create: if isChatParticipant()
+                      && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 4000;
+        allow update, delete: if false;
+      }
+    }
   }
 }
