@@ -76,8 +76,8 @@ dependencies {
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-functions")
     implementation("com.google.firebase:firebase-messaging")
-    // WebRTC media engine for real-time peer-to-peer voice and video calls.
-    implementation("io.github.webrtc-sdk:android:150.7871.04")
+    // LiveKit media engine for reliable real-time voice and video calls.
+    implementation("io.livekit:livekit-android:2.30.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
