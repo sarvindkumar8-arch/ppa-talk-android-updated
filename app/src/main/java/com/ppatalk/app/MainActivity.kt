@@ -590,6 +590,28 @@ private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail
             value.any { it.isLowerCase() } && value.any { it.isDigit() } &&
             value.any { !it.isLetterOrDigit() }
 
+    fun functionErrorMessage(exception: Exception, fallback: String): String {
+        val functionsError = exception as? FirebaseFunctionsException
+        return when (functionsError?.code) {
+            FirebaseFunctionsException.Code.NOT_FOUND ->
+                "Phone login service is not deployed in asia-south1. Firebase project/functions setup is required."
+            FirebaseFunctionsException.Code.UNAVAILABLE,
+            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED ->
+                "Phone service is temporarily unavailable. Please try again."
+            FirebaseFunctionsException.Code.UNAUTHENTICATED ->
+                "Mobile number or password is incorrect, or your phone verification has expired."
+            FirebaseFunctionsException.Code.PERMISSION_DENIED ->
+                "Phone verification does not match this account. Please verify your number again."
+            FirebaseFunctionsException.Code.INVALID_ARGUMENT ->
+                functionsError.message ?: "Please check your mobile number and password."
+            FirebaseFunctionsException.Code.ALREADY_EXISTS ->
+                "An account already exists for this mobile number. Please sign in."
+            FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED ->
+                "Too many attempts. Please wait before trying again."
+            else -> functionsError?.message ?: exception.localizedMessage ?: fallback
+        }
+    }
+
     fun resetOtpState() {
         otp = ""
         verificationId = null
@@ -721,7 +743,7 @@ private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail
             }
             .addOnFailureListener { exception ->
                 busy = false
-                message = exception.localizedMessage ?: "Could not save password."
+                message = functionErrorMessage(exception, "Could not save password.")
             }
     }
 
@@ -805,18 +827,7 @@ private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail
                                 }
                                 .addOnFailureListener { exception ->
                                     busy = false
-                                    message = when (exception) {
-                                        is FirebaseFunctionsException -> when (exception.code) {
-                                            FirebaseFunctionsException.Code.UNAUTHENTICATED,
-                                            FirebaseFunctionsException.Code.PERMISSION_DENIED,
-                                            FirebaseFunctionsException.Code.NOT_FOUND -> "Wrong mobile number or password. Please check your details and try again."
-                                            FirebaseFunctionsException.Code.INVALID_ARGUMENT -> exception.message ?: "Please enter a valid mobile number and password."
-                                            FirebaseFunctionsException.Code.UNAVAILABLE,
-                                            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> "Login service is temporarily unavailable. Please try again."
-                                            else -> "Login failed. Please try again."
-                                        }
-                                        else -> "Wrong mobile number or password. Please check your details and try again."
-                                    }
+                                    message = functionErrorMessage(exception, "Login failed. Please try again.")
                                 }
                         }
                     }
