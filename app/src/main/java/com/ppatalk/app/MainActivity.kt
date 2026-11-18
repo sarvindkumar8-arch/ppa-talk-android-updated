@@ -2178,7 +2178,11 @@ fun FriendsScreen(
             }
         }
         Text("Find people", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        val matches = users.filter { it.name.contains(search, true) && friends.none { f -> f.uid == it.uid } }.take(30)
+        val matches = users.filter { person ->
+            person.name.contains(search, true) &&
+                friends.none { friend -> friend.uid == person.uid } &&
+                requests.none { request -> request["fromUid"] == person.uid }
+        }.take(30)
         if (matches.isEmpty()) Text("No people found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         matches.forEach { person ->
             Card(Modifier.fillMaxWidth()) {
@@ -2197,12 +2201,9 @@ fun FriendsScreen(
                     }
                     if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else OutlinedButton(onClick = {
-                        val data = hashMapOf("fromUid" to uid, "toUid" to person.uid, "fromName" to currentName,
-                            "toName" to person.name, "status" to "pending",
-                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-                        db.collection("friendRequests").document("${uid}_${person.uid}").set(data)
-                            .addOnSuccessListener { status = "Friend request sent to ${person.name}." }
-                            .addOnFailureListener { status = it.localizedMessage ?: "Could not send friend request." }
+                        sendFriendRequestSafely(db, uid, person.uid, currentName, person.name) { _, detail ->
+                            status = detail
+                        }
                     }) { Text("Add Friend") }
                 }
             }
