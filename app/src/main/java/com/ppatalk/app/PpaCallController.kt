@@ -95,7 +95,7 @@ class PpaCallController(
                     flushRemoteCandidates()
                     createAnswer()
                 }
-                override fun onSetFailure(error: String) { onError("Could not accept call: $error") }
+                override fun onSetFailure(error: String?) { onError("Could not accept call: $error") }
             }, offer)
             listenForCallUpdates()
             listenForRemoteCandidates()
@@ -199,10 +199,10 @@ class PpaCallController(
                                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
                         ).addOnFailureListener { onError(it.localizedMessage ?: "Could not send call offer.") }
                     }
-                    override fun onSetFailure(error: String) { onError("Could not set local offer: $error") }
+                    override fun onSetFailure(error: String?) { onError("Could not set local offer: $error") }
                 }, description)
             }
-            override fun onCreateFailure(error: String) { onError("Offer failed: $error") }
+            override fun onCreateFailure(error: String?) { onError("Offer failed: $error") }
         }, MediaConstraints())
     }
 
@@ -221,10 +221,10 @@ class PpaCallController(
                         ).addOnSuccessListener { onStatus("Connecting…") }
                             .addOnFailureListener { onError(it.localizedMessage ?: "Could not send answer.") }
                     }
-                    override fun onSetFailure(error: String) { onError("Could not set local answer: $error") }
+                    override fun onSetFailure(error: String?) { onError("Could not set local answer: $error") }
                 }, description)
             }
-            override fun onCreateFailure(error: String) { onError("Answer failed: $error") }
+            override fun onCreateFailure(error: String?) { onError("Answer failed: $error") }
         }, MediaConstraints())
     }
 
@@ -242,7 +242,7 @@ class PpaCallController(
                     if (caller && !sdp.isNullOrBlank() && !remoteDescriptionSet) {
                         peer?.setRemoteDescription(object : SimpleSdpObserver() {
                             override fun onSetSuccess() { remoteDescriptionSet = true; flushRemoteCandidates(); onStatus("Connecting…") }
-                            override fun onSetFailure(error: String) { onError("Could not read answer: $error") }
+                            override fun onSetFailure(error: String?) { onError("Could not read answer: $error") }
                         }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
                     }
                 }
