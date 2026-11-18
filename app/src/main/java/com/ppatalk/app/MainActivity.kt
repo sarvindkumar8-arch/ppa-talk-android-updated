@@ -619,6 +619,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var selected by remember { mutableStateOf("Home") }
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
+    var viewedProfileUid by remember { mutableStateOf(uid) }
     var menuExpanded by remember { mutableStateOf(false) }
     val backStack = remember { mutableStateListOf<String>() }
 
@@ -644,8 +645,13 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         handleBack()
     }
 
-    DisposableEffect(uid) {
+    DisposableEffect(uid, displayName) {
         val db = FirebaseFirestore.getInstance()
+        db.collection("publicProfiles").document(uid).set(
+            mapOf("uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
+                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
             db.collection("users").document(uid)
                 .collection("fcmTokens").document(token)
@@ -751,10 +757,15 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 uid,
                 Modifier.padding(padding),
                 onCreatePost = { navigateTo("Create") },
-                onOpenProfile = { navigateTo("Profile") },
+                onOpenProfile = { viewedProfileUid = uid; navigateTo("Profile") },
+                onOpenUserProfile = { profileUid -> viewedProfileUid = profileUid; navigateTo("Profile") },
                 displayName = displayName
             )
-            "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
+            "Profile" -> if (viewedProfileUid == uid) {
+                ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
+            } else {
+                PublicProfileScreen(viewedProfileUid, Modifier.padding(padding))
+            }
             "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Menu", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue)
@@ -770,7 +781,10 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
                 activeChatUid = friendUid
                 activeChatName = friendName
-            }, Modifier.padding(padding))
+            }, Modifier.padding(padding), onOpenProfile = { profileUid ->
+                viewedProfileUid = profileUid
+                navigateTo("Profile")
+            })
             "Reels" -> SimplePage("Reels", "Short videos from the PPA Talk community.", Modifier.padding(padding))
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
@@ -786,6 +800,7 @@ fun HomeFeed(
     modifier: Modifier = Modifier,
     onCreatePost: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
+    onOpenUserProfile: (String) -> Unit = {},
     displayName: String = "PPA Talk user"
 ) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
@@ -835,7 +850,7 @@ fun HomeFeed(
         if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
         if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
         items(posts, key = { it.id }) { post ->
-            FeedPostCard(post, currentUid) { selectedPost = post }
+            FeedPostCard(post, currentUid, onOpenAuthorProfile = { onOpenUserProfile(post.uid) }) { selectedPost = post }
         }
     }
     selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
@@ -1047,7 +1062,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit) {
+fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {}, onCommentsClick: () -> Unit) {
     var liked by remember(post.id, currentUid) { mutableStateOf(false) }
     var selectedReaction by remember(post.id, currentUid) { mutableStateOf("") }
     var showReactionPicker by remember(post.id, currentUid) { mutableStateOf(false) }
@@ -1072,10 +1087,27 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue)
+                Surface(
+                    modifier = Modifier.size(38.dp), shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant, onClick = onOpenAuthorProfile
+                ) {
+                    var authorPhotoUrl by remember(post.uid) { mutableStateOf("") }
+                    DisposableEffect(post.uid) {
+                        val registration = db.collection("publicProfiles").document(post.uid)
+                            .addSnapshotListener { profile, _ -> authorPhotoUrl = profile?.getString("photoUrl").orEmpty() }
+                        onDispose { registration.remove() }
+                    }
+                    if (authorPhotoUrl.isNotBlank()) AsyncImage(model = authorPhotoUrl,
+                        contentDescription = "Open author profile",
+                        modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                    else Icon(Icons.Default.AccountCircle, contentDescription = "Open profile",
+                        tint = RoyalBlue, modifier = Modifier.padding(2.dp))
+                }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(post.authorName, fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = onOpenAuthorProfile, contentPadding = PaddingValues(0.dp)) {
+                        Text(post.authorName, fontWeight = FontWeight.SemiBold)
+                    }
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1676,10 +1708,54 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 }
 
 
+@Composable
+fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
+    var displayName by remember(uid) { mutableStateOf("PPA Talk user") }
+    var bio by remember(uid) { mutableStateOf("") }
+    var photoUrl by remember(uid) { mutableStateOf("") }
+    var coverPhotoUrl by remember(uid) { mutableStateOf("") }
+    var loading by remember(uid) { mutableStateOf(true) }
+    var error by remember(uid) { mutableStateOf("") }
+    DisposableEffect(uid) {
+        val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) { error = exception.localizedMessage ?: "Profile load nahi ho payi."; loading = false }
+                else if (snapshot != null && snapshot.exists()) {
+                    displayName = snapshot.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                    bio = snapshot.getString("bio").orEmpty()
+                    photoUrl = snapshot.getString("photoUrl").orEmpty()
+                    coverPhotoUrl = snapshot.getString("coverPhotoUrl").orEmpty()
+                    loading = false
+                } else { error = "Is user ki public profile abhi available nahi hai."; loading = false }
+            }
+        onDispose { registration.remove() }
+    }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.padding(start = 20.dp, top = 16.dp))
+        Box(Modifier.fillMaxWidth().height(180.dp).padding(horizontal = 12.dp)) {
+            Card(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.large) {
+                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(42.dp)) }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo", modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+            else Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo", modifier = Modifier.size(100.dp), tint = RoyalBlue)
+            Spacer(Modifier.width(14.dp))
+            Column { Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text("PPA Talk member", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (loading) CircularProgressIndicator(Modifier.padding(20.dp))
+        if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 20.dp))
+        if (bio.isNotBlank()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { Column(Modifier.padding(16.dp)) { Text("About", style = MaterialTheme.typography.titleMedium, color = Orange, fontWeight = FontWeight.Bold); Text(bio) } }
+    }
+}
 data class PPAUser(val uid: String, val name: String, val photoUrl: String = "")
 
 @Composable
-fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) -> Unit, modifier: Modifier = Modifier) {
+fun FriendsScreen(
+    uid: String, currentName: String, onMessage: (String, String) -> Unit,
+    modifier: Modifier = Modifier, onOpenProfile: (String) -> Unit = {}
+) {
     val db = remember { FirebaseFirestore.getInstance() }
     var search by remember { mutableStateOf("") }
     var users by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
@@ -1726,16 +1802,27 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
         requests.forEach { request ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(request["fromName"] ?: "PPA Talk user", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = { onOpenProfile(request["fromUid"].orEmpty()) },
+                        modifier = Modifier.weight(1f), contentPadding = PaddingValues(0.dp)) {
+                        Text(request["fromName"] ?: "PPA Talk user", fontWeight = FontWeight.SemiBold)
+                    }
                     TextButton(onClick = {
                         val fromUid = request["fromUid"].orEmpty()
                         db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "accepted")
                             .addOnSuccessListener {
-                                db.collection("friends").document(uid).collection("list").document(fromUid)
-                                    .set(mapOf("displayName" to currentName, "uid" to uid))
-                                db.collection("friends").document(fromUid).collection("list").document(uid)
-                                    .set(mapOf("displayName" to (request["fromName"] ?: "PPA Talk user"), "uid" to fromUid))
-                                status = "Friend request accepted."
+                                db.collection("publicProfiles").document(uid).get().addOnSuccessListener { mine ->
+                                    db.collection("publicProfiles").document(fromUid).get().addOnSuccessListener { theirs ->
+                                        val batch = db.batch()
+                                        batch.set(db.collection("friends").document(uid).collection("list").document(fromUid),
+                                            mapOf("displayName" to (theirs.getString("displayName") ?: request["fromName"]),
+                                                "uid" to fromUid, "photoUrl" to (theirs.getString("photoUrl") ?: "")))
+                                        batch.set(db.collection("friends").document(fromUid).collection("list").document(uid),
+                                            mapOf("displayName" to (mine.getString("displayName") ?: currentName),
+                                                "uid" to uid, "photoUrl" to (mine.getString("photoUrl") ?: "")))
+                                        batch.commit().addOnSuccessListener { status = "Friend request accepted." }
+                                            .addOnFailureListener { status = it.localizedMessage ?: "Friend list update failed." }
+                                    }.addOnFailureListener { status = it.localizedMessage ?: "Could not load friend profile." }
+                                }.addOnFailureListener { status = it.localizedMessage ?: "Could not load your profile." }
                             }.addOnFailureListener { status = it.localizedMessage ?: "Could not accept request." }
                     }) { Text("Accept") }
                     TextButton(onClick = {
@@ -1750,8 +1837,17 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
         friends.forEach { friend ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(36.dp))
-                    Text(friend.name, modifier = Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold)
+                    Surface(modifier = Modifier.size(40.dp), shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant, onClick = { onOpenProfile(friend.uid) }) {
+                        if (friend.photoUrl.isNotBlank()) AsyncImage(model = friend.photoUrl,
+                            contentDescription = "Open friend profile",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        else Icon(Icons.Default.AccountCircle, contentDescription = "Open profile", tint = RoyalBlue)
+                    }
+                    TextButton(onClick = { onOpenProfile(friend.uid) }, modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(start = 10.dp)) {
+                        Text(friend.name, fontWeight = FontWeight.SemiBold)
+                    }
                     Button(onClick = { onMessage(friend.uid, friend.name) }) {
                         Icon(Icons.Default.Chat, contentDescription = null)
                         Spacer(Modifier.width(5.dp)); Text("Message")
@@ -1767,8 +1863,9 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                        Text(person.name, fontWeight = FontWeight.SemiBold)
-
+                        TextButton(onClick = { onOpenProfile(person.uid) }, contentPadding = PaddingValues(0.dp)) {
+                            Text(person.name, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                     if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else OutlinedButton(onClick = {
