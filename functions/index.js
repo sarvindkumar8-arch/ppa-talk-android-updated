@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 const { scrypt: scryptCallback, randomBytes, timingSafeEqual, createHash } = require("node:crypto");
 const { promisify } = require("node:util");
 
@@ -137,4 +138,64 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false
   }, { merge: true });
   const token = await getAuth().createCustomToken(record.uid);
   return { token };
+});
+
+
+// Send an FCM push whenever a new outgoing call session is created.
+// The server reads recipient device tokens; clients never get access to other users' tokens.
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+
+exports.notifyIncomingCall = onDocumentCreated({
+  document: "callSessions/{callId}",
+  region: REGION,
+  maxInstances: 20
+}, async (event) => {
+  const call = event.data?.data();
+  if (!call || call.status !== "ringing" ||
+      typeof call.callerUid !== "string" || typeof call.calleeUid !== "string" ||
+      !["audio", "video"].includes(call.callType)) return;
+
+  const tokensSnapshot = await db.collection("users").doc(call.calleeUid)
+    .collection("fcmTokens").get();
+  const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
+  if (tokens.length === 0) {
+    console.info("No registered FCM tokens for callee", call.calleeUid);
+    return;
+  }
+
+  const callerProfile = await db.collection("publicProfiles").doc(call.callerUid).get();
+  const callerName = callerProfile.get("displayName") || "PPA Talk user";
+  const kind = call.callType === "video" ? "video" : "voice";
+  const result = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: callerName,
+      body: "Incoming " + kind + " call"
+    },
+    data: {
+      title: callerName,
+      body: "Incoming " + kind + " call",
+      callId: event.params.callId,
+      callerUid: call.callerUid,
+      callType: call.callType
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "ppa_incoming_calls",
+        sound: "default",
+        visibility: "public"
+      }
+    }
+  });
+
+  const stale = [];
+  result.responses.forEach((response, index) => {
+    if (!response.success &&
+        ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(response.error?.code)) {
+      stale.push(tokensSnapshot.docs.find((doc) => doc.id === tokens[index]).ref.delete());
+    }
+  });
+  await Promise.all(stale);
+  console.info("Incoming call push result", { successCount: result.successCount, failureCount: result.failureCount });
 });
