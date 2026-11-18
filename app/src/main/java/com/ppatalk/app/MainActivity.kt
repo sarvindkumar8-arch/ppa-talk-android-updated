@@ -135,7 +135,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     )
 
     if (usePhone) {
-        PhonePasswordAuthScreen(onAuthenticated = onAuthenticated)
+        PhonePasswordAuthScreen(onAuthenticated = onAuthenticated, onSwitchToEmail = { usePhone = false })
         return
     }
 
@@ -551,7 +551,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit) {
+private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail: () -> Unit) {
     var mode by remember { mutableStateOf("login") } // login, signup, forgot
     var countryCode by remember { mutableStateOf("+91") }
     var phone by remember { mutableStateOf("") }
@@ -838,8 +838,7 @@ private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit) {
                 else MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.height(10.dp))
-        Text("Email and Google login are available from the Email sign-in tab.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(enabled = !busy, onClick = onSwitchToEmail) { Text("Use Email / Google instead") }
     }
 }
 
