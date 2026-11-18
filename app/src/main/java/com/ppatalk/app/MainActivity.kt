@@ -777,7 +777,7 @@ private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail
                                 .getHttpsCallable("loginWithPhonePassword")
                                 .call(mapOf("phoneNumber" to fullPhone, "password" to password))
                                 .addOnSuccessListener { result ->
-                                    val data = result.data as? Map<*, *>
+                                    val data = result.getData() as? Map<*, *>
                                     val token = data?.get("token") as? String
                                     if (token.isNullOrBlank()) {
                                         busy = false
