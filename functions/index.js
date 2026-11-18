@@ -129,6 +129,12 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false
   }
 
   await docRef.update({ failedAttempts: 0, lockUntil: FieldValue.delete(), lastLoginAt: FieldValue.serverTimestamp() });
+  const authUser = await getAuth().getUser(record.uid);
+  await db.collection("publicProfiles").doc(record.uid).set({
+    uid: record.uid,
+    displayName: authUser.displayName || "PPA Talk user",
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
   const token = await getAuth().createCustomToken(record.uid);
   return { token };
 });
