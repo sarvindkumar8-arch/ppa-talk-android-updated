@@ -16,6 +16,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_ENCRYPTED_KEY: ${{ secrets.DEBUG_KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Checkout Repository
@@ -42,14 +44,14 @@ jobs:
       # Preferred: encrypted repository secrets. The cache fallback is only
       # for bootstrapping until the owner adds the four signing secrets.
       - name: Restore debug keystore cache (fallback only)
-        if: ${{ secrets.DEBUG_KEYSTORE_BASE64 == '' }}
+        if: ${{ env.HAS_ENCRYPTED_KEY != 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
           key: ppa-talk-debug-keystore-v1
 
       - name: Configure encrypted signing keystore
-        if: ${{ secrets.DEBUG_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_ENCRYPTED_KEY == 'true' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
@@ -73,7 +75,7 @@ jobs:
           echo "Encrypted repository keystore loaded and validated."
 
       - name: Create debug keystore if cache is empty
-        if: ${{ secrets.DEBUG_KEYSTORE_BASE64 == '' }}
+        if: ${{ env.HAS_ENCRYPTED_KEY != 'true' }}
         run: |
           mkdir -p "$HOME/.android"
           if [ ! -f "$HOME/.android/debug.keystore" ]; then
