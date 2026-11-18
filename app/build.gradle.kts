@@ -5,6 +5,15 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val customKeystoreFile = file("ppa-talk-debug-new.jks")
+val customStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val customKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val customKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val hasCustomSigning = customKeystoreFile.exists() &&
+    !customStorePassword.isNullOrBlank() &&
+    !customKeyAlias.isNullOrBlank() &&
+    !customKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.ppatalk.app"
     compileSdk = 35
@@ -15,6 +24,26 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.1.0"
+    }
+
+    signingConfigs {
+        if (hasCustomSigning) {
+            create("custom") {
+                storeFile = customKeystoreFile
+                storePassword = customStorePassword
+                keyAlias = customKeyAlias
+                keyPassword = customKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (hasCustomSigning) {
+                signingConfig = signingConfigs.getByName("custom")
+            }
+        }
     }
 
     compileOptions {
