@@ -1265,16 +1265,14 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
                     doc.getString("email") ?: "", doc.getString("photoUrl") ?: "")
             }
         }
-        val requestsListener = db.collection("friendRequests").whereEqualTo("toUid", uid)
-            .whereEqualTo("status", "pending").addSnapshotListener { snap, _ ->
-                if (snap != null) requests = snap.documents.map { doc ->
+        val requestsListener = db.collection("friendRequests").whereEqualTo("toUid", uid).addSnapshotListener { snap, _ ->
+                if (snap != null) requests = snap.documents.filter { it.getString("status") == "pending" }.map { doc ->
                     mapOf("id" to doc.id, "fromUid" to (doc.getString("fromUid") ?: ""),
                         "fromName" to (doc.getString("fromName") ?: "PPA Talk user"))
                 }
             }
-        val sentListener = db.collection("friendRequests").whereEqualTo("fromUid", uid)
-            .whereEqualTo("status", "pending").addSnapshotListener { snap, _ ->
-                if (snap != null) sentRequests = snap.documents.mapNotNull { it.getString("toUid") }.toSet()
+        val sentListener = db.collection("friendRequests").whereEqualTo("fromUid", uid).addSnapshotListener { snap, _ ->
+                if (snap != null) sentRequests = snap.documents.filter { it.getString("status") == "pending" }.mapNotNull { it.getString("toUid") }.toSet()
             }
         val friendsListener = db.collection("friends").document(uid).collection("list")
             .addSnapshotListener { snap, _ ->
