@@ -620,7 +620,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 uid,
                 Modifier.padding(padding),
                 onCreatePost = { navigateTo("Create") },
-                onOpenProfile = { navigateTo("Profile") }
+                onOpenProfile = { navigateTo("Profile") },
+                displayName = displayName
             )
             "Profile" -> ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -653,7 +654,8 @@ fun HomeFeed(
     currentUid: String,
     modifier: Modifier = Modifier,
     onCreatePost: () -> Unit = {},
-    onOpenProfile: () -> Unit = {}
+    onOpenProfile: () -> Unit = {},
+    displayName: String = "PPA Talk user"
 ) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -689,7 +691,7 @@ fun HomeFeed(
             )
         }
         item {
-            StoriesStrip()
+            StoriesStrip(uid = currentUid, displayName = displayName)
         }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -783,40 +785,134 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () ->
 }
 
 @Composable
-fun StoriesStrip() {
+fun StoriesStrip(uid: String, displayName: String) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var stories by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    var showCreate by remember { mutableStateOf(false) }
+    var viewingStory by remember { mutableStateOf<Map<String, Any>?>(null) }
+
+    DisposableEffect(uid) {
+        val listener = db.collection("stories").orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, _ ->
+                val now = System.currentTimeMillis()
+                stories = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                    val expires = doc.getTimestamp("expiresAt")?.toDate()?.time ?: 0L
+                    if (expires > now) doc.data?.plus("id" to doc.id) else null
+                }
+            }
+        onDispose { listener.remove() }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(118.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Card(
-                modifier = Modifier.weight(1f).height(104.dp),
+                onClick = { showCreate = true },
+                modifier = Modifier.width(92.dp).fillMaxHeight(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(
-                    Modifier.fillMaxSize().padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(Icons.Default.AddCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(32.dp))
-                    Text("Create story", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    Icon(Icons.Default.AddCircle, contentDescription = "Create story", tint = RoyalBlue, modifier = Modifier.size(34.dp))
+                    Text("Create story", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
-            listOf("Friends", "Community", "Explore").forEachIndexed { index, title ->
-                Card(
-                    modifier = Modifier.weight(1f).height(104.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = listOf(RoyalBlue.copy(alpha = 0.28f), Orange.copy(alpha = 0.24f), RoyalBlue.copy(alpha = 0.18f))[index]
-                    )
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
-                        Text(title, modifier = Modifier.padding(8.dp), color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
+            stories.forEach { story ->
+                Card(onClick = { viewingStory = story }, modifier = Modifier.width(92.dp).fillMaxHeight()) {
+                    Box(Modifier.fillMaxSize()) {
+                        AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story",
+                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Text(story["authorName"] as? String ?: "PPA Talk user",
+                            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.55f)).padding(5.dp),
+                            color = Color.White, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                     }
                 }
             }
         }
     }
+
+    if (showCreate) CreateStoryDialog(uid, displayName, onDismiss = { showCreate = false })
+    viewingStory?.let { story ->
+        AlertDialog(
+            onDismissRequest = { viewingStory = null },
+            title = { Text(story["authorName"] as? String ?: "Story") },
+            text = {
+                AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story media",
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit)
+            },
+            confirmButton = { TextButton(onClick = { viewingStory = null }) { Text("Close") } }
+        )
+    }
+}
+
+@Composable
+fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var mediaType by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedUri = uri
+        mediaType = if (uri == null) "" else "image"
+        message = ""
+    }
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedUri = uri
+        mediaType = if (uri == null) "" else "video"
+        message = ""
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Create story") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Choose a photo or video. Your story will be visible for 24 hours.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy) { Icon(Icons.Default.Photo, null); Text("Photo") }
+                    OutlinedButton(onClick = { videoPicker.launch("video/*") }, enabled = !busy) { Icon(Icons.Default.VideoLibrary, null); Text("Video") }
+                }
+                selectedUri?.let { uri ->
+                    if (mediaType == "image") AsyncImage(model = uri, contentDescription = "Selected story",
+                        modifier = Modifier.fillMaxWidth().height(170.dp), contentScale = ContentScale.Crop)
+                    else Text("Video selected")
+                }
+                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            Button(enabled = selectedUri != null && !busy, onClick = {
+                val uri = selectedUri ?: return@Button
+                busy = true
+                message = ""
+                val ext = if (mediaType == "video") "mp4" else "jpg"
+                val storageRef = FirebaseStorage.getInstance().reference
+                    .child("stories/$uid/${System.currentTimeMillis()}.$ext")
+                storageRef.putFile(uri)
+                    .addOnSuccessListener {
+                        storageRef.downloadUrl.addOnSuccessListener { download ->
+                            val now = System.currentTimeMillis()
+                            val story = hashMapOf(
+                                "uid" to uid,
+                                "authorName" to displayName,
+                                "mediaUrl" to download.toString(),
+                                "mediaType" to mediaType,
+                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                "expiresAt" to com.google.firebase.Timestamp(Date(now + 24L * 60L * 60L * 1000L))
+                            )
+                            FirebaseFirestore.getInstance().collection("stories").add(story)
+                                .addOnSuccessListener { busy = false; onDismiss() }
+                                .addOnFailureListener { e -> busy = false; message = e.localizedMessage ?: "Story save failed. Check Firestore rules." }
+                        }.addOnFailureListener { e -> busy = false; message = e.localizedMessage ?: "Could not get media URL." }
+                    }
+                    .addOnFailureListener { e -> busy = false; message = e.localizedMessage ?: "Upload failed. Check Storage rules." }
+            }) { Text(if (busy) "Uploading..." else "Share story") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } }
+    )
 }
 
 @Composable
