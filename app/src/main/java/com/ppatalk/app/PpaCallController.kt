@@ -145,12 +145,16 @@ class PpaCallController(
             override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
                 val track = receiver?.track() as? VideoTrack ?: return
                 remoteVideo = track
+                track.setEnabled(true)
                 remoteRenderer?.let { track.addSink(it) }
+                onStatus("Remote video stream received")
             }
             override fun onTrack(transceiver: RtpTransceiver?) {
                 val track = transceiver?.receiver?.track() as? VideoTrack ?: return
                 remoteVideo = track
+                track.setEnabled(true)
                 remoteRenderer?.let { track.addSink(it) }
+                onStatus("Remote video stream received")
             }
             override fun onRemoveTrack(receiver: RtpReceiver?) {}
         }) ?: run {
@@ -298,6 +302,7 @@ class PpaCallController(
         localRenderer = renderer
         renderer.init(egl.eglBaseContext, null)
         renderer.setEnableHardwareScaler(true)
+        renderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
         renderer.setMirror(true)
         localVideo?.addSink(renderer)
     }
@@ -306,6 +311,7 @@ class PpaCallController(
         remoteRenderer = renderer
         renderer.init(egl.eglBaseContext, null)
         renderer.setEnableHardwareScaler(true)
+        renderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
         renderer.setMirror(false)
         remoteVideo?.addSink(renderer)
     }
