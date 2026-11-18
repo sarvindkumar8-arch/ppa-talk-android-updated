@@ -80,7 +80,16 @@ class MainActivity : ComponentActivity() {
                 vibrationPattern = longArrayOf(0, 1000, 500, 1000)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(NotificationChannel(
+                "ppa_general_notifications",
+                "PPA Talk notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Friend requests and social activity"
+                enableVibration(true)
+            })
         }
     }
 
