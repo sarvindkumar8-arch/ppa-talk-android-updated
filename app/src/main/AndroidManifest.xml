@@ -9,10 +9,6 @@
 <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 <uses-permission android:name="android.permission.CAMERA"/>
 <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-<!-- Required to keep VoIP call audio active while the app is in use. -->
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
 <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="PPA Talk" android:icon="@drawable/ic_ppa_talk" android:roundIcon="@drawable/ic_ppa_talk" android:allowBackup="false" android:supportsRtl="true">
 <activity android:name=".MainActivity" android:exported="true">
 <intent-filter>
