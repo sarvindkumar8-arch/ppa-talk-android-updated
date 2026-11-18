@@ -1,6 +1,11 @@
 package com.ppatalk.app
 
 import android.os.Bundle
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.os.Build
 import android.app.Activity
 import android.net.Uri
 import android.content.Intent
@@ -54,8 +59,30 @@ private val RoyalBlue = Color(0xFF2457D6)
 private val Orange = Color(0xFFF27A21)
 
 class MainActivity : ComponentActivity() {
+    private fun createIncomingCallNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val channel = NotificationChannel(
+                "ppa_incoming_calls_v2",
+                "Incoming calls",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Ringtone and alerts for incoming PPA Talk calls"
+                setSound(ringtone, AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build())
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 1000, 500, 1000)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createIncomingCallNotificationChannel()
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4102)
