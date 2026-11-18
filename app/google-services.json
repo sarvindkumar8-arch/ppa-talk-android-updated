@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "469604923642-6ap8etjsg7n2f46d2cs46gnu2mcd085o.apps.googleusercontent.com",
+          "client_id": "469604923642-6hpli5pr3d1s7v5vuj7jgpto6fsbg14f.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.ppatalk.app",
-            "certificate_hash": "c3330823358151cab9a8d77994f04246f34a2c54"
+            "certificate_hash": "97134ab544d2da7bab2ca4bf4c3e374cd623204b"
           }
         },
         {
