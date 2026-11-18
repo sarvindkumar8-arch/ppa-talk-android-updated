@@ -788,7 +788,21 @@ private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail
                                             .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
                                     }
                                 }
-                                .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Mobile number or password is incorrect." }
+                                .addOnFailureListener { exception ->
+                                    busy = false
+                                    message = when (exception) {
+                                        is FirebaseFunctionsException -> when (exception.code) {
+                                            FirebaseFunctionsException.Code.UNAUTHENTICATED,
+                                            FirebaseFunctionsException.Code.PERMISSION_DENIED,
+                                            FirebaseFunctionsException.Code.NOT_FOUND -> "Wrong mobile number or password. Please check your details and try again."
+                                            FirebaseFunctionsException.Code.INVALID_ARGUMENT -> exception.message ?: "Please enter a valid mobile number and password."
+                                            FirebaseFunctionsException.Code.UNAVAILABLE,
+                                            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> "Login service is temporarily unavailable. Please try again."
+                                            else -> "Login failed. Please try again."
+                                        }
+                                        else -> "Wrong mobile number or password. Please check your details and try again."
+                                    }
+                                }
                         }
                     }
                     !otpVerified && !otpSent -> {
