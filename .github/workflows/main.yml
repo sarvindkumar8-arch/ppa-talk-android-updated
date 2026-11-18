@@ -38,6 +38,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Print Debug Signing Certificate Fingerprints
+        run: gradle signingReport --no-daemon
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon
 
