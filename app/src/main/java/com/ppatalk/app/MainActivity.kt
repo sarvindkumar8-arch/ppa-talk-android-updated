@@ -1522,6 +1522,17 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         onDispose { incomingRegistration.remove() }
     }
 
+    // Close the local call UI when Firestore reports that the other participant
+    // ended or rejected the call.
+    LaunchedEffect(callStatus) {
+        if (callStatus == "Call ended" || callStatus == "Call declined") {
+            callController?.let { controller ->
+                controller.release()
+                callController = null
+            }
+        }
+    }
+
     DisposableEffect(chatId) {
         val registration = db.collection("chats").document(chatId).collection("messages")
             .orderBy("createdAt", Query.Direction.ASCENDING).addSnapshotListener { snap, exception ->
