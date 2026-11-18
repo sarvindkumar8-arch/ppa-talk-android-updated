@@ -138,25 +138,29 @@ class PpaCallController(
                 db.collection("callSessions").document(id).collection(collection).add(data)
             }
             override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
-            override fun onAddStream(stream: MediaStream?) {}
+            override fun onAddStream(stream: MediaStream?) {
+                // Compatibility fallback for peers that deliver a MediaStream callback.
+                stream?.videoTracks?.firstOrNull()?.let { attachRemoteVideoTrack(it) }
+            }
             override fun onRemoveStream(stream: MediaStream?) {}
             override fun onDataChannel(channel: DataChannel?) {}
             override fun onRenegotiationNeeded() {}
             override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
-                val track = receiver?.track() as? VideoTrack ?: return
-                remoteVideo = track
-                track.setEnabled(true)
-                remoteRenderer?.let { track.addSink(it) }
-                onStatus("Remote video stream received")
+                val track = receiver?.track() as? VideoTrack
+                    ?: streams?.firstNotNullOfOrNull { it.videoTracks.firstOrNull() }
+                    ?: return
+                attachRemoteVideoTrack(track)
             }
             override fun onTrack(transceiver: RtpTransceiver?) {
                 val track = transceiver?.receiver?.track() as? VideoTrack ?: return
-                remoteVideo = track
-                track.setEnabled(true)
-                remoteRenderer?.let { track.addSink(it) }
-                onStatus("Remote video stream received")
+                attachRemoteVideoTrack(track)
             }
-            override fun onRemoveTrack(receiver: RtpReceiver?) {}
+            override fun onRemoveTrack(receiver: RtpReceiver?) {
+                val track = receiver?.track() as? VideoTrack ?: return
+                remoteRenderer?.let { track.removeSink(it) }
+                if (remoteVideo === track) remoteVideo = null
+                onStatus("Remote video track removed")
+            }
         }) ?: run {
             onError("Could not create WebRTC connection.")
             return
@@ -296,6 +300,17 @@ class PpaCallController(
                     ))
                 }
             }
+    }
+
+    private fun attachRemoteVideoTrack(track: VideoTrack) {
+        remoteVideo = track
+        track.setEnabled(true)
+        // The renderer may be attached after WebRTC delivers the track.
+        remoteRenderer?.let { renderer ->
+            track.removeSink(renderer)
+            track.addSink(renderer)
+        }
+        onStatus("Remote video stream received")
     }
 
     fun attachLocalRenderer(renderer: SurfaceViewRenderer) {
