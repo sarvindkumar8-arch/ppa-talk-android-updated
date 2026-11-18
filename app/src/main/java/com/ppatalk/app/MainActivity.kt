@@ -1034,7 +1034,7 @@ fun StoriesStrip(uid: String, displayName: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(
-            modifier = Modifier.fillMaxWidth().height(118.dp),
+            modifier = Modifier.fillMaxWidth().height(118.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Card(
@@ -1060,8 +1060,18 @@ fun StoriesStrip(uid: String, displayName: String) {
             onDismissRequest = { viewingStory = null },
             title = { Text(story["authorName"] as? String ?: "Story") },
             text = {
-                AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story media",
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit)
+                if (story["mediaType"] == "video") {
+                    AndroidView(factory = { viewContext ->
+                        VideoView(viewContext).apply {
+                            setMediaController(MediaController(viewContext).also { it.setAnchorView(this) })
+                            setVideoURI(Uri.parse(story["mediaUrl"] as? String ?: ""))
+                            setOnPreparedListener { player -> player.isLooping = true; start() }
+                        }
+                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 480.dp))
+                } else {
+                    AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story media",
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit)
+                }
             },
             confirmButton = { TextButton(onClick = { viewingStory = null }) { Text("Close") } }
         )
@@ -1299,7 +1309,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.height(10.dp))
                 AndroidView(
                     factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); setVideoURI(Uri.parse(post.mediaUrl)) } },
-                    update = { view -> if (!view.isPlaying) view.setVideoURI(Uri.parse(post.mediaUrl)) },
+                    update = { }
                     modifier = Modifier.fillMaxWidth().height(230.dp)
                 )
             }
