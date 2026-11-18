@@ -2321,7 +2321,7 @@ fun FriendsScreen(
                                 color = if (friend.uid in onlineFriends) Color(0xFF239B56) else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Button(onClick = { onMessage(friend.uid, friend.name) })
+                    Button(onClick = { onMessage(friend.uid, friend.name) }) {
                         Icon(Icons.Default.Chat, contentDescription = null)
                         Spacer(Modifier.width(5.dp)); Text("Message")
                     }
