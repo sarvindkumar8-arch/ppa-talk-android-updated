@@ -107,7 +107,7 @@ fun PPATalkApp() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(onAuthenticated: () -> Unit) {
-    var isSignUp by remember { mutableStateOf(true) }
+    var isSignUp by remember { mutableStateOf(false) }
     var usePhone by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -371,7 +371,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Login")
+            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Sign In")
         }
 
         OutlinedButton(
@@ -384,7 +384,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         ) { Text(if (busy) "Please wait..." else "Continue with Google") }
 
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
-            Text(if (isSignUp) "Already have an account? Login" else "New here? Create account")
+            Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
         }
         if (!isSignUp && !usePhone) {
             TextButton(
@@ -489,33 +489,6 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
             }
         },
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, contentColor = RoyalBlue,
-                tonalElevation = 3.dp) {
-                listOf(
-                    "Home" to Icons.Default.Home,
-                    "Friends" to Icons.Default.PeopleAlt,
-                    "Reels" to Icons.Default.PlayCircle,
-                    "Marketplace" to Icons.Default.Storefront,
-                    "Notifications" to Icons.Default.Notifications,
-                    "Menu" to Icons.Default.Person
-                ).forEach { (label, icon) ->
-                    NavigationBarItem(
-                        selected = selected == label,
-                        onClick = { selected = label },
-                        icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(25.dp)) },
-                        label = { Text(label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = RoyalBlue,
-                            selectedTextColor = RoyalBlue,
-                            indicatorColor = RoyalBlue.copy(alpha = 0.14f),
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-        }
     ) { padding ->
         if (activeChatUid != null) {
             ChatScreen(uid, activeChatUid!!, activeChatName, Modifier.padding(padding)) { activeChatUid = null }
