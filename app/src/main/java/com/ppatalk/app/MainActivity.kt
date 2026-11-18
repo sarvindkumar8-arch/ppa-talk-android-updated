@@ -63,7 +63,6 @@ class MainActivity : ComponentActivity() {
 fun PPATalkApp() {
     val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
-    val auth = FirebaseAuth.getInstance()
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
@@ -123,6 +122,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
     val countryCodes = listOf(
         "India (+91)" to "+91", "United States (+1)" to "+1", "United Kingdom (+44)" to "+44",
         "United Arab Emirates (+971)" to "+971", "Canada (+1)" to "+1", "Australia (+61)" to "+61",
