@@ -525,7 +525,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     }
 }
 
-data class FeedPost(val id: String, val uid: String, val authorName: String, val authorEmail: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
+data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
 
 @Composable
@@ -545,7 +545,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
                     posts = snapshot.documents.map { doc ->
                         FeedPost(doc.id, doc.getString("uid") ?: "",
                             doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("authorEmail") ?: "", doc.getString("text") ?: "",
+                            doc.getString("text") ?: "",
                             doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
                             doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
                     }
@@ -813,7 +813,7 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
         onDispose { registration.remove() }
     }
     LaunchedEffect(currentUid) {
-        db.collection("users").document(currentUid).get()
+        db.collection("publicProfiles").document(currentUid).get()
             .addOnSuccessListener { currentName = it.getString("displayName") ?: currentName }
     }
     AlertDialog(
@@ -936,7 +936,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     val post = hashMapOf(
                         "uid" to uid,
                         "authorName" to displayName,
-                        "authorEmail" to email,
+
                         "text" to postText.trim(),
                         "mediaUrl" to mediaUrl,
                         "mediaType" to mediaType,
