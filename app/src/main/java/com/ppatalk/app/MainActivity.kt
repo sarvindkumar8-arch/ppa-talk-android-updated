@@ -258,7 +258,24 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             }
         } else {
             busy = false
-            message = "Google sign-in cancelled."
+            // RESULT_CANCELED can also hide a Google OAuth configuration error.
+            // Read the status returned by Google Play Services before showing a message.
+            val statusCode = try {
+                GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                    .getResult(ApiException::class.java)
+                null
+            } catch (exception: ApiException) {
+                exception.statusCode
+            } catch (_: Exception) {
+                null
+            }
+            message = when (statusCode) {
+                10 -> "Google sign-in configuration error (DEVELOPER_ERROR). Check SHA-1/SHA-256 fingerprints and OAuth client IDs in Firebase."
+                7 -> "Google sign-in network error. Check your internet connection and try again."
+                12500 -> "Google sign-in failed. Check that Google provider is enabled in Firebase Authentication and OAuth setup is complete."
+                12501 -> "Google sign-in was cancelled. Please select your Google account and try again."
+                else -> "Google sign-in did not complete (resultCode=${result.resultCode}, statusCode=${statusCode ?: "unknown"}). Check Firebase Google provider and app SHA fingerprints."
+            }
         }
     }
 
