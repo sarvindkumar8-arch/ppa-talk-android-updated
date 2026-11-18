@@ -159,9 +159,10 @@ class PpaCallController(
         }
 
         val audioSource = factory.createAudioSource(MediaConstraints())
-        localAudio = factory.createAudioTrack("ppa_audio_$uid", audioSource)
-        localAudio?.setEnabled(true)
-        peer?.addTrack(localAudio, listOf("ppa_stream"))
+        val audioTrack = factory.createAudioTrack("ppa_audio_$uid", audioSource)
+        localAudio = audioTrack
+        audioTrack.setEnabled(true)
+        peer?.addTrack(audioTrack, listOf("ppa_stream"))
 
         if (callType == "video") {
             val enumerator = Camera2Enumerator(context)
@@ -174,12 +175,14 @@ class PpaCallController(
             cameraCapturer = enumerator.createCapturer(cameraName, null)
             val capturer = cameraCapturer ?: return
             surfaceTextureHelper = SurfaceTextureHelper.create("PPA-Camera", egl.eglBaseContext)
-            videoSource = factory.createVideoSource(false)
-            capturer.initialize(surfaceTextureHelper, context, videoSource?.capturerObserver)
+            val source = factory.createVideoSource(false)
+            videoSource = source
+            capturer.initialize(surfaceTextureHelper, context, source.capturerObserver)
             capturer.startCapture(640, 480, 24)
-            localVideo = factory.createVideoTrack("ppa_video_$uid", videoSource)
-            localVideo?.setEnabled(true)
-            peer?.addTrack(localVideo, listOf("ppa_stream"))
+            val videoTrack = factory.createVideoTrack("ppa_video_$uid", source)
+            localVideo = videoTrack
+            videoTrack.setEnabled(true)
+            peer?.addTrack(videoTrack, listOf("ppa_stream"))
             localRenderer?.let { localVideo?.addSink(it) }
         }
     }
