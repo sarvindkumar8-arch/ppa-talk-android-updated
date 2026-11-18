@@ -83,7 +83,7 @@ fun PpaCallDialog(
                             }
                             .width(112.dp)
                             .height(158.dp)
-                            .pointerInput(controller, maxWidth, maxHeight) {
+                            .pointerInput(controller, maxX, maxY) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     val minOffsetX = -baseX
