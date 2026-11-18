@@ -1425,11 +1425,67 @@ fun FriendsScreen(uid: String, currentName: String, onMessage: (String, String) 
 @Composable
 fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit) {
     val db = remember { FirebaseFirestore.getInstance() }
+    val context = LocalContext.current
     val chatId = remember(currentUid, friendUid) { listOf(currentUid, friendUid).sorted().joinToString("_") }
     var messages by remember(chatId) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var draft by remember(chatId) { mutableStateOf("") }
     var sending by remember(chatId) { mutableStateOf(false) }
     var error by remember(chatId) { mutableStateOf("") }
+    var callController by remember { mutableStateOf<PpaCallController?>(null) }
+    var callStatus by remember { mutableStateOf("") }
+    var callError by remember { mutableStateOf("") }
+    var incomingCallId by remember { mutableStateOf<String?>(null) }
+    var incomingCallType by remember { mutableStateOf("audio") }
+    var pendingCallId by remember { mutableStateOf<String?>(null) }
+    var requestedCallType by remember { mutableStateOf("audio") }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.values.all { it }
+        if (!granted) {
+            callError = "Call ke liye microphone aur video call ke liye camera permission zaroori hai."
+        } else {
+            val controller = PpaCallController(
+                context, currentUid, friendUid,
+                onStatus = { callStatus = it },
+                onError = { callError = it }
+            )
+            callController = controller
+            val incomingId = pendingCallId
+            pendingCallId = null
+            if (incomingId != null) controller.acceptIncoming(incomingId)
+            else controller.startOutgoing(requestedCallType)
+        }
+    }
+
+    fun requestCall(type: String, incomingId: String? = null) {
+        requestedCallType = type
+        pendingCallId = incomingId
+        callError = ""
+        val permissions = if (type == "video") {
+            arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+        } else arrayOf(android.Manifest.permission.RECORD_AUDIO)
+        permissionLauncher.launch(permissions)
+    }
+
+    DisposableEffect(currentUid, friendUid) {
+        val incomingRegistration = db.collection("callSessions")
+            .whereEqualTo("calleeUid", currentUid)
+            .whereEqualTo("status", "ringing")
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    callError = exception.localizedMessage ?: "Incoming call check failed."
+                } else {
+                    val incoming = snapshot?.documents?.firstOrNull {
+                        it.getString("callerUid") == friendUid && it.get("offer") is Map<*, *>
+                    }
+                    incomingCallId = incoming?.id
+                    incomingCallType = incoming?.getString("callType") ?: "audio"
+                }
+            }
+        onDispose { incomingRegistration.remove() }
+    }
 
     DisposableEffect(chatId) {
         val registration = db.collection("chats").document(chatId).collection("messages")
@@ -1442,12 +1498,19 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         onDispose { registration.remove() }
     }
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text(friendName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(friendName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(enabled = callController == null, onClick = { requestCall("audio") }) {
+                Icon(Icons.Default.Call, contentDescription = "Voice call", tint = RoyalBlue)
+            }
+            IconButton(enabled = callController == null, onClick = { requestCall("video") }) {
+                Icon(Icons.Default.VideoCall, contentDescription = "Video call", tint = Orange)
+            }
         }
         HorizontalDivider()
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
+        if (callError.isNotBlank()) Text(callError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
             contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (messages.isEmpty()) item { Text("Say hello to ${friendName} 👋", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -1480,6 +1543,39 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                 }
             }) { Icon(Icons.Default.Send, contentDescription = "Send message", tint = RoyalBlue) }
         }
+    }
+
+    if (incomingCallId != null && callController == null) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(if (incomingCallType == "video") "Incoming video call" else "Incoming voice call") },
+            text = { Text("${friendName} is calling you.") },
+            confirmButton = {
+                TextButton(onClick = { requestCall(incomingCallType, incomingCallId) }) { Text("Accept") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val id = incomingCallId
+                    incomingCallId = null
+                    if (id != null) db.collection("callSessions").document(id).update(
+                        mapOf("status" to "rejected", "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                    )
+                }) { Text("Reject") }
+            }
+        )
+    }
+
+    callController?.let { controller ->
+        PpaCallDialog(
+            controller = controller,
+            callType = requestedCallType,
+            status = callStatus.ifBlank { "Connecting…" },
+            onEnd = {
+                controller.endCall()
+                callController = null
+                callStatus = "Call ended"
+            }
+        )
     }
 }
 
