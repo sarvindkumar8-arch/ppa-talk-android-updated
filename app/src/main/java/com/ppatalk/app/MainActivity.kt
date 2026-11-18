@@ -1449,7 +1449,7 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
             val controller = PpaCallController(
                 context, currentUid, friendUid,
                 onStatus = { callStatus = it },
-                onError = { callError = it }
+                onError = { callError = it; callStatus = it }
             )
             callController = controller
             val incomingId = pendingCallId
