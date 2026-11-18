@@ -1069,7 +1069,30 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     var likeCount by remember(post.id) { mutableIntStateOf(0) }
     var commentCount by remember(post.id) { mutableIntStateOf(0) }
     var actionBusy by remember(post.id) { mutableStateOf(false) }
+    var friendState by remember(post.uid, currentUid) { mutableStateOf("Add Friend") }
+    var friendBusy by remember(post.uid, currentUid) { mutableStateOf(false) }
+    var friendMessage by remember(post.uid, currentUid) { mutableStateOf("") }
     val db = remember { FirebaseFirestore.getInstance() }
+
+    DisposableEffect(post.uid, currentUid) {
+        if (post.uid == currentUid) return@DisposableEffect onDispose { }
+        val friendRef = db.collection("friends").document(currentUid).collection("list").document(post.uid)
+        val sentRef = db.collection("friendRequests").document("${currentUid}_${post.uid}")
+        val receivedRef = db.collection("friendRequests").document("${post.uid}_${currentUid}")
+        val friendListener = friendRef.addSnapshotListener { snap, _ ->
+            if (snap?.exists() == true) friendState = "Friends"
+        }
+        val sentListener = sentRef.addSnapshotListener { snap, _ ->
+            if (snap?.getString("status") == "pending") friendState = "Requested"
+            else if (snap?.getString("status") == "accepted") friendState = "Friends"
+            else if (friendState != "Friends") friendState = "Add Friend"
+        }
+        val receivedListener = receivedRef.addSnapshotListener { snap, _ ->
+            if (snap?.getString("status") == "pending" && friendState != "Friends") friendState = "Respond"
+        }
+        onDispose { friendListener.remove(); sentListener.remove(); receivedListener.remove() }
+    }
+
     DisposableEffect(post.id, currentUid) {
         val likesRef = db.collection("posts").document(post.id).collection("likes")
         val likeListener = likesRef.addSnapshotListener { snapshot, _ ->
@@ -1111,7 +1134,49 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                if (post.uid != currentUid) {
+                    OutlinedButton(
+                        enabled = !friendBusy && friendState == "Add Friend",
+                        onClick = {
+                            friendBusy = true
+                            val senderProfile = db.collection("publicProfiles").document(currentUid)
+                            senderProfile.get().addOnSuccessListener { profile ->
+                                val data = hashMapOf(
+                                    "fromUid" to currentUid,
+                                    "toUid" to post.uid,
+                                    "fromName" to (profile.getString("displayName") ?: "PPA Talk user"),
+                                    "toName" to post.authorName,
+                                    "status" to "pending",
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )
+                                db.collection("friendRequests").document("${currentUid}_${post.uid}").set(data)
+                                    .addOnSuccessListener {
+                                        friendState = "Requested"
+                                        friendMessage = "Friend request sent"
+                                        friendBusy = false
+                                    }
+                                    .addOnFailureListener { error ->
+                                        friendMessage = error.localizedMessage ?: "Could not send request"
+                                        friendBusy = false
+                                    }
+                            }.addOnFailureListener { error ->
+                                friendMessage = error.localizedMessage ?: "Could not load your profile"
+                                friendBusy = false
+                            }
+                        }
+                    ) {
+                        if (friendBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text(when (friendState) {
+                            "Requested" -> "Requested"
+                            "Friends" -> "Friends"
+                            "Respond" -> "Respond"
+                            else -> "Add Friend"
+                        })
+                    }
+                }
             }
+            if (friendMessage.isNotBlank()) Text(friendMessage, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(12.dp))
             if (post.text.isNotBlank()) Text(post.text)
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
