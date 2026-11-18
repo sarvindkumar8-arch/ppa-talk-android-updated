@@ -371,7 +371,32 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                             .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Sign up failed." }
                     } else {
                         auth.signInWithEmailAndPassword(email.trim(), password)
-                            .addOnSuccessListener { busy = false; onAuthenticated() }
+                            .addOnSuccessListener { result ->
+                                val signedInUser = result.user
+                                if (signedInUser == null) {
+                                    busy = false
+                                    message = "Login succeeded but account details were unavailable."
+                                } else {
+                                    val db = FirebaseFirestore.getInstance()
+                                    val profileName = signedInUser.displayName?.takeIf { it.isNotBlank() }
+                                        ?: signedInUser.email?.substringBefore("@") ?: "PPA Talk user"
+                                    val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    val batch = db.batch()
+                                    batch.set(db.collection("users").document(signedInUser.uid), mapOf(
+                                        "uid" to signedInUser.uid, "email" to (signedInUser.email ?: ""),
+                                        "updatedAt" to timestamp
+                                    ), com.google.firebase.firestore.SetOptions.merge())
+                                    batch.set(db.collection("publicProfiles").document(signedInUser.uid), mapOf(
+                                        "uid" to signedInUser.uid, "displayName" to profileName,
+                                        "updatedAt" to timestamp
+                                    ), com.google.firebase.firestore.SetOptions.merge())
+                                    batch.commit().addOnCompleteListener { task ->
+                                        busy = false
+                                        if (task.isSuccessful) onAuthenticated()
+                                        else message = task.exception?.localizedMessage ?: "Profile setup failed."
+                                    }
+                                }
+                            }
                             .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
                     }
                 }
