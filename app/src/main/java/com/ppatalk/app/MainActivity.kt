@@ -38,6 +38,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -98,7 +101,6 @@ fun PPATalkApp() {
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser?.takeIf { it.phoneNumber != null || it.isEmailVerified }) }
-    LaunchedEffect(Unit) { if (FirebaseAuth.getInstance().currentUser != null && user == null) FirebaseAuth.getInstance().signOut() }
     val lightColors = lightColorScheme(
         primary = RoyalBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
@@ -186,6 +188,48 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var phoneOtpSent by remember { mutableStateOf(false) }
     var phoneResendToken by remember { mutableStateOf<PhoneAuthProvider.ForceResendingToken?>(null) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Keep an unverified email account signed in while the user opens the
+    // verification email. When the app resumes, refresh Firebase Auth and
+    // automatically enter PPA Talk once Firebase confirms the email.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val auth = FirebaseAuth.getInstance()
+                val pendingUser = auth.currentUser
+                if (pendingUser?.email != null && !pendingUser.isEmailVerified) {
+                    pendingUser.reload().addOnSuccessListener {
+                        val verifiedUser = auth.currentUser
+                        if (verifiedUser?.isEmailVerified == true) {
+                            val db = FirebaseFirestore.getInstance()
+                            val profileName = verifiedUser.displayName?.takeIf { it.isNotBlank() }
+                                ?: verifiedUser.email?.substringBefore("@") ?: "PPA Talk user"
+                            val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            val batch = db.batch()
+                            batch.set(db.collection("users").document(verifiedUser.uid), mapOf(
+                                "uid" to verifiedUser.uid,
+                                "email" to (verifiedUser.email ?: ""),
+                                "updatedAt" to timestamp
+                            ), com.google.firebase.firestore.SetOptions.merge())
+                            batch.set(db.collection("publicProfiles").document(verifiedUser.uid), mapOf(
+                                "uid" to verifiedUser.uid,
+                                "displayName" to profileName,
+                                "updatedAt" to timestamp
+                            ), com.google.firebase.firestore.SetOptions.merge())
+                            batch.commit().addOnSuccessListener { onAuthenticated() }
+                                .addOnFailureListener { exception ->
+                                    message = exception.localizedMessage ?: "Email verified, but profile setup failed. Please sign in again."
+                                }
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val countryCodes = listOf(
         "India (+91)" to "+91", "United States (+1)" to "+1", "United Kingdom (+44)" to "+44",
         "United Arab Emirates (+971)" to "+971", "Canada (+1)" to "+1", "Australia (+61)" to "+61",
@@ -468,14 +512,12 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     if (firebaseUser != null) {
                                         firebaseUser.sendEmailVerification()
                                             .addOnSuccessListener {
-                                                auth.signOut()
                                                 busy = false
-                                                message = "Verification email sent. Open the link in your inbox, then sign in."
+                                                message = "Verification email sent. Link par click karein; verify hone ke baad PPA Talk app mein wapas aate hi auto login ho jayega."
                                             }
                                             .addOnFailureListener { exception ->
-                                                auth.signOut()
                                                 busy = false
-                                                message = exception.localizedMessage ?: "Could not send verification email. Try signing in to resend."
+                                                message = exception.localizedMessage ?: "Could not send verification email. Please try again."
                                             }
                                     } else {
                                         busy = false
