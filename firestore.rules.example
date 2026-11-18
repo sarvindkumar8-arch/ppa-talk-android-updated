@@ -45,6 +45,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Stories are visible to signed-in users and expire after 24 hours in the app.
+    match /stories/{storyId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.mediaUrl is string
+        && request.resource.data.mediaType in ['image', 'video']
+        && request.resource.data.authorName is string;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /posts/{postId} {
       allow read: if true;
       allow create: if signedIn()
