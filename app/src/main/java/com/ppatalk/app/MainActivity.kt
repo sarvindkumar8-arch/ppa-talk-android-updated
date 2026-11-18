@@ -1782,10 +1782,29 @@ fun FriendsScreen(
                 if (snap != null) sentRequests = snap.documents.filter { it.getString("status") == "pending" }.mapNotNull { it.getString("toUid") }.toSet()
             }
         val friendsListener = db.collection("friends").document(uid).collection("list")
-            .addSnapshotListener { snap, _ ->
-                if (snap != null) friends = snap.documents.map { doc ->
-                    PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user",
-                        doc.getString("photoUrl") ?: "")
+            .addSnapshotListener { snap, error ->
+                if (error != null) status = error.localizedMessage ?: "Friends list load nahi hui."
+                if (snap != null) {
+                    friends = snap.documents.map { doc ->
+                        PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user",
+                            doc.getString("photoUrl") ?: "")
+                    }
+                    // Older friend-list entries may not contain photoUrl. Hydrate
+                    // them from the public profile so existing friends also see photos.
+                    snap.documents.filter { it.getString("photoUrl").isNullOrBlank() }.forEach { doc ->
+                        db.collection("publicProfiles").document(doc.id).get().addOnSuccessListener { profile ->
+                            val photo = profile.getString("photoUrl").orEmpty()
+                            val name = profile.getString("displayName").orEmpty()
+                            if (photo.isNotBlank() || name.isNotBlank()) {
+                                friends = friends.map { friend ->
+                                    if (friend.uid == doc.id) friend.copy(
+                                        name = name.ifBlank { friend.name },
+                                        photoUrl = photo.ifBlank { friend.photoUrl }
+                                    ) else friend
+                                }
+                            }
+                        }
+                    }
                 }
             }
         onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
@@ -1861,7 +1880,13 @@ fun FriendsScreen(
         matches.forEach { person ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
+                    Surface(modifier = Modifier.size(40.dp), shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant, onClick = { onOpenProfile(person.uid) }) {
+                        if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl,
+                            contentDescription = "Open profile photo",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        else Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
+                    }
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         TextButton(onClick = { onOpenProfile(person.uid) }, contentPadding = PaddingValues(0.dp)) {
                             Text(person.name, fontWeight = FontWeight.SemiBold)
