@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - security/phone-otp-auth
   pull_request:
     branches:
       - main
