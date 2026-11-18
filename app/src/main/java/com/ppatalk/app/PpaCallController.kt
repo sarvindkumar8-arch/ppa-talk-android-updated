@@ -119,7 +119,10 @@ class PpaCallController(
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
                 when (state) {
                     PeerConnection.IceConnectionState.CONNECTED,
-                    PeerConnection.IceConnectionState.COMPLETED -> onStatus("Connected")
+                    PeerConnection.IceConnectionState.COMPLETED -> {
+                        Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
+                        onStatus(if (callType == "video") "Connected • waiting for remote video" else "Connected")
+                    }
                     PeerConnection.IceConnectionState.DISCONNECTED -> onStatus("Connection interrupted…")
                     PeerConnection.IceConnectionState.FAILED -> onError("Connection failed. A TURN server may be required.")
                     PeerConnection.IceConnectionState.CLOSED -> onStatus("Call ended")
@@ -220,6 +223,12 @@ class PpaCallController(
         peer?.createOffer(object : SimpleSdpObserver() {
             override fun onCreateSuccess(description: SessionDescription?) {
                 if (description == null) { onError("Could not create call offer."); return }
+                val videoMLine = description.description.lineSequence().firstOrNull { it.startsWith("m=video") }
+                val videoDirection = description.description.lineSequence().firstOrNull {
+                    it == "a=sendrecv" || it == "a=sendonly" || it == "a=recvonly" || it == "a=inactive"
+                }
+                Log.d("PPATalkWebRTC", "Created offer: callType=$callType, videoMLine=$videoMLine, direction=$videoDirection")
+                if (callType == "video") onStatus(if (videoMLine != null) "Video offer created" else "Video offer missing m=video")
                 peer?.setLocalDescription(object : SimpleSdpObserver() {
                     override fun onSetSuccess() {
                         val id = callId ?: return
@@ -239,6 +248,12 @@ class PpaCallController(
         peer?.createAnswer(object : SimpleSdpObserver() {
             override fun onCreateSuccess(description: SessionDescription?) {
                 if (description == null) { onError("Could not create answer."); return }
+                val videoMLine = description.description.lineSequence().firstOrNull { it.startsWith("m=video") }
+                val videoDirection = description.description.lineSequence().firstOrNull {
+                    it == "a=sendrecv" || it == "a=sendonly" || it == "a=recvonly" || it == "a=inactive"
+                }
+                Log.d("PPATalkWebRTC", "Created answer: callType=$callType, videoMLine=$videoMLine, direction=$videoDirection")
+                if (callType == "video") onStatus(if (videoMLine != null) "Video answer created" else "Video answer missing m=video")
                 peer?.setLocalDescription(object : SimpleSdpObserver() {
                     override fun onSetSuccess() {
                         val id = callId ?: return
@@ -269,8 +284,9 @@ class PpaCallController(
                     val answerMap = snapshot.get("answer") as? Map<*, *>
                     val sdp = answerMap?.get("sdp") as? String
                     if (caller && !sdp.isNullOrBlank() && !remoteDescriptionSet) {
+                        Log.d("PPATalkWebRTC", "Received answer SDP: hasVideoMLine=${sdp.lineSequence().any { it.startsWith("m=video") }}")
                         peer?.setRemoteDescription(object : SimpleSdpObserver() {
-                            override fun onSetSuccess() { remoteDescriptionSet = true; flushRemoteCandidates(); onStatus("Connecting…") }
+                            override fun onSetSuccess() { remoteDescriptionSet = true; flushRemoteCandidates(); onStatus(if (callType == "video") "Answer received • negotiating video" else "Connecting…") }
                             override fun onSetFailure(error: String?) { onError("Could not read answer: $error") }
                         }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
                     }
