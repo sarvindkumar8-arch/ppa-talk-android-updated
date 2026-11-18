@@ -45,6 +45,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.messaging.FirebaseMessaging
 import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
@@ -55,6 +56,10 @@ private val Orange = Color(0xFFF27A21)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4102)
+        }
         setContent { PPATalkApp() }
     }
 }
@@ -456,6 +461,17 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
+
+    DisposableEffect(uid) {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            FirebaseFirestore.getInstance().collection("users").document(uid)
+                .collection("fcmTokens").document(token)
+                .set(mapOf("token" to token, "platform" to "android",
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+        }
+        onDispose { }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
