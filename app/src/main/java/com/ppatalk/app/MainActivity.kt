@@ -2542,6 +2542,15 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     fun requestCall(type: String, incomingId: String? = null) {
         requestedCallType = type
         pendingCallId = incomingId
+        if (incomingId != null) {
+            incomingCallId = null
+            (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(incomingId.hashCode())
+            db.collection("callSessions").document(incomingId).update(mapOf(
+                "status" to "accepting",
+                "acceptedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )).addOnFailureListener { callError = it.localizedMessage ?: "Could not accept incoming call." }
+        }
         callError = ""
         val permissions = if (type == "video") {
             arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
@@ -2664,9 +2673,12 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                 TextButton(onClick = {
                     val id = incomingCallId
                     incomingCallId = null
-                    if (id != null) db.collection("callSessions").document(id).update(
+                    if (id != null) {
+                        (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(id.hashCode())
+                        db.collection("callSessions").document(id).update(
                         mapOf("status" to "rejected", "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-                    )
+                        )
+                    }
                 }) { Text("Reject") }
             }
         )
