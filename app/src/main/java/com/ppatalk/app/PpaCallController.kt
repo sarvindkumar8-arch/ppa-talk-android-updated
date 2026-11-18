@@ -77,9 +77,12 @@ class PpaCallController(
         callId = id
         caller = false
         val ref = db.collection("callSessions").document(id)
+        ref.update(mapOf("status" to "accepting",
+            "acceptedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
         ref.get().addOnSuccessListener { snapshot ->
             if (!snapshot.exists() || snapshot.getString("calleeUid") != uid ||
-                snapshot.getString("status") != "ringing") {
+                snapshot.getString("status") !in listOf("ringing", "accepting")) {
                 onError("This call is no longer available.")
                 return@addOnSuccessListener
             }
