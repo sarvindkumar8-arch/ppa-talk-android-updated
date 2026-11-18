@@ -1765,7 +1765,8 @@ fun FriendsScreen(
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(uid) {
-        val usersListener = db.collection("publicProfiles").addSnapshotListener { snap, _ ->
+        val usersListener = db.collection("publicProfiles").addSnapshotListener { snap, error ->
+            if (error != null) status = error.localizedMessage ?: "People directory load nahi hui. Firestore rules check karein."
             if (snap != null) users = snap.documents.mapNotNull { doc ->
                 if (doc.id == uid) null else PPAUser(doc.id,
                     doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user",
