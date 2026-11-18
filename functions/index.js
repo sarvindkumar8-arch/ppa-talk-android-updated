@@ -182,7 +182,7 @@ exports.notifyIncomingCall = onDocumentCreated({
     android: {
       priority: "high",
       notification: {
-        channelId: "ppa_incoming_calls",
+        channelId: "ppa_incoming_calls_v2",
         sound: "default",
         visibility: "public"
       }
