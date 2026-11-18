@@ -255,7 +255,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 value = phoneNumber,
                 onValueChange = { phoneNumber = it.filter(Char::isDigit).take(14) },
                 label = { Text("Mobile number") }, placeholder = { Text("Enter mobile number") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors
             )
         } else {
@@ -271,7 +271,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             value = password, onValueChange = { password = it },
             label = { Text("Password") },
             placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = Color.Black),
+            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
@@ -642,7 +642,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
             .addSnapshotListener { snapshot, _ -> if (snapshot != null) commentCount = snapshot.size() }
         onDispose { likeListener.remove(); commentsListener.remove() }
     }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue)
@@ -1122,7 +1122,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(displayName.ifBlank { "PPA Talk user" },
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = Color.White)
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text("PPA Talk member", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !saving) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null)
