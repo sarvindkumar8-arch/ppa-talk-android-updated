@@ -133,7 +133,7 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false
 
 // Send an FCM push whenever a new outgoing call session is created.
 // The server reads recipient device tokens; clients never get access to other users' tokens.
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 
 exports.notifyIncomingCall = onDocumentCreated({
   document: "callSessions/{callId}",
@@ -192,13 +192,14 @@ exports.notifyIncomingCall = onDocumentCreated({
 
 
 // Notify the recipient when a new friend request is created.
-exports.notifyFriendRequest = onDocumentCreated({
+exports.notifyFriendRequest = onDocumentWritten({
   document: "friendRequests/{requestId}",
   region: REGION,
   maxInstances: 20
 }, async (event) => {
-  const request = event.data?.data();
-  if (!request || request.status !== "pending" ||
+  const before = event.data?.before?.data();
+  const request = event.data?.after?.data();
+  if (!request || request.status !== "pending" || (before?.status === "pending") ||
       typeof request.fromUid !== "string" || typeof request.toUid !== "string" ||
       request.fromUid === request.toUid) return;
 
