@@ -158,10 +158,9 @@ exports.notifyIncomingCall = onDocumentCreated({
   const kind = call.callType === "video" ? "video" : "voice";
   const result = await getMessaging().sendEachForMulticast({
     tokens,
-    notification: {
-      title: callerName,
-      body: "Incoming " + kind + " call"
-    },
+    // Send a data-only push. If a notification payload is included, Android
+    // displays it itself in the background and the app cannot reliably cancel
+    // that system-owned ringing notification when the call is accepted.
     data: {
       title: callerName,
       body: "Incoming " + kind + " call",
@@ -171,11 +170,7 @@ exports.notifyIncomingCall = onDocumentCreated({
     },
     android: {
       priority: "high",
-      notification: {
-        channelId: "ppa_incoming_calls_v2",
-        sound: "default",
-        visibility: "public"
-      }
+      ttl: 60 * 1000
     }
   });
 
