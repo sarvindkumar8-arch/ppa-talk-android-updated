@@ -30,9 +30,39 @@ class PpaMessagingService : FirebaseMessagingService() {
             return
         }
         val callId = message.data["callId"].orEmpty()
+        if (type == "call_cancel") {
+            cancelCallNotification(callId)
+            return
+        }
         val callerUid = message.data["callerUid"].orEmpty()
         val callType = message.data["callType"] ?: "audio"
-        showCallNotification(title, body, callId, callerUid, callType)
+        if (callId.isBlank()) return
+
+        // FCM can deliver an old ringing push after the caller has already
+        // ended the call. Verify the live Firestore state before displaying it.
+        FirebaseFirestore.getInstance().collection("callSessions").document(callId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+                if (snapshot.exists() &&
+                    snapshot.getString("status") == "ringing" &&
+                    snapshot.getString("calleeUid") == currentUid) {
+                    showCallNotification(title, body, callId, callerUid, callType)
+                } else {
+                    cancelCallNotification(callId)
+                }
+            }
+            .addOnFailureListener {
+                // Fail closed: do not show a potentially stale incoming call.
+                cancelCallNotification(callId)
+            }
+    }
+
+
+    private fun cancelCallNotification(callId: String) {
+        if (callId.isBlank()) return
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(callId.hashCode())
     }
 
     private fun saveToken(token: String) {
