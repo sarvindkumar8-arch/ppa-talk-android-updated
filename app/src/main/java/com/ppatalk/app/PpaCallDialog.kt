@@ -31,6 +31,7 @@ import org.webrtc.SurfaceViewRenderer
 @Composable
 fun PpaCallDialog(
     controller: PpaCallController,
+    callerName: String,
     callType: String,
     status: String,
     onEnd: () -> Unit
@@ -123,19 +124,42 @@ fun PpaCallDialog(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .background(Color(0x9907111F))
-                        .padding(start = 20.dp, top = 42.dp, end = 150.dp, bottom = 14.dp)
+                        .background(Color(0xF0101827))
+                        .padding(start = 20.dp, top = 42.dp, end = 20.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Text(if (callType == "video") "Video call" else "Voice call",
-                        color = Color.White, style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold)
+                    Text(
+                        callerName.ifBlank { "PPA Talk user" },
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    val connected = status.contains("connected", ignoreCase = true) ||
+                        status.contains("remote video displaying", ignoreCase = true) ||
+                        status.contains("remote video frame", ignoreCase = true)
+                    Text(
+                        when {
+                            connected -> "● Connected"
+                            status.isNotBlank() -> status
+                            else -> "Connecting…"
+                        },
+                        color = if (connected) Color(0xFF55D98A) else Color(0xFFD4DCE8),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        if (callType == "video") "Video call" else "Voice call",
+                        color = Color(0xFFB8C4D8),
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
 
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color(0xE607111F))
+                        .background(Color(0xFF101827))
                         .navigationBarsPadding()
                         .padding(horizontal = 12.dp, vertical = 24.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
