@@ -2736,9 +2736,6 @@ fun PublicProfileScreen(
                     "" to interests
                 ), Icons.Default.Info)
 
-                DetailSection("Contact info", listOf(
-                    "PPA Talk username" to username.takeIf { it.isNotBlank() }?.let { "@$it" }.orEmpty()
-                ), Icons.Default.AlternateEmail)
             } else {
                 Text(if (selectedTab == "Reels") "Reels will appear here." else "Photos will appear here.",
                     modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
