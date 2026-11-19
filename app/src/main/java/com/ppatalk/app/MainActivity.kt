@@ -1762,10 +1762,11 @@ private fun PhotoCropDialog(
                             val left = (size.width - frameWidth) / 2f
                             val top = (size.height - frameHeight) / 2f
                             val frame = androidx.compose.ui.geometry.Rect(left, top, left + frameWidth, top + frameHeight)
-                            drawRect(Color.White.copy(alpha = 0.9f), topLeft = androidx.compose.ui.geometry.Offset(frame.left, frame.top),
-                                size = androidx.compose.ui.geometry.Size(frame.width, frame.height),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
-                            if (!isCover) {
+                            if (isCover) {
+                                drawRect(Color.White.copy(alpha = 0.95f), topLeft = androidx.compose.ui.geometry.Offset(frame.left, frame.top),
+                                    size = androidx.compose.ui.geometry.Size(frame.width, frame.height),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                            } else {
                                 drawCircle(Color.White.copy(alpha = 0.95f), radius = frameWidth / 2f,
                                     center = frame.center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
                             }
