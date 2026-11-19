@@ -2189,22 +2189,30 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
             ) { Icon(Icons.Default.CameraAlt, contentDescription = "Change cover photo") }
-            Surface(
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp),
-                shape = CircleShape, color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface)
+            Box(
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp).size(116.dp)
             ) {
-                Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface)
+                ) {
                     if (photoUrl.isNotBlank()) {
                         AsyncImage(model = photoUrl, contentDescription = "Profile photo",
                             modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                    } else Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo",
-                        modifier = Modifier.fillMaxSize(), tint = RoyalBlue)
-                    FilledIconButton(
-                        onClick = { imagePicker.launch("image/*") }, enabled = !saving,
-                        modifier = Modifier.align(Alignment.BottomEnd).size(36.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
-                    ) { Icon(Icons.Default.CameraAlt, contentDescription = "Edit profile photo", modifier = Modifier.size(18.dp)) }
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo",
+                                modifier = Modifier.fillMaxSize(), tint = RoyalBlue)
+                        }
+                    }
+                }
+                FilledIconButton(
+                    onClick = { imagePicker.launch("image/*") }, enabled = !saving,
+                    modifier = Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(40.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = "Edit profile photo", modifier = Modifier.size(20.dp))
                 }
             }
         }
