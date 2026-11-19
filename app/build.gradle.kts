@@ -61,6 +61,8 @@ android {
 }
 
 dependencies {
+    // Keep Kotlin stdlib and its JDK variants on the same version.
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.compose.ui:ui")
