@@ -77,6 +77,11 @@ import java.util.Date
 private val RoyalBlue = Color(0xFF2457D6)
 private val Orange = Color(0xFFF27A21)
 
+private data class ProfileGalleryItem(
+    val id: String, val url: String, val thumbnailUrl: String,
+    val type: String, val category: String, val caption: String
+)
+
 class MainActivity : ComponentActivity() {
     private fun createIncomingCallNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1946,6 +1951,9 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var postCount by remember { mutableStateOf(0) }
     var friendCount by remember { mutableStateOf(0) }
     var profileTab by remember { mutableStateOf("All") }
+    var galleryItems by remember { mutableStateOf(emptyList<ProfileGalleryItem>()) }
+    var galleryFilter by remember { mutableStateOf("All photos") }
+    var selectedGalleryItem by remember { mutableStateOf<ProfileGalleryItem?>(null) }
     var showStoryComposer by remember { mutableStateOf(false) }
     var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
     var photoEditorIsCover by remember { mutableStateOf(false) }
@@ -1985,7 +1993,21 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         val friendsRegistration = db.collection("friends").document(uid).collection("list").addSnapshotListener { snap, _ ->
             if (snap != null) friendCount = snap.size()
         }
-        onDispose { postsRegistration.remove(); friendsRegistration.remove() }
+        val galleryRegistration = db.collection("posts").whereEqualTo("uid", uid).addSnapshotListener { snap, _ ->
+            if (snap != null) galleryItems = snap.documents.mapNotNull { doc ->
+                val url = doc.getString("mediaUrl").orEmpty()
+                if (url.isBlank()) null else {
+                    val mediaType = doc.getString("mediaType").orEmpty().lowercase()
+                    val postType = doc.getString("postType").orEmpty().lowercase()
+                    val photoKind = doc.getString("photoKind").orEmpty().lowercase()
+                    ProfileGalleryItem(doc.id, url, doc.getString("thumbnailUrl").orEmpty().ifBlank { url },
+                        if (mediaType.contains("video") || postType == "reel" || postType == "reels") "video" else "image",
+                        when (photoKind) { "profile" -> "Profile pictures"; "cover" -> "Cover photos"; else -> "Uploads" },
+                        doc.getString("text").orEmpty())
+                }
+            }.sortedByDescending { it.id }
+        }
+        onDispose { postsRegistration.remove(); friendsRegistration.remove(); galleryRegistration.remove() }
     }
 
     DisposableEffect(uid) {
@@ -2255,28 +2277,42 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     FilterChip(selected = profileTab == tab, onClick = { profileTab = tab }, label = { Text(tab) })
                 }
             }
-            if (profileTab == "Photos") {
-                Text("Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                val savedPhotos = listOfNotNull(
-                    (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let { "Profile photo" to it },
-                    (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let { "Cover photo" to it }
-                )
-                if (savedPhotos.isEmpty()) Text("Abhi koi photo nahi hai.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    savedPhotos.forEach { (label, imageUrl) ->
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            AsyncImage(model = imageUrl, contentDescription = label,
-                                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.small),
-                                contentScale = ContentScale.Crop)
-                            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+            if (profileTab == "Photos" || profileTab == "Reels") {
+                val isReels = profileTab == "Reels"
+                val filteredItems = galleryItems.filter { item ->
+                    if (isReels) item.type == "video" else item.type == "image" && when (galleryFilter) {
+                        "Cover photos" -> item.category == "Cover photos"
+                        "Profile pictures" -> item.category == "Profile pictures"
+                        "Tagged photos" -> false
+                        else -> true
                     }
-                    repeat(2 - savedPhotos.size) { Spacer(Modifier.weight(1f)) }
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (if (isReels) listOf("All reels") else listOf("Tagged photos", "Cover photos", "Profile pictures", "All photos")).forEach { filter ->
+                        FilterChip(selected = galleryFilter == filter, onClick = { galleryFilter = filter }, label = { Text(filter) })
+                    }
+                }
+                Text(if (isReels) "Your Reels" else "Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (filteredItems.isEmpty()) Text(if (isReels) "Abhi koi reel nahi hai." else "Abhi is category mein koi photo nahi hai.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp))
+                else filteredItems.chunked(3).forEach { rowItems ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        rowItems.forEach { item ->
+                            Box(Modifier.weight(1f).aspectRatio(1f).clip(MaterialTheme.shapes.small).clickable { selectedGalleryItem = item }) {
+                                AsyncImage(model = item.thumbnailUrl, contentDescription = item.caption.ifBlank { "Open media" },
+                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                if (item.type == "video") Icon(Icons.Default.PlayCircleFilled, contentDescription = "Play reel",
+                                    tint = Color.White, modifier = Modifier.align(Alignment.Center).size(42.dp))
+                            }
+                        }
+                        repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }
 
 
+        if (profileTab == "All" || profileTab == "More") {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -2461,6 +2497,30 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
         }
         Spacer(Modifier.height(12.dp))
+        }
+    }
+
+    if (selectedGalleryItem != null) {
+        val item = selectedGalleryItem!!
+        Dialog(onDismissRequest = { selectedGalleryItem = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                Box(Modifier.fillMaxSize()) {
+                    if (item.type == "video") {
+                        AndroidView(factory = { viewContext ->
+                            VideoView(viewContext).apply {
+                                setVideoURI(Uri.parse(item.url))
+                                setMediaController(MediaController(viewContext).also { it.setAnchorView(this) })
+                                setOnPreparedListener { player -> player.isLooping = true; start() }
+                            }
+                        }, modifier = Modifier.fillMaxSize())
+                    } else AsyncImage(model = item.url, contentDescription = item.caption,
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                    IconButton(onClick = { selectedGalleryItem = null }, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close media", tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
+        }
     }
     if (showStoryComposer) CreateStoryDialog(uid, displayName, onDismiss = { showStoryComposer = false })
 }
