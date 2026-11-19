@@ -5,6 +5,7 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.functions.FirebaseFunctions
 import io.livekit.android.LiveKit
@@ -70,9 +71,19 @@ class PpaCallController(
         )
         ref.set(data)
             .addOnSuccessListener { listenForCallUpdates() }
-            .addOnFailureListener {
+            .addOnFailureListener { error ->
                 stopRingback()
-                onError(it.localizedMessage ?: "Could not start call.")
+                Log.e(
+                    "PPATalkCall",
+                    "Failed to create callSessions/" + callId + " in project " + db.app.options.projectId,
+                    error
+                )
+                val detail = if (error is FirebaseFirestoreException) {
+                    "Firestore " + error.code + ": " + (error.message ?: "No details")
+                } else {
+                    error.javaClass.simpleName + ": " + (error.localizedMessage ?: "No details")
+                }
+                onError("Call session creation failed — " + detail)
             }
     }
 
