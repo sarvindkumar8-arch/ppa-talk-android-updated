@@ -115,23 +115,29 @@ class PpaCallController(
                     // Re-assert the callee's local video sender after applying the
                     // caller's offer. The receiver must both receive and send video.
                     if (callType == "video") {
+                        // The callee must use the transceiver created for the
+                        // incoming offer's video m-line. An unassociated local
+                        // transceiver (mid=null) may also exist and must not be
+                        // selected ahead of the negotiated one.
                         val videoTransceiver = peer?.transceivers?.firstOrNull { transceiver ->
-                            transceiver.sender.track()?.kind() == "video" ||
-                                transceiver.receiver.track()?.kind() == "video"
+                            transceiver.mid != null &&
+                                (transceiver.receiver.track()?.kind() == "video" ||
+                                    transceiver.sender.track()?.kind() == "video")
+                        } ?: peer?.transceivers?.firstOrNull { transceiver ->
+                            transceiver.receiver.track()?.kind() == "video" ||
+                                transceiver.sender.track()?.kind() == "video"
                         }
                         if (videoTransceiver != null) {
                             localVideo?.setEnabled(true)
-                            if (videoTransceiver.sender.track()?.kind() != "video") {
-                                localVideo?.let { videoTransceiver.sender.setTrack(it, false) }
-                            }
+                            val attached = localVideo?.let { videoTransceiver.sender.setTrack(it, false) } ?: false
                             videoTransceiver.setDirection(
                                 RtpTransceiver.RtpTransceiverDirection.SEND_RECV
                             )
                             Log.d(
                                 "PPATalkWebRTC",
-                                "Callee video sender re-armed: mid=" + videoTransceiver.mid +
+                                "Callee negotiated video transceiver armed: mid=" + videoTransceiver.mid +
                                     ", direction=" + videoTransceiver.direction +
-                                    ", sender=" + videoTransceiver.sender.track()?.kind()
+                                    ", attached=$attached, sender=" + videoTransceiver.sender.track()?.kind()
                             )
                         } else {
                             Log.e("PPATalkWebRTC", "Callee has no video transceiver after remote offer")
@@ -250,20 +256,23 @@ class PpaCallController(
             val videoTrack = factory.createVideoTrack("ppa_video_$uid", source)
             localVideo = videoTrack
             videoTrack.setEnabled(true)
-            // Restore the previously working bidirectional transceiver setup.
-            // The addTrack experiment caused ICE/audio regression on the test phones.
-            val videoTransceiver = peer?.addTransceiver(
-                videoTrack,
-                RtpTransceiver.RtpTransceiverInit(
-                    RtpTransceiver.RtpTransceiverDirection.SEND_RECV,
-                    listOf("ppa_stream")
+            // The caller creates the offer's video m-line. The callee waits
+            // for setRemoteDescription(offer) to create the matching transceiver,
+            // then attaches its camera track to that negotiated transceiver.
+            if (caller) {
+                val videoTransceiver = peer?.addTransceiver(
+                    videoTrack,
+                    RtpTransceiver.RtpTransceiverInit(
+                        RtpTransceiver.RtpTransceiverDirection.SEND_RECV,
+                        listOf("ppa_stream")
+                    )
                 )
-            )
-            if (videoTransceiver == null) {
-                onError("Could not create video transceiver.")
-                return
+                if (videoTransceiver == null) {
+                    onError("Could not create video transceiver.")
+                    return
+                }
+                Log.d("PPATalkWebRTC", "Caller video transceiver created: mid=${videoTransceiver.mid}, direction=${videoTransceiver.direction}")
             }
-            Log.d("PPATalkWebRTC", "Local video transceiver created: mid=${videoTransceiver.mid}, direction=${videoTransceiver.direction}")
             localRenderer?.let { localVideo?.addSink(it) }
         }
     }
