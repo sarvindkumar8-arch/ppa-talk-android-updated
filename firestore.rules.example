@@ -13,6 +13,14 @@ service cloud.firestore {
 
       // Each signed-in user can manage only their own device push tokens.
       // Cloud Functions Admin SDK reads these tokens server-side.
+      match /savedPosts/{postId} {
+        allow read, delete: if owns(userId);
+        allow create, update: if owns(userId)
+          && request.resource.data.postId == postId
+          && request.resource.data.ownerUid is string
+          && request.resource.data.keys().hasOnly(['postId', 'ownerUid', 'savedAt']);
+      }
+
       match /fcmTokens/{tokenId} {
         allow read: if owns(userId);
         allow create, update: if owns(userId)
@@ -128,6 +136,15 @@ service cloud.firestore {
           && request.resource.data.parentId is string;
         allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
       }
+    }
+
+    match /postReports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.postId is string
+        && request.resource.data.postOwnerUid is string
+        && request.resource.data.keys().hasOnly(['postId', 'postOwnerUid', 'reporterUid', 'createdAt']);
+      allow read, update, delete: if false;
     }
 
     match /friendRequests/{requestId} {
