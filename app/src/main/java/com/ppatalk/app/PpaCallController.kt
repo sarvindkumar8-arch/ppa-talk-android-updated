@@ -204,20 +204,16 @@ class PpaCallController(
             val videoTrack = factory.createVideoTrack("ppa_video_$uid", source)
             localVideo = videoTrack
             videoTrack.setEnabled(true)
-            // Explicitly negotiate a bidirectional video transceiver on both peers.
-            // This makes the video m-line unambiguous in Unified Plan SDP.
-            val videoTransceiver = peer?.addTransceiver(
-                videoTrack,
-                RtpTransceiver.RtpTransceiverInit(
-                    RtpTransceiver.RtpTransceiverDirection.SEND_RECV,
-                    listOf("ppa_stream")
-                )
-            )
-            if (videoTransceiver == null) {
-                onError("Could not create video transceiver.")
+            // Add the camera track through the standard Unified Plan track API.
+            // This creates the sender/transceiver and associates the stream ID in
+            // the same way on caller and callee, avoiding mismatched pre-created
+            // transceivers when the incoming offer is applied.
+            val videoSender = peer?.addTrack(videoTrack, listOf("ppa_stream"))
+            if (videoSender == null) {
+                onError("Could not add local video track to the call.")
                 return
             }
-            Log.d("PPATalkWebRTC", "Local video transceiver created: mid=${videoTransceiver.mid}, direction=${videoTransceiver.direction}")
+            Log.d("PPATalkWebRTC", "Local video sender added: trackId=${videoSender.track()?.id()}, streams=ppa_stream")
             localRenderer?.let { localVideo?.addSink(it) }
         }
     }
