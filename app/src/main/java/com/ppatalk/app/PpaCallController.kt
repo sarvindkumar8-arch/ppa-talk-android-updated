@@ -111,7 +111,32 @@ class PpaCallController(
                     remoteDescriptionSet = true
                     Log.d("PPATalkWebRTC", "Remote OFFER applied successfully")
                     remoteVideoSdpLine = videoSdpSummary(sdp)
-                logSdpMediaSections("REMOTE OFFER", sdp)
+                    logSdpMediaSections("REMOTE OFFER", sdp)
+                    // Re-assert the callee's local video sender after applying the
+                    // caller's offer. The receiver must both receive and send video.
+                    if (callType == "video") {
+                        val videoTransceiver = peer?.transceivers?.firstOrNull { transceiver ->
+                            transceiver.sender.track()?.kind() == "video" ||
+                                transceiver.receiver.track()?.kind() == "video"
+                        }
+                        if (videoTransceiver != null) {
+                            localVideo?.setEnabled(true)
+                            if (videoTransceiver.sender.track()?.kind() != "video") {
+                                localVideo?.let { videoTransceiver.sender.setTrack(it, false) }
+                            }
+                            videoTransceiver.setDirection(
+                                RtpTransceiver.RtpTransceiverDirection.SEND_RECV
+                            )
+                            Log.d(
+                                "PPATalkWebRTC",
+                                "Callee video sender re-armed: mid=" + videoTransceiver.mid +
+                                    ", direction=" + videoTransceiver.direction +
+                                    ", sender=" + videoTransceiver.sender.track()?.kind()
+                            )
+                        } else {
+                            Log.e("PPATalkWebRTC", "Callee has no video transceiver after remote offer")
+                        }
+                    }
                     logTransceivers("after remote OFFER")
                     flushRemoteCandidates()
                     createAnswer()
