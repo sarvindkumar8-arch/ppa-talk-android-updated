@@ -98,6 +98,9 @@ class PpaCallController(
             peer?.setRemoteDescription(object : SimpleSdpObserver() {
                 override fun onSetSuccess() {
                     remoteDescriptionSet = true
+                    Log.d("PPATalkWebRTC", "Remote OFFER applied successfully")
+                    logSdpMediaSections("REMOTE OFFER", sdp)
+                    logTransceivers("after remote OFFER")
                     flushRemoteCandidates()
                     createAnswer()
                 }
@@ -132,12 +135,18 @@ class PpaCallController(
                     else -> {}
                 }
             }
-            override fun onIceConnectionReceivingChange(receiving: Boolean) {}
-            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
+            override fun onIceConnectionReceivingChange(receiving: Boolean) {
+                Log.d("PPATalkWebRTC", "ICE receiving=$receiving, callType=$callType")
+            }
+            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {
+                Log.d("PPATalkWebRTC", "ICE gathering state=$state, callType=$callType")
+            }
             override fun onIceCandidate(candidate: IceCandidate?) {
                 candidate ?: return
                 val id = callId ?: return
                 val collection = if (caller) "callerCandidates" else "calleeCandidates"
+                val candidateType = candidate.sdp.substringAfter(" typ ", "unknown").substringBefore(' ')
+                Log.d("PPATalkWebRTC", "Local ICE candidate: type=$candidateType, mid=${candidate.sdpMid}, mLine=${candidate.sdpMLineIndex}")
                 val data = hashMapOf<String, Any>(
                     "candidate" to candidate.sdp,
                     "sdpMid" to (candidate.sdpMid ?: ""),
@@ -231,9 +240,13 @@ class PpaCallController(
                     it == "a=sendrecv" || it == "a=sendonly" || it == "a=recvonly" || it == "a=inactive"
                 }
                 Log.d("PPATalkWebRTC", "Created offer: callType=$callType, videoMLine=$videoMLine, direction=$videoDirection")
+                logSdpMediaSections("LOCAL OFFER", description.description)
+                logTransceivers("after create OFFER")
                 if (callType == "video") onStatus(if (videoMLine != null) "Video offer created" else "Video offer missing m=video")
                 peer?.setLocalDescription(object : SimpleSdpObserver() {
                     override fun onSetSuccess() {
+                        logSdpMediaSections("SET LOCAL OFFER", description.description)
+                        logTransceivers("after set LOCAL OFFER")
                         val id = callId ?: return
                         db.collection("callSessions").document(id).update(
                             mapOf("offer" to mapOf("type" to "offer", "sdp" to description.description),
@@ -256,9 +269,13 @@ class PpaCallController(
                     it == "a=sendrecv" || it == "a=sendonly" || it == "a=recvonly" || it == "a=inactive"
                 }
                 Log.d("PPATalkWebRTC", "Created answer: callType=$callType, videoMLine=$videoMLine, direction=$videoDirection")
+                logSdpMediaSections("LOCAL ANSWER", description.description)
+                logTransceivers("after create ANSWER")
                 if (callType == "video") onStatus(if (videoMLine != null) "Video answer created" else "Video answer missing m=video")
                 peer?.setLocalDescription(object : SimpleSdpObserver() {
                     override fun onSetSuccess() {
+                        logSdpMediaSections("SET LOCAL ANSWER", description.description)
+                        logTransceivers("after set LOCAL ANSWER")
                         val id = callId ?: return
                         db.collection("callSessions").document(id).update(
                             mapOf("answer" to mapOf("type" to "answer", "sdp" to description.description),
@@ -289,7 +306,14 @@ class PpaCallController(
                     if (caller && !sdp.isNullOrBlank() && !remoteDescriptionSet) {
                         Log.d("PPATalkWebRTC", "Received answer SDP: hasVideoMLine=${sdp.lineSequence().any { it.startsWith("m=video") }}")
                         peer?.setRemoteDescription(object : SimpleSdpObserver() {
-                            override fun onSetSuccess() { remoteDescriptionSet = true; flushRemoteCandidates(); onStatus(if (callType == "video") "Answer received • negotiating video" else "Connecting…") }
+                            override fun onSetSuccess() {
+                                remoteDescriptionSet = true
+                                Log.d("PPATalkWebRTC", "Remote ANSWER applied successfully")
+                                logSdpMediaSections("REMOTE ANSWER", sdp)
+                                logTransceivers("after remote ANSWER")
+                                flushRemoteCandidates()
+                                onStatus(if (callType == "video") "Answer received • negotiating video" else "Connecting…")
+                            }
                             override fun onSetFailure(error: String?) { onError("Could not read answer: $error") }
                         }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
                     }
@@ -346,6 +370,42 @@ class PpaCallController(
                     ))
                 }
             }
+    }
+
+    private fun logSdpMediaSections(label: String, sdp: String) {
+        var sectionName = "SESSION"
+        val selected = mutableListOf<String>()
+        fun flush() {
+            if (sectionName == "audio" || sectionName == "video") {
+                Log.d("PPATalkWebRTC", "$label $sectionName: ${selected.joinToString(" | ")}")
+            }
+            selected.clear()
+        }
+        sdp.lineSequence().forEach { line ->
+            if (line.startsWith("m=")) {
+                flush()
+                sectionName = when {
+                    line.startsWith("m=video") -> "video"
+                    line.startsWith("m=audio") -> "audio"
+                    else -> "other"
+                }
+                if (sectionName == "video" || sectionName == "audio") selected.add(line)
+            } else if (sectionName == "video" || sectionName == "audio") {
+                if (line.startsWith("a=mid:") || line == "a=sendrecv" || line == "a=sendonly" ||
+                    line == "a=recvonly" || line == "a=inactive" || line.startsWith("a=msid:") ||
+                    line.startsWith("a=rtpmap:")) selected.add(line)
+            }
+        }
+        flush()
+    }
+
+    private fun logTransceivers(stage: String) {
+        val currentPeer = peer ?: return
+        currentPeer.transceivers.forEachIndexed { index, transceiver ->
+            val senderKind = transceiver.sender.track()?.kind()
+            val receiverKind = transceiver.receiver.track()?.kind()
+            Log.d("PPATalkWebRTC", "Transceiver[$index] $stage: mid=${transceiver.mid}, direction=${transceiver.direction}, currentDirection=${transceiver.currentDirection}, senderKind=$senderKind, receiverKind=$receiverKind")
+        }
     }
 
     private fun attachRemoteVideoTrack(track: VideoTrack) {
