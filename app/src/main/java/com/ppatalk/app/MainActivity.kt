@@ -1726,18 +1726,19 @@ private fun PhotoCropDialog(
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(if (isCover) "Adjust cover photo" else "Adjust profile photo",
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Photo ko drag karke position set karein aur slider se size chhota-bada karein.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Puri original photo preview mein dikhegi. Frame ke andar ka hissa profile/cover par set hoga. Photo ko drag ya pinch karke adjust karein.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (bitmap != null) {
                     Box(
                         Modifier.fillMaxWidth()
                             .aspectRatio(if (isCover) 16f / 9f else 1f)
-                            .clip(if (isCover) MaterialTheme.shapes.medium else CircleShape)
-                            .background(Color.Black)
+                            .background(Color(0xFF202633))
                             .onSizeChanged { viewportWidth = it.width; viewportHeight = it.height }
                             .pointerInput(uri) {
                                 detectTransformGestures { _, pan, zoomChange, _ ->
-                                    zoom = (zoom * zoomChange).coerceIn(1f, 5f)
+                                    zoom = (zoom * zoomChange).coerceIn(0.5f, 6f)
                                     offsetX += pan.x
                                     offsetY += pan.y
                                 }
@@ -1745,8 +1746,8 @@ private fun PhotoCropDialog(
                     ) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Photo crop preview",
-                            contentScale = ContentScale.Crop,
+                            contentDescription = "Full original photo preview",
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize().graphicsLayer {
                                 scaleX = zoom
                                 scaleY = zoom
@@ -1754,9 +1755,24 @@ private fun PhotoCropDialog(
                                 translationY = offsetY
                             }
                         )
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                            val frameWidth = if (isCover) minOf(size.width * 0.9f, size.height * 0.9f * (16f / 9f))
+                                else minOf(size.width, size.height) * 0.72f
+                            val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
+                            val left = (size.width - frameWidth) / 2f
+                            val top = (size.height - frameHeight) / 2f
+                            val frame = androidx.compose.ui.geometry.Rect(left, top, left + frameWidth, top + frameHeight)
+                            drawRect(Color.White.copy(alpha = 0.9f), topLeft = androidx.compose.ui.geometry.Offset(frame.left, frame.top),
+                                size = androidx.compose.ui.geometry.Size(frame.width, frame.height),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                            if (!isCover) {
+                                drawCircle(Color.White.copy(alpha = 0.95f), radius = frameWidth / 2f,
+                                    center = frame.center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                            }
+                        }
                     }
                     Text("Zoom", style = MaterialTheme.typography.labelLarge)
-                    Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 1f..5f)
+                    Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 0.5f..6f)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(onClick = { zoom = 1f; offsetX = 0f; offsetY = 0f }, modifier = Modifier.weight(1f)) {
                             Text("Reset")
@@ -1769,24 +1785,33 @@ private fun PhotoCropDialog(
                                 val outHeight = if (isCover) 900 else 1080
                                 val output = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
                                 val canvas = android.graphics.Canvas(output)
-                                val baseScale = maxOf(outWidth.toFloat() / bitmap.width, outHeight.toFloat() / bitmap.height)
-                                val finalScale = baseScale * zoom
+                                canvas.drawColor(android.graphics.Color.BLACK)
+                                val fitScale = minOf(
+                                    viewportWidth.toFloat() / bitmap.width,
+                                    viewportHeight.toFloat() / bitmap.height
+                                )
+                                val imageScale = fitScale * zoom
+                                val frameWidth = if (isCover) minOf(viewportWidth * 0.9f, viewportHeight * 0.9f * (16f / 9f))
+                                    else minOf(viewportWidth, viewportHeight) * 0.72f
+                                val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
+                                val frameLeft = (viewportWidth - frameWidth) / 2f
+                                val frameTop = (viewportHeight - frameHeight) / 2f
+                                val outputScale = outWidth.toFloat() / frameWidth
+                                val imageLeft = viewportWidth / 2f + offsetX - bitmap.width * imageScale / 2f
+                                val imageTop = viewportHeight / 2f + offsetY - bitmap.height * imageScale / 2f
                                 val matrix = Matrix().apply {
-                                    setScale(finalScale, finalScale)
+                                    setScale(imageScale * outputScale, imageScale * outputScale)
                                     postTranslate(
-                                        (outWidth - bitmap.width * finalScale) / 2f + offsetX * outWidth / viewportWidth,
-                                        (outHeight - bitmap.height * finalScale) / 2f + offsetY * outHeight / viewportHeight
+                                        (imageLeft - frameLeft) * outputScale,
+                                        (imageTop - frameTop) * outputScale
                                     )
                                 }
                                 canvas.drawBitmap(bitmap, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
                                 val stream = java.io.ByteArrayOutputStream()
-                                output.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+                                output.compress(Bitmap.CompressFormat.JPEG, 95, stream)
                                 output.recycle()
                                 val originalBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                if (originalBytes == null) {
-                                    output.recycle()
-                                    return@Button
-                                }
+                                if (originalBytes == null) return@Button
                                 onSave(originalBytes, stream.toByteArray())
                             },
                             modifier = Modifier.weight(1f)
