@@ -37,7 +37,7 @@ service cloud.firestore {
       allow update: if owns(userId)
         && request.resource.data.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'profileVisibility', 'updatedAt'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'profileVisibility', 'updatedAt'
         ]);
       allow delete: if owns(userId);
     }
