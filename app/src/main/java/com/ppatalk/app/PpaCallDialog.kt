@@ -38,15 +38,6 @@ fun PpaCallDialog(
     var muted by remember(controller) { mutableStateOf(false) }
     var speaker by remember(controller) { mutableStateOf(true) }
     var previewOffset by remember(controller) { mutableStateOf(Offset.Zero) }
-    val statusHistory = remember(controller) { mutableStateListOf<String>() }
-
-    LaunchedEffect(status) {
-        if (status.isNotBlank() && statusHistory.lastOrNull() != status) {
-            statusHistory.add(status)
-            while (statusHistory.size > 8) statusHistory.removeAt(0)
-        }
-    }
-
     DisposableEffect(controller) {
         onDispose { controller.release() }
     }
@@ -138,19 +129,6 @@ fun PpaCallDialog(
                     Text(if (callType == "video") "Video call" else "Voice call",
                         color = Color.White, style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold)
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 190.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        statusHistory.forEach { entry ->
-                            Text(
-                                entry,
-                                color = Color(0xFFB9D9F5),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
                 }
 
                 Row(
