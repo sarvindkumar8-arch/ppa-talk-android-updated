@@ -3311,7 +3311,6 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         val chatRef = db.collection("chats").document(chatId)
         chatRef.set(mapOf(
             "participantIds" to listOf(currentUid, friendUid).sorted(),
-            "autoDeleteSeconds" to 0L,
             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         ), com.google.firebase.firestore.SetOptions.merge())
         val settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, _ ->
