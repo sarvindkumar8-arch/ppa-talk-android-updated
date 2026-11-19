@@ -31,13 +31,13 @@ service cloud.firestore {
         || resource.data.profileVisibility == "public";
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'profileVisibility', 'updatedAt', 'createdAt'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'profileVisibility', 'updatedAt', 'createdAt'
         ])
         && request.resource.data.uid == userId;
       allow update: if owns(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'profileVisibility', 'updatedAt'
+          'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'profileVisibility', 'updatedAt'
         ]);
       allow delete: if owns(userId);
     }
