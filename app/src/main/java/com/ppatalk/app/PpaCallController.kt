@@ -468,8 +468,10 @@ class PpaCallController(
         val summary = videos.joinToString("; ") { t ->
             "mid=${t.mid ?: "?"}, dir=${t.direction}, current=${t.currentDirection ?: "?"}, rx=${t.receiver.track()?.kind() ?: "none"}, tx=${t.sender.track()?.kind() ?: "none"}"
         }.ifBlank { "no video transceiver" }
-        Log.d("PPATalkWebRTC", "$stage video negotiation: $summary")
-        return "$stage • $summary • local[$localVideoSdpLine] remote[$remoteVideoSdpLine]"
+        // Keep detailed negotiation diagnostics in Logcat only. Never expose
+        // SDP/transceiver internals in the call UI status line.
+        Log.d("PPATalkWebRTC", "$stage video negotiation: $summary • local[$localVideoSdpLine] remote[$remoteVideoSdpLine]")
+        return stage
     }
 
     private fun logTransceivers(stage: String) {
