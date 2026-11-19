@@ -2128,8 +2128,9 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
         val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
-                    error = if (exception.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED)
-                        "This profile is private." else (exception.localizedMessage ?: "Profile load nahi ho payi.")
+                    val isPermissionDenied = exception.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    isPrivate = isPermissionDenied
+                    error = if (isPermissionDenied) "" else (exception.localizedMessage ?: "Profile load nahi ho payi.")
                     loading = false
                 }
                 else if (snapshot != null && snapshot.exists()) {
