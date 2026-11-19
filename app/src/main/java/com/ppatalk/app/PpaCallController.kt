@@ -127,7 +127,7 @@ class PpaCallController(
                     PeerConnection.IceConnectionState.CONNECTED,
                     PeerConnection.IceConnectionState.COMPLETED -> {
                         Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
-                        onStatus(if (callType == "video") "Connected • waiting for remote video" else "Connected")
+                        onStatus(if (callType == "video") videoNegotiationStatus("Connected") else "Connected")
                     }
                     PeerConnection.IceConnectionState.DISCONNECTED -> onStatus("Connection interrupted…")
                     PeerConnection.IceConnectionState.FAILED -> onError("Connection failed. A TURN server may be required.")
@@ -277,6 +277,7 @@ class PpaCallController(
                         logSdpMediaSections("SET LOCAL ANSWER", description.description)
                         logTransceivers("after set LOCAL ANSWER")
                         val id = callId ?: return
+                        if (callType == "video") onStatus(videoNegotiationStatus("Answer ready"))
                         db.collection("callSessions").document(id).update(
                             mapOf("answer" to mapOf("type" to "answer", "sdp" to description.description),
                                 "status" to "accepted",
@@ -312,7 +313,7 @@ class PpaCallController(
                                 logSdpMediaSections("REMOTE ANSWER", sdp)
                                 logTransceivers("after remote ANSWER")
                                 flushRemoteCandidates()
-                                onStatus(if (callType == "video") "Answer received • negotiating video" else "Connecting…")
+                                onStatus(if (callType == "video") videoNegotiationStatus("Answer received") else "Connecting…")
                             }
                             override fun onSetFailure(error: String?) { onError("Could not read answer: $error") }
                         }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
@@ -397,6 +398,18 @@ class PpaCallController(
             }
         }
         flush()
+    }
+
+    private fun videoNegotiationStatus(stage: String): String {
+        val videos = peer?.transceivers?.filter { transceiver ->
+            transceiver.sender.track()?.kind() == "video" || transceiver.receiver.track()?.kind() == "video" ||
+                transceiver.mid != null
+        }.orEmpty()
+        val summary = videos.joinToString("; ") { t ->
+            "mid=${t.mid ?: "?"}, dir=${t.direction}, current=${t.currentDirection ?: "?"}, rx=${t.receiver.track()?.kind() ?: "none"}, tx=${t.sender.track()?.kind() ?: "none"}"
+        }.ifBlank { "no video transceiver" }
+        Log.d("PPATalkWebRTC", "$stage video negotiation: $summary")
+        return "$stage • $summary"
     }
 
     private fun logTransceivers(stage: String) {
