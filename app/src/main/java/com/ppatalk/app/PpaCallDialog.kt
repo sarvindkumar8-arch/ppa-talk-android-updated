@@ -139,12 +139,17 @@ fun PpaCallDialog(
                     val connected = status.contains("connected", ignoreCase = true) ||
                         status.contains("remote video displaying", ignoreCase = true) ||
                         status.contains("remote video frame", ignoreCase = true)
+                    val safeStatus = when {
+                        connected -> "● Connected"
+                        status.equals("Calling…", ignoreCase = true) -> "Calling…"
+                        status.equals("Connecting…", ignoreCase = true) -> "Connecting…"
+                        status.equals("Connection interrupted…", ignoreCase = true) -> "Connection interrupted…"
+                        status.equals("Call declined", ignoreCase = true) -> "Call declined"
+                        status.equals("Call ended", ignoreCase = true) -> "Call ended"
+                        else -> "Connecting…"
+                    }
                     Text(
-                        when {
-                            connected -> "● Connected"
-                            status.isNotBlank() -> status
-                            else -> "Connecting…"
-                        },
+                        safeStatus,
                         color = if (connected) Color(0xFF55D98A) else Color(0xFFD4DCE8),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
