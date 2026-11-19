@@ -124,7 +124,7 @@ fun PpaCallDialog(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .background(Color(0xF0101827))
+                        .background(Color.Transparent)
                         .padding(start = 20.dp, top = 42.dp, end = 20.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
