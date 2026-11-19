@@ -40,7 +40,6 @@ class PpaCallController(
     private var localRenderer: SurfaceViewRenderer? = null
     @Volatile private var remoteRenderer: SurfaceViewRenderer? = null
     @Volatile private var remoteVideo: VideoTrack? = null
-    private var localVideoTransceiver: RtpTransceiver? = null
     private val remoteTrackLock = Any()
     private var muted = false
     private var speakerEnabled = true
@@ -128,13 +127,7 @@ class PpaCallController(
                     PeerConnection.IceConnectionState.CONNECTED,
                     PeerConnection.IceConnectionState.COMPLETED -> {
                         Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
-                        if (callType == "video") {
-                            val videoState = videoNegotiationSummary()
-                            Log.d("PPATalkWebRTC", "VIDEO DIAGNOSTIC: $videoState")
-                            onStatus("Connected • $videoState")
-                        } else {
-                            onStatus("Connected")
-                        }
+                        onStatus(if (callType == "video") "Connected • waiting for remote video" else "Connected")
                     }
                     PeerConnection.IceConnectionState.DISCONNECTED -> onStatus("Connection interrupted…")
                     PeerConnection.IceConnectionState.FAILED -> onError("Connection failed. A TURN server may be required.")
@@ -233,7 +226,6 @@ class PpaCallController(
                 onError("Could not create video transceiver.")
                 return
             }
-            localVideoTransceiver = videoTransceiver
             Log.d("PPATalkWebRTC", "Local video transceiver created: mid=${videoTransceiver.mid}, direction=${videoTransceiver.direction}")
             localRenderer?.let { localVideo?.addSink(it) }
         }
@@ -416,21 +408,6 @@ class PpaCallController(
         }
     }
 
-    private fun videoNegotiationSummary(): String {
-        // Keep the exact transceiver returned by addTransceiver; enumerating
-        // PeerConnection.transceivers can be unreliable across SDK versions.
-        val transceiver = localVideoTransceiver ?: peer?.transceivers?.firstOrNull {
-            it.sender.track()?.kind() == "video" || it.receiver.track()?.kind() == "video"
-        }
-        if (transceiver == null) {
-            val count = peer?.transceivers?.size ?: -1
-            return "video transceiver missing (pc transceivers=$count)"
-        }
-        val receiverKind = transceiver.receiver.track()?.kind() ?: "none"
-        val senderKind = transceiver.sender.track()?.kind() ?: "none"
-        val negotiatedDirection = transceiver.currentDirection?.toString() ?: "not-negotiated"
-        return "video mid=${transceiver.mid ?: "?"}, dir=$negotiatedDirection, tx=$senderKind, rx=$receiverKind"
-    }
     private fun attachRemoteVideoTrack(track: VideoTrack) {
         Log.d("PPATalkWebRTC", "Remote video track attached: id=${track.id()}, enabled=${track.enabled()}")
         track.setEnabled(true)
