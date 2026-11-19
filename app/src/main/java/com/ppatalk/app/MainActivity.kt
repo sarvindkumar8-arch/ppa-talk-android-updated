@@ -2063,6 +2063,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "username" to cleanUsername, "bio" to bio.trim(),
                             "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                            "hobby" to hobby.trim(), "school" to school.trim(),
+                            "favoritePlace" to favoritePlace.trim(), "hometown" to hometown.trim(),
                             "profileVisibility" to profileVisibility,
                             "updatedAt" to timestamp
                         )
@@ -2121,6 +2123,10 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
     var bio by remember(uid) { mutableStateOf("") }
     var photoUrl by remember(uid) { mutableStateOf("") }
     var coverPhotoUrl by remember(uid) { mutableStateOf("") }
+    var hobby by remember(uid) { mutableStateOf("") }
+    var school by remember(uid) { mutableStateOf("") }
+    var favoritePlace by remember(uid) { mutableStateOf("") }
+    var hometown by remember(uid) { mutableStateOf("") }
     var isPrivate by remember(uid) { mutableStateOf(false) }
     var loading by remember(uid) { mutableStateOf(true) }
     var error by remember(uid) { mutableStateOf("") }
@@ -2139,6 +2145,10 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
                     bio = snapshot.getString("bio").orEmpty()
                     photoUrl = snapshot.getString("photoUrl").orEmpty()
                     coverPhotoUrl = snapshot.getString("coverPhotoUrl").orEmpty()
+                    hobby = snapshot.getString("hobby").orEmpty()
+                    school = snapshot.getString("school").orEmpty()
+                    favoritePlace = snapshot.getString("favoritePlace").orEmpty()
+                    hometown = snapshot.getString("hometown").orEmpty()
                     isPrivate = snapshot.getString("profileVisibility") == "private"
                     loading = false
                 } else { error = "Is user ki public profile abhi available nahi hai."; loading = false }
@@ -2172,6 +2182,23 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
         if (loading) CircularProgressIndicator(Modifier.padding(20.dp))
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 20.dp))
         if (bio.isNotBlank()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { Column(Modifier.padding(16.dp)) { Text("About", style = MaterialTheme.typography.titleMedium, color = Orange, fontWeight = FontWeight.Bold); Text(bio) } }
+        val publicDetails = listOf(
+            "Hobby" to hobby,
+            "School" to school,
+            "Favorite place" to favoritePlace,
+            "Hometown" to hometown
+        ).filter { it.second.isNotBlank() }
+        if (publicDetails.isNotEmpty()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Profile details", style = MaterialTheme.typography.titleMedium, color = Orange, fontWeight = FontWeight.Bold)
+                publicDetails.forEach { (label, value) ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("$label:", fontWeight = FontWeight.SemiBold, modifier = Modifier.width(112.dp))
+                        Text(value, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 @Composable
