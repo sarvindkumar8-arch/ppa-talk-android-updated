@@ -220,17 +220,40 @@ class PpaCallController(
 
                 liveRoom.connect(serverUrl, token)
                 val participant = liveRoom.localParticipant
-                participant.setMicrophoneEnabled(true)
+
+                // Do not report a successful call if the media engine failed to
+                // publish the microphone. LiveKit plays subscribed remote audio
+                // automatically; both participants must publish their mic tracks.
+                val microphoneReady = participant.setMicrophoneEnabled(true)
+                if (!microphoneReady) {
+                    error("LiveKit could not start the microphone. Check microphone permission and device availability.")
+                }
+                Log.i("PPATalkLiveKit", "Local microphone enabled and published")
+
                 if (callType == "video") {
-                    participant.setCameraEnabled(true)
+                    val cameraReady = participant.setCameraEnabled(true)
+                    if (!cameraReady) {
+                        error("LiveKit could not start the camera. Check camera permission and whether another app is using the camera.")
+                    }
+
                     localVideo = participant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
-                    localVideo?.let { track -> localRenderer?.let { track.addRenderer(it) } }
+                    val cameraTrack = localVideo
+                        ?: error("Camera started but LiveKit did not publish a local video track.")
+                    localRenderer?.let { renderer ->
+                        liveRoom.initVideoRenderer(renderer)
+                        cameraTrack.addRenderer(renderer)
+                    }
+                    Log.i("PPATalkLiveKit", "Local camera enabled; renderer attached")
+
                     // A peer may have published before our event collector finished connecting.
                     liveRoom.remoteParticipants.values.forEach { remote ->
                         val track = remote.getTrackPublication(Track.Source.CAMERA)?.track as? VideoTrack
                         if (track != null) {
                             remoteVideo = track
-                            remoteRenderer?.let { track.addRenderer(it) }
+                            remoteRenderer?.let { renderer ->
+                                liveRoom.initVideoRenderer(renderer)
+                                track.addRenderer(renderer)
+                            }
                         }
                     }
                 }
