@@ -186,6 +186,52 @@ exports.notifyIncomingCall = onDocumentCreated({
 });
 
 
+
+// Cancel an incoming-call alert on the callee's devices as soon as the call
+// is accepted, rejected, ended, or missed. This is data-only so Android does
+// not create an uncancellable system notification on its own.
+exports.cancelIncomingCallAlert = onDocumentWritten({
+  document: "callSessions/{callId}",
+  region: REGION,
+  maxInstances: 20
+}, async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!after || !["accepted", "accepting", "rejected", "ended", "missed"].includes(after.status)) return;
+  if (before?.status === after.status) return;
+  const calleeUid = after.calleeUid;
+  if (typeof calleeUid !== "string" || !calleeUid) return;
+
+  const tokensSnapshot = await db.collection("users").doc(calleeUid)
+    .collection("fcmTokens").get();
+  const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
+  if (!tokens.length) return;
+
+  const result = await getMessaging().sendEachForMulticast({
+    tokens,
+    data: {
+      type: "call_cancel",
+      callId: event.params.callId
+    },
+    android: { priority: "high", ttl: 60 * 1000 }
+  });
+
+  const stale = [];
+  result.responses.forEach((response, index) => {
+    if (!response.success &&
+        ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(response.error?.code)) {
+      stale.push(tokensSnapshot.docs.find((doc) => doc.id === tokens[index]).ref.delete());
+    }
+  });
+  await Promise.all(stale);
+  console.info("Incoming call cancellation push result", {
+    callId: event.params.callId,
+    status: after.status,
+    successCount: result.successCount,
+    failureCount: result.failureCount
+  });
+});
+
 // Notify the recipient when a new friend request is created.
 exports.notifyFriendRequest = onDocumentWritten({
   document: "friendRequests/{requestId}",
