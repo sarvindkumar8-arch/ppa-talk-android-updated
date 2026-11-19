@@ -701,9 +701,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             .whereEqualTo("status", "ringing")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
-                val incoming = snapshot?.documents?.firstOrNull {
-                    it.get("offer") is Map<*, *>
-                } ?: return@addSnapshotListener
+                val incoming = snapshot?.documents?.firstOrNull()
+                    ?: return@addSnapshotListener
                 val callerUid = incoming.getString("callerUid") ?: return@addSnapshotListener
                 activeChatUid = callerUid
                 db.collection("publicProfiles").document(callerUid).get()
@@ -2567,7 +2566,7 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                     callError = exception.localizedMessage ?: "Incoming call check failed."
                 } else {
                     val incoming = snapshot?.documents?.firstOrNull {
-                        it.getString("callerUid") == friendUid && it.get("offer") is Map<*, *>
+                        it.getString("callerUid") == friendUid
                     }
                     incomingCallId = incoming?.id
                     incomingCallType = incoming?.getString("callType") ?: "audio"
