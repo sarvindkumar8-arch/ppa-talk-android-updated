@@ -199,12 +199,20 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
   const after = event.data?.after?.data();
   if (!after || !["accepted", "accepting", "rejected", "ended", "missed"].includes(after.status)) return;
   if (before?.status === after.status) return;
-  const calleeUid = after.calleeUid;
-  if (typeof calleeUid !== "string" || !calleeUid) return;
+  // Clear the call notification on every device belonging to both participants.
+  // The caller may have an older notification from a previous app state/device.
+  const participantUids = [...new Set([after.calleeUid, after.callerUid]
+    .filter((uid) => typeof uid === "string" && uid.length > 0))];
+  if (!participantUids.length) return;
 
-  const tokensSnapshot = await db.collection("users").doc(calleeUid)
-    .collection("fcmTokens").get();
-  const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
+  const tokenSnapshots = await Promise.all(participantUids.map((uid) =>
+    db.collection("users").doc(uid).collection("fcmTokens").get()
+  ));
+  const tokenOwners = new Map();
+  tokenSnapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((doc) => tokenOwners.set(doc.id, doc.ref));
+  });
+  const tokens = [...tokenOwners.keys()];
   if (!tokens.length) return;
 
   const result = await getMessaging().sendEachForMulticast({
@@ -220,7 +228,8 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
   result.responses.forEach((response, index) => {
     if (!response.success &&
         ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(response.error?.code)) {
-      stale.push(tokensSnapshot.docs.find((doc) => doc.id === tokens[index]).ref.delete());
+      const tokenRef = tokenOwners.get(tokens[index]);
+      if (tokenRef) stale.push(tokenRef.delete());
     }
   });
   await Promise.all(stale);
