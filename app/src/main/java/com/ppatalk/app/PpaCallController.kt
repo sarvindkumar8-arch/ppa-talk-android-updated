@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -129,7 +130,7 @@ class PpaCallController(
             try {
                 val response = functions.getHttpsCallable("createLiveKitToken")
                     .call(mapOf("callId" to id)).await()
-                val result = response.data as? Map<*, *>
+                val result = response.getData() as? Map<*, *>
                     ?: error("Token service returned an invalid response.")
                 val serverUrl = result["serverUrl"] as? String
                     ?: error("LiveKit server URL is missing.")
@@ -275,5 +276,4 @@ class PpaCallController(
     }
 
     fun currentCallId(): String? = callId
-    fun eglContext(): org.webrtc.EglBase.Context? = null
 }
