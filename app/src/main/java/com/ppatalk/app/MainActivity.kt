@@ -3309,13 +3309,13 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     DisposableEffect(chatId, currentUid, friendUid) {
         var registration: com.google.firebase.firestore.ListenerRegistration? = null
         val chatRef = db.collection("chats").document(chatId)
+        val settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, _ ->
+            autoDeleteSeconds = chatSnapshot?.getLong("autoDeleteSeconds") ?: 0L
+        }
         chatRef.set(mapOf(
             "participantIds" to listOf(currentUid, friendUid).sorted(),
             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         ), com.google.firebase.firestore.SetOptions.merge())
-        val settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, _ ->
-            autoDeleteSeconds = chatSnapshot?.getLong("autoDeleteSeconds") ?: 0L
-        }
             .addOnSuccessListener {
                 registration = chatRef.collection("messages")
                     .orderBy("createdAt", Query.Direction.ASCENDING)
