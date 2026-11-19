@@ -3194,6 +3194,10 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     var incomingCallId by remember { mutableStateOf<String?>(null) }
     var incomingCallType by remember { mutableStateOf("audio") }
     var friendPhotoUrl by remember(friendUid) { mutableStateOf("") }
+    var autoDeleteSeconds by remember(chatId) { mutableStateOf(0L) }
+    var showChatSettings by remember { mutableStateOf(false) }
+    var selectedMessageId by remember { mutableStateOf<String?>(null) }
+    var chatSettingsSaving by remember { mutableStateOf(false) }
 
     DisposableEffect(friendUid) {
         val profileListener = db.collection("publicProfiles").document(friendUid)
@@ -3307,27 +3311,41 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         val chatRef = db.collection("chats").document(chatId)
         chatRef.set(mapOf(
             "participantIds" to listOf(currentUid, friendUid).sorted(),
+            "autoDeleteSeconds" to 0L,
             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         ), com.google.firebase.firestore.SetOptions.merge())
+        val settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, _ ->
+            autoDeleteSeconds = chatSnapshot?.getLong("autoDeleteSeconds") ?: 0L
+        }
             .addOnSuccessListener {
                 registration = chatRef.collection("messages")
                     .orderBy("createdAt", Query.Direction.ASCENDING)
                     .addSnapshotListener { snap, exception ->
                         if (exception != null) error = exception.localizedMessage ?: "Messages could not load. Check Firestore chat permissions."
                         else if (snap != null) messages = snap.documents.map { doc ->
-                            mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""), "text" to (doc.getString("text") ?: ""))
+                            mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""),
+                                "text" to (doc.getString("text") ?: ""),
+                                "expireAt" to doc.getTimestamp("expireAt"))
                         }
                     }
             }
             .addOnFailureListener { exception ->
                 error = exception.localizedMessage ?: "Chat permission denied. Please check Firestore rules."
             }
-        onDispose { registration?.remove() }
+        onDispose { registration?.remove(); settingsRegistration.remove() }
     }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
             Text(friendName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Box {
+                IconButton(onClick = { showChatSettings = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Chat settings")
+                }
+                DropdownMenu(expanded = showChatSettings, onDismissRequest = { showChatSettings = false }) {
+                    DropdownMenuItem(text = { Text("Auto-delete messages") }, onClick = { showChatSettings = false; selectedMessageId = "__timer__" })
+                }
+            }
             IconButton(enabled = callController == null, onClick = { requestCall("audio") }) {
                 Icon(Icons.Default.Call, contentDescription = "Voice call", tint = RoyalBlue)
             }
@@ -3344,9 +3362,23 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
             items(messages, key = { it["id"] as String }) { msg ->
                 val mine = msg["uid"] == currentUid
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-                    Surface(color = if (mine) RoyalBlue else MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.large) {
-                        Text(msg["text"] as? String ?: "", modifier = Modifier.widthIn(max = 280.dp).padding(12.dp),
-                            color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface)
+                    Box {
+                        Surface(
+                            color = if (mine) RoyalBlue else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.clickable { if (mine) selectedMessageId = msg["id"] as String }
+                        ) {
+                            Text(msg["text"] as? String ?: "", modifier = Modifier.widthIn(max = 280.dp).padding(12.dp),
+                                color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface)
+                        }
+                        DropdownMenu(expanded = selectedMessageId == msg["id"], onDismissRequest = { selectedMessageId = null }) {
+                            DropdownMenuItem(text = { Text("Delete message") }, onClick = {
+                                val messageId = msg["id"] as String
+                                selectedMessageId = null
+                                db.collection("chats").document(chatId).collection("messages").document(messageId)
+                                    .delete().addOnFailureListener { error = it.localizedMessage ?: "Message delete failed." }
+                            })
+                        }
                     }
                 }
             }
@@ -3363,8 +3395,16 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                     chatRef.set(mapOf("participantIds" to listOf(currentUid, friendUid).sorted(),
                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
                         com.google.firebase.firestore.SetOptions.merge()).onSuccessTask {
-                        chatRef.collection("messages").add(mapOf("uid" to currentUid, "text" to messageText,
-                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())).addOnSuccessListener {
+                        val messageData = hashMapOf<String, Any>(
+                            "uid" to currentUid, "text" to messageText,
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                        if (autoDeleteSeconds > 0L) {
+                            messageData["expireAt"] = com.google.firebase.Timestamp(
+                                java.util.Date(System.currentTimeMillis() + autoDeleteSeconds * 1000L)
+                            )
+                        }
+                        chatRef.collection("messages").add(messageData).addOnSuccessListener {
                             chatRef.set(mapOf("lastMessage" to messageText, "lastMessageAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(), "lastSenderUid" to currentUid), com.google.firebase.firestore.SetOptions.merge())
                         }
                     }.addOnSuccessListener { draft = ""; sending = false }
@@ -3372,6 +3412,47 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                 }
             }) { Icon(Icons.Default.Send, contentDescription = "Send message", tint = RoyalBlue) }
         }
+    }
+
+    if (selectedMessageId == "__timer__") {
+        AlertDialog(
+            onDismissRequest = { selectedMessageId = null },
+            title = { Text("Auto-delete messages") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Choose when new messages in this chat are automatically deleted.")
+                    listOf(
+                        0L to "Never",
+                        86400L to "24 hours",
+                        604800L to "7 days",
+                        1296000L to "15 days",
+                        2592000L to "30 days"
+                    ).forEach { (seconds, label) ->
+                        Row(Modifier.fillMaxWidth().clickable(enabled = !chatSettingsSaving) {
+                            chatSettingsSaving = true
+                            db.collection("chats").document(chatId).update(
+                                mapOf("autoDeleteSeconds" to seconds,
+                                    "autoDeleteLabel" to label,
+                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                            ).addOnSuccessListener {
+                                autoDeleteSeconds = seconds
+                                chatSettingsSaving = false
+                                selectedMessageId = null
+                            }.addOnFailureListener {
+                                chatSettingsSaving = false
+                                error = it.localizedMessage ?: "Could not update auto-delete setting."
+                                selectedMessageId = null
+                            }
+                        }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = autoDeleteSeconds == seconds, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedMessageId = null }) { Text("Close") } }
+        )
     }
 
     if (incomingCallId != null && callController == null) {
