@@ -2072,35 +2072,47 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         val profileRef = db.collection("publicProfiles").document(uid)
                         val usersRef = db.collection("users").document(uid)
                         db.runTransaction { transaction ->
+                            // Complete every transaction read before the first write.
                             val newClaim = transaction.get(usernameRef)
+                            val currentProfile = transaction.get(profileRef)
+                            val oldUsername = currentProfile.getString("username").orEmpty()
+                            val oldClaimRef = if (oldUsername.isNotBlank() && oldUsername != cleanUsername) {
+                                db.collection("usernameClaims").document(oldUsername)
+                            } else null
+                            val oldClaim = oldClaimRef?.let { transaction.get(it) }
+
                             if (newClaim.exists() && newClaim.getString("uid") != uid) {
                                 throw com.google.firebase.firestore.FirebaseFirestoreException(
                                     "Username already taken. Please choose another.",
                                     com.google.firebase.firestore.FirebaseFirestoreException.Code.ABORTED
                                 )
                             }
-                            val oldUsername = transaction.get(profileRef).getString("username").orEmpty()
-                            if (oldUsername.isNotBlank() && oldUsername != cleanUsername) {
-                                val oldClaimRef = db.collection("usernameClaims").document(oldUsername)
-                                val oldClaim = transaction.get(oldClaimRef)
-                                if (oldClaim.exists() && oldClaim.getString("uid") == uid) transaction.delete(oldClaimRef)
+                            if (oldClaim?.exists() == true && oldClaim.getString("uid") == uid) {
+                                transaction.delete(oldClaimRef!!)
                             }
                             transaction.set(usernameRef, mapOf("uid" to uid, "username" to cleanUsername, "createdAt" to timestamp))
-                            transaction.set(usersRef, privateUpdates, com.google.firebase.firestore.SetOptions.merge())
                             transaction.set(profileRef, publicUpdates, com.google.firebase.firestore.SetOptions.merge())
                             null
                         }.addOnSuccessListener {
-                                FirebaseAuth.getInstance().currentUser
-                                    ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                                        .setDisplayName(cleanName).build())
-                                saving = false
-                                message = "Profile save ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Profile save nahi hui."
-                            }
+                            // Keep private fields in users/{uid}; never copy them to publicProfiles.
+                            usersRef.set(privateUpdates, com.google.firebase.firestore.SetOptions.merge())
+                                .addOnSuccessListener {
+                                    FirebaseAuth.getInstance().currentUser
+                                        ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                            .setDisplayName(cleanName).build())
+                                    saving = false
+                                    message = "Profile save ho gayi."
+                                }
+                                .addOnFailureListener { exception ->
+                                    saving = false
+                                    isError = true
+                                    message = "Private profile save failed: ${exception.localizedMessage ?: "permission denied"}"
+                                }
+                        }.addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = "Username/public profile save failed: ${exception.localizedMessage ?: "permission denied"}"
+                        }
                     }
                 },
                 enabled = !saving && !loading,
