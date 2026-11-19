@@ -129,18 +129,32 @@ class PpaMessagingService : FirebaseMessagingService() {
         }
         val pending = PendingIntent.getActivity(this, callId.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val rejectIntent = Intent(this, PpaCallActionReceiver::class.java).apply {
+            action = PpaCallActionReceiver.ACTION_REJECT_CALL
+            putExtra(PpaCallActionReceiver.EXTRA_CALL_ID, callId)
+        }
+        val rejectPending = PendingIntent.getBroadcast(
+            this, callId.hashCode() + 1, rejectIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val answerPending = PendingIntent.getActivity(
+            this, callId.hashCode() + 2, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
-            .setContentTitle(title)
-            .setContentText(body)
+            .setContentTitle(title.ifBlank { "PPA Talk" })
+            .setContentText(if (callType == "video") "Incoming video call" else "Incoming voice call")
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_CALL)
-             .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))
             .setVibrate(longArrayOf(0, 1000, 500, 1000))
             .setOngoing(true)
-            .setAutoCancel(true)
+            .setAutoCancel(false)
             .setContentIntent(pending)
+            .addAction(android.R.drawable.sym_call_incoming, "Answer", answerPending)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Reject", rejectPending)
             .build()
         manager.notify(callId.hashCode(), notification)
     }
