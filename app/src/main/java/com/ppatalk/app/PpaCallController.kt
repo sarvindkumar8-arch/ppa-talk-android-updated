@@ -2,6 +2,7 @@ package com.ppatalk.app
 
 import android.content.Context
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -49,6 +50,8 @@ class PpaCallController(
     private var released = false
     private var muted = false
     private var speakerEnabled = true
+    private var ringbackTone: ToneGenerator? = null
+    private var ringbackJob: kotlinx.coroutines.Job? = null
 
     fun startOutgoing(type: String) {
         callType = type
@@ -56,6 +59,7 @@ class PpaCallController(
         val ref = db.collection("callSessions").document()
         callId = ref.id
         onStatus("Calling…")
+        startRingback()
         val data = hashMapOf<String, Any>(
             "callerUid" to uid,
             "calleeUid" to friendUid,
@@ -66,12 +70,16 @@ class PpaCallController(
         )
         ref.set(data)
             .addOnSuccessListener { listenForCallUpdates() }
-            .addOnFailureListener { onError(it.localizedMessage ?: "Could not start call.") }
+            .addOnFailureListener {
+                stopRingback()
+                onError(it.localizedMessage ?: "Could not start call.")
+            }
     }
 
     fun acceptIncoming(id: String) {
         callId = id
         caller = false
+        stopRingback()
         onStatus("Accepting call…")
         val ref = db.collection("callSessions").document(id)
         ref.update(
@@ -106,13 +114,16 @@ class PpaCallController(
                 if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
                 when (snapshot.getString("status") ?: "ringing") {
                     "accepting", "accepted" -> {
+                        stopRingback()
                         if (caller && !joining && room == null) joinLiveKitRoom()
                     }
                     "rejected" -> {
+                        stopRingback()
                         onStatus("Call declined")
                         onRemoteCallEnded()
                     }
                     "ended", "missed" -> {
+                        stopRingback()
                         onStatus("Call ended")
                         onRemoteCallEnded()
                     }
@@ -121,7 +132,42 @@ class PpaCallController(
             }
     }
 
+    /** Audible caller-side ringback while the call is still ringing. */
+    private fun startRingback() {
+        stopRingback()
+        try {
+            val tone = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 80)
+            ringbackTone = tone
+            ringbackJob = scope.launch {
+                try {
+                    while (true) {
+                        tone.startTone(ToneGenerator.TONE_SUP_RINGTONE, 3000)
+                        kotlinx.coroutines.delay(4000)
+                    }
+                } finally {
+                    tone.stopTone()
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w("PPATalkCall", "Could not start caller ringback tone", t)
+            stopRingback()
+        }
+    }
+
+    private fun stopRingback() {
+        ringbackJob?.cancel()
+        ringbackJob = null
+        ringbackTone?.let { tone ->
+            try {
+                tone.stopTone()
+                tone.release()
+            } catch (_: Throwable) { }
+        }
+        ringbackTone = null
+    }
+
     private fun joinLiveKitRoom() {
+        stopRingback()
         val id = callId ?: return
         if (joining || released) return
         joining = true
@@ -250,6 +296,7 @@ class PpaCallController(
     fun release() {
         if (released) return
         released = true
+        stopRingback()
         callListener?.remove()
         callListener = null
         eventJob?.cancel()
