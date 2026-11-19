@@ -37,6 +37,8 @@ class PpaCallController(
     private val pendingRemoteCandidates = mutableListOf<IceCandidate>()
     private var released = false
     private var remoteDescriptionSet = false
+    @Volatile private var localVideoSdpLine: String = "local SDP pending"
+    @Volatile private var remoteVideoSdpLine: String = "remote SDP pending"
     private var localRenderer: SurfaceViewRenderer? = null
     @Volatile private var remoteRenderer: SurfaceViewRenderer? = null
     @Volatile private var remoteVideo: VideoTrack? = null
@@ -99,7 +101,8 @@ class PpaCallController(
                 override fun onSetSuccess() {
                     remoteDescriptionSet = true
                     Log.d("PPATalkWebRTC", "Remote OFFER applied successfully")
-                    logSdpMediaSections("REMOTE OFFER", sdp)
+                    remoteVideoSdpLine = videoSdpSummary(sdp)
+                logSdpMediaSections("REMOTE OFFER", sdp)
                     logTransceivers("after remote OFFER")
                     flushRemoteCandidates()
                     createAnswer()
@@ -240,6 +243,7 @@ class PpaCallController(
                     it == "a=sendrecv" || it == "a=sendonly" || it == "a=recvonly" || it == "a=inactive"
                 }
                 Log.d("PPATalkWebRTC", "Created offer: callType=$callType, videoMLine=$videoMLine, direction=$videoDirection")
+                localVideoSdpLine = videoSdpSummary(description.description)
                 logSdpMediaSections("LOCAL OFFER", description.description)
                 logTransceivers("after create OFFER")
                 if (callType == "video") onStatus(if (videoMLine != null) "Video offer created" else "Video offer missing m=video")
@@ -269,6 +273,7 @@ class PpaCallController(
                     it == "a=sendrecv" || it == "a=sendonly" || it == "a=recvonly" || it == "a=inactive"
                 }
                 Log.d("PPATalkWebRTC", "Created answer: callType=$callType, videoMLine=$videoMLine, direction=$videoDirection")
+                localVideoSdpLine = videoSdpSummary(description.description)
                 logSdpMediaSections("LOCAL ANSWER", description.description)
                 logTransceivers("after create ANSWER")
                 if (callType == "video") onStatus(if (videoMLine != null) "Video answer created" else "Video answer missing m=video")
@@ -310,7 +315,8 @@ class PpaCallController(
                             override fun onSetSuccess() {
                                 remoteDescriptionSet = true
                                 Log.d("PPATalkWebRTC", "Remote ANSWER applied successfully")
-                                logSdpMediaSections("REMOTE ANSWER", sdp)
+                                remoteVideoSdpLine = videoSdpSummary(sdp)
+                        logSdpMediaSections("REMOTE ANSWER", sdp)
                                 logTransceivers("after remote ANSWER")
                                 flushRemoteCandidates()
                                 onStatus(if (callType == "video") videoNegotiationStatus("Answer received") else "Connecting…")
@@ -373,6 +379,17 @@ class PpaCallController(
             }
     }
 
+    private fun videoSdpSummary(sdp: String): String {
+        val lines = sdp.lineSequence().toList()
+        val start = lines.indexOfFirst { it.startsWith("m=video") }
+        if (start < 0) return "no m=video"
+        val end = (start + 1 until lines.size).firstOrNull { lines[it].startsWith("m=") } ?: lines.size
+        val section = lines.subList(start, end)
+        val mid = section.firstOrNull { it.startsWith("a=mid:") } ?: "mid missing"
+        val direction = section.firstOrNull { it in listOf("a=sendrecv", "a=sendonly", "a=recvonly", "a=inactive") } ?: "direction default(sendrecv)"
+        return "${lines[start]} $mid $direction"
+    }
+
     private fun logSdpMediaSections(label: String, sdp: String) {
         var sectionName = "SESSION"
         val selected = mutableListOf<String>()
@@ -409,7 +426,7 @@ class PpaCallController(
             "mid=${t.mid ?: "?"}, dir=${t.direction}, current=${t.currentDirection ?: "?"}, rx=${t.receiver.track()?.kind() ?: "none"}, tx=${t.sender.track()?.kind() ?: "none"}"
         }.ifBlank { "no video transceiver" }
         Log.d("PPATalkWebRTC", "$stage video negotiation: $summary")
-        return "$stage • $summary"
+        return "$stage • $summary • local[$localVideoSdpLine] remote[$remoteVideoSdpLine]"
     }
 
     private fun logTransceivers(stage: String) {
