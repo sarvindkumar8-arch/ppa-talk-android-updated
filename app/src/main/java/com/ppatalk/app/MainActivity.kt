@@ -2070,8 +2070,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 val displayField = if (isCover) "coverPhotoUrl" else "photoUrl"
                 val folder = if (isCover) "cover_photos/$uid" else "profile_photos/$uid"
                 val storage = FirebaseStorage.getInstance().reference
-                val originalRef = storage.child("$folder/original.jpg")
-                val displayRef = storage.child(if (isCover) "$folder/cover.jpg" else "$folder/profile.jpg")
+                // Unique object names prevent stale cached download URLs after replacing a photo.
+                val uploadVersion = System.currentTimeMillis().toString()
+                val originalRef = storage.child("$folder/original_$uploadVersion.jpg")
+                val displayFileName = if (isCover) "cover" else "profile"
+                val displayRef = storage.child("$folder/${displayFileName}_$uploadVersion.jpg")
                 val originalMimeType = context.contentResolver.getType(selectedUri) ?: "image/jpeg"
                 val originalMetadata = com.google.firebase.storage.StorageMetadata.Builder()
                     .setContentType(originalMimeType).build()
@@ -2088,8 +2091,20 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                             displayField to displayDownload.toString(),
                                             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                         )
-                                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                        val firestore = FirebaseFirestore.getInstance()
+                                        val profileRef = firestore.collection("publicProfiles").document(uid)
+                                        val directoryRef = firestore.collection("profileDirectory").document(uid)
+                                        val batch = firestore.batch()
+                                        batch.set(profileRef, updates, com.google.firebase.firestore.SetOptions.merge())
+                                        batch.set(directoryRef, mapOf(
+                                            "uid" to uid,
+                                            "displayName" to displayName.ifBlank { "PPA Talk user" },
+                                            "username" to username,
+                                            displayField to displayDownload.toString(),
+                                            "profileVisibility" to profileVisibility,
+                                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        ), com.google.firebase.firestore.SetOptions.merge())
+                                        batch.commit()
                                             .addOnSuccessListener {
                                                 if (isCover) {
                                                     coverPhotoUrl = displayDownload.toString()
