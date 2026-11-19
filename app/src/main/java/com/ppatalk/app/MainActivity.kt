@@ -810,7 +810,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Profile" -> if (viewedProfileUid == uid) {
                 ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             } else {
-                PublicProfileScreen(viewedProfileUid, Modifier.padding(padding))
+                PublicProfileScreen(viewedProfileUid, currentUid = uid, currentName = displayName, onOpenChat = { friendUid, friendName -> activeChatUid = friendUid; activeChatName = friendName }, modifier = Modifier.padding(padding))
             }
             "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2391,7 +2391,14 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 
 
 @Composable
-fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
+fun PublicProfileScreen(
+    uid: String,
+    currentUid: String,
+    currentName: String,
+    onOpenChat: (String, String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val db = remember { FirebaseFirestore.getInstance() }
     var displayName by remember(uid) { mutableStateOf("PPA Talk user") }
     var username by remember(uid) { mutableStateOf("") }
     var bio by remember(uid) { mutableStateOf("") }
@@ -2401,19 +2408,26 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
     var school by remember(uid) { mutableStateOf("") }
     var favoritePlace by remember(uid) { mutableStateOf("") }
     var hometown by remember(uid) { mutableStateOf("") }
+    var work by remember(uid) { mutableStateOf("") }
+    var education by remember(uid) { mutableStateOf("") }
+    var relationship by remember(uid) { mutableStateOf("") }
+    var interests by remember(uid) { mutableStateOf("") }
     var isPrivate by remember(uid) { mutableStateOf(false) }
     var loading by remember(uid) { mutableStateOf(true) }
     var error by remember(uid) { mutableStateOf("") }
-    DisposableEffect(uid) {
-        val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+    var friendStatus by remember(uid) { mutableStateOf("Add Friend") }
+    var actionMessage by remember(uid) { mutableStateOf("") }
+    var selectedTab by remember(uid) { mutableStateOf("All") }
+
+    DisposableEffect(uid, currentUid) {
+        val profileRegistration = db.collection("publicProfiles").document(uid)
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
-                    val isPermissionDenied = exception.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
-                    isPrivate = isPermissionDenied
-                    error = if (isPermissionDenied) "" else (exception.localizedMessage ?: "Profile load nahi ho payi.")
+                    val denied = exception.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    isPrivate = denied
+                    error = if (denied) "" else (exception.localizedMessage ?: "Profile load nahi ho payi.")
                     loading = false
-                }
-                else if (snapshot != null && snapshot.exists()) {
+                } else if (snapshot != null && snapshot.exists()) {
                     displayName = snapshot.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
                     username = snapshot.getString("username").orEmpty()
                     bio = snapshot.getString("bio").orEmpty()
@@ -2423,58 +2437,121 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
                     school = snapshot.getString("school").orEmpty()
                     favoritePlace = snapshot.getString("favoritePlace").orEmpty()
                     hometown = snapshot.getString("hometown").orEmpty()
+                    work = snapshot.getString("work").orEmpty()
+                    education = snapshot.getString("education").orEmpty()
+                    relationship = snapshot.getString("relationshipStatus").orEmpty()
+                    interests = snapshot.getString("interests").orEmpty()
                     isPrivate = snapshot.getString("profileVisibility") == "private"
                     loading = false
-                } else { error = "Is user ki public profile abhi available nahi hai."; loading = false }
-            }
-        onDispose { registration.remove() }
-    }
-    if (isPrivate) {
-        Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(56.dp))
-            Text("This profile is private", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Only this user can view their profile.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    } else Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.padding(start = 20.dp, top = 16.dp))
-        Box(Modifier.fillMaxWidth().height(180.dp).padding(horizontal = 12.dp)) {
-            Card(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.large) {
-                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(42.dp)) }
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo", modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-            else Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo", modifier = Modifier.size(100.dp), tint = RoyalBlue)
-            Spacer(Modifier.width(14.dp))
-            Column {
-                Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (username.isNotBlank()) Text("@$username", style = MaterialTheme.typography.bodyMedium, color = RoyalBlue)
-                Text("PPA Talk member", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        if (loading) CircularProgressIndicator(Modifier.padding(20.dp))
-        if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 20.dp))
-        if (bio.isNotBlank()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { Column(Modifier.padding(16.dp)) { Text("About", style = MaterialTheme.typography.titleMedium, color = Orange, fontWeight = FontWeight.Bold); Text(bio) } }
-        val publicDetails = listOf(
-            "Hobby" to hobby,
-            "School" to school,
-            "Favorite place" to favoritePlace,
-            "Hometown" to hometown
-        ).filter { it.second.isNotBlank() }
-        if (publicDetails.isNotEmpty()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Profile details", style = MaterialTheme.typography.titleMedium, color = Orange, fontWeight = FontWeight.Bold)
-                publicDetails.forEach { (label, value) ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("$label:", fontWeight = FontWeight.SemiBold, modifier = Modifier.width(112.dp))
-                        Text(value, modifier = Modifier.weight(1f))
-                    }
+                } else {
+                    error = "Is user ki public profile abhi available nahi hai."
+                    loading = false
                 }
             }
+        val outgoingRegistration = db.collection("friendRequests").document("${currentUid}_${uid}")
+            .addSnapshotListener { request, _ ->
+                friendStatus = when (request?.getString("status")) {
+                    "accepted" -> "Friends"
+                    "pending" -> "Requested"
+                    else -> "Add Friend"
+                }
+            }
+        val incomingRegistration = db.collection("friendRequests").document("${uid}_${currentUid}")
+            .addSnapshotListener { request, _ ->
+                if (request?.getString("status") == "accepted") friendStatus = "Friends"
+                else if (request?.getString("status") == "pending" && friendStatus != "Friends") friendStatus = "Respond to Request"
+            }
+        onDispose { profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
+    }
+
+    if (isPrivate) {
+        Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(56.dp))
+            Text("This profile is private", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Only accepted friends can view private profile content.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    } else {
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.fillMaxWidth().height(205.dp)) {
+                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
+                    if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
+                }
+            }
+            Spacer(Modifier.height(45.dp))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
+                if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Text("Posts", fontWeight = FontWeight.SemiBold)
+                    Text("Friends", fontWeight = FontWeight.SemiBold)
+                    Text("Followers", fontWeight = FontWeight.SemiBold)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(onClick = {
+                        if (friendStatus == "Add Friend") {
+                            sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { _, detail -> actionMessage = detail }
+                        } else if (friendStatus == "Respond to Request") {
+                            actionMessage = "Friends tab mein request accept karein."
+                        }
+                    }, modifier = Modifier.weight(1f)) {
+                        Icon(if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd, null)
+                        Spacer(Modifier.width(6.dp)); Text(friendStatus)
+                    }
+                    OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
+                    }
+                }
+                if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Reels", "Photos").forEach { tab ->
+                    FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) })
+                }
+            }
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
+            if (selectedTab == "All") {
+                val details = listOf(
+                    "Current city" to favoritePlace, "Hometown" to hometown,
+                    "Work" to work, "Education" to school.ifBlank { education },
+                    "Relationship" to relationship, "Hobbies" to hobby, "Interests" to interests
+                ).filter { it.second.isNotBlank() }
+                if (details.isNotEmpty()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Personal details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        details.forEach { (label, value) ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(value, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(if (selectedTab == "Reels") "Reels will appear here." else "Photos will appear here.",
+                    modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
+
 @Composable
 fun NotificationsScreen(uid: String, modifier: Modifier = Modifier, onOpenFriends: () -> Unit = {}) {
     val db = remember { FirebaseFirestore.getInstance() }
