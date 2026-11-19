@@ -177,7 +177,12 @@ service cloud.firestore {
       allow update: if signedIn()
         && request.auth.uid in resource.data.participantIds
         && request.resource.data.participantIds == resource.data.participantIds
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'updatedAt', 'lastMessage', 'lastMessageAt', 'lastSenderUid',
+          'autoDeleteSeconds', 'autoDeleteLabel'
+        ])
+        && (!('autoDeleteSeconds' in request.resource.data)
+          || request.resource.data.autoDeleteSeconds in [0, 86400, 604800, 1296000, 2592000]);
       match /messages/{messageId} {
         function isChatParticipant() {
           return signedIn()
@@ -185,11 +190,17 @@ service cloud.firestore {
         }
         allow read: if isChatParticipant();
         allow create: if isChatParticipant()
+          && request.resource.data.keys().hasOnly(['uid', 'text', 'createdAt', 'expireAt'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 4000;
-        allow update, delete: if false;
+          && request.resource.data.text.size() <= 4000
+          && (!('expireAt' in request.resource.data)
+            || (request.resource.data.expireAt is timestamp
+              && request.resource.data.expireAt > request.time
+              && request.resource.data.expireAt <= request.time + duration.value(30, 'd')));
+        allow update: if false;
+        allow delete: if isChatParticipant() && resource.data.uid == request.auth.uid;
       }
     }
     // WebRTC call signalling. Firestore stores call metadata, SDP and ICE
