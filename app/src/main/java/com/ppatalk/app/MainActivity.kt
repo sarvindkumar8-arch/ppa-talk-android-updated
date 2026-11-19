@@ -2498,6 +2498,17 @@ fun PublicProfileScreen(
     var selectedTab by remember(uid) { mutableStateOf("All") }
 
     DisposableEffect(uid, currentUid) {
+        val directoryRegistration = db.collection("profileDirectory").document(uid)
+            .addSnapshotListener { directory, directoryError ->
+                if (directoryError == null && directory != null && directory.exists()) {
+                    displayName = directory.getString("displayName")?.takeIf { it.isNotBlank() } ?: displayName
+                    username = directory.getString("username").orEmpty()
+                    photoUrl = directory.getString("photoUrl").orEmpty()
+                    coverPhotoUrl = directory.getString("coverPhotoUrl").orEmpty()
+                    isPrivate = directory.getString("profileVisibility") == "private"
+                    loading = false
+                }
+            }
         val profileRegistration = db.collection("publicProfiles").document(uid)
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
@@ -2539,16 +2550,72 @@ fun PublicProfileScreen(
                 if (request?.getString("status") == "accepted") friendStatus = "Friends"
                 else if (request?.getString("status") == "pending" && friendStatus != "Friends") friendStatus = "Respond to Request"
             }
-        onDispose { profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
+        onDispose { directoryRegistration.remove(); profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
     }
 
     if (isPrivate) {
-        Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(56.dp))
-            Text("This profile is private", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Only accepted friends can view private profile content.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.fillMaxWidth().height(205.dp)) {
+                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
+                    if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
+                }
+            }
+            Spacer(Modifier.height(45.dp))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        enabled = !isFriendActionRunning && friendStatus != "Friends" && friendStatus != "Requested",
+                        onClick = {
+                            isFriendActionRunning = true
+                            if (friendStatus == "Respond to Request") {
+                                acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Friends"
+                                }
+                            } else {
+                                friendStatus = "Requested"
+                                sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (!success && !detail.contains("already sent", ignoreCase = true)) friendStatus = "Add Friend"
+                                    else friendStatus = "Requested"
+                                }
+                            }
+                        }, modifier = Modifier.weight(1f)
+                    ) {
+                        if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else Icon(if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isFriendActionRunning) "Sending..." else friendStatus)
+                    }
+                    OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
+                    }
+                }
+                if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(30.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("This profile is private", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Add this person as a friend to see their posts, photos and personal details.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
         }
     } else {
         Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -2784,7 +2851,7 @@ fun FriendsScreen(
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(uid) {
-        val usersListener = db.collection("publicProfiles").whereEqualTo("profileVisibility", "public").addSnapshotListener { snap, error ->
+        val usersListener = db.collection("profileDirectory").addSnapshotListener { snap, error ->
             if (error != null) status = error.localizedMessage ?: "People directory load nahi hui. Firestore rules check karein."
             if (snap != null) users = snap.documents.mapNotNull { doc ->
                 if (doc.id == uid) null else PPAUser(doc.id,
@@ -2830,7 +2897,7 @@ fun FriendsScreen(
         onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
     }
     DisposableEffect(uid) {
-        val registration = db.collection("publicProfiles").whereEqualTo("profileVisibility", "public").addSnapshotListener { snap, _ ->
+        val registration = db.collection("profileDirectory").addSnapshotListener { snap, _ ->
             if (snap != null) onlineFriends = snap.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
         }
         onDispose { registration.remove() }
@@ -3015,7 +3082,7 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
     var people by remember(uid) { mutableStateOf<List<PPAUser>>(emptyList()) }
     var onlinePeople by remember(uid) { mutableStateOf<Set<String>>(emptySet()) }
     DisposableEffect(uid) {
-        val presenceRegistration = db.collection("publicProfiles").whereEqualTo("profileVisibility", "public").addSnapshotListener { snapshot, _ ->
+        val presenceRegistration = db.collection("profileDirectory").addSnapshotListener { snapshot, _ ->
             if (snapshot != null) onlinePeople = snapshot.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
         }
         onDispose { presenceRegistration.remove() }
