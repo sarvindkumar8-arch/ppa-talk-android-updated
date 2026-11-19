@@ -45,7 +45,9 @@ service cloud.firestore {
     // Username reservations: one document per normalized username.
     // A user can only reserve a name for their own account.
     match /usernameClaims/{username} {
-      allow read: if signedIn();
+      // The app checks a single username claim; do not allow listing all claims.
+      allow get: if signedIn();
+      allow list: if false;
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.username == username
@@ -75,7 +77,7 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      allow read: if true;
+      allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && ((request.resource.data.text is string && request.resource.data.text.size() <= 5000)
@@ -83,7 +85,7 @@ service cloud.firestore {
       allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
 
       match /likes/{likerId} {
-        allow read: if true;
+        allow read: if signedIn();
         allow create: if owns(likerId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡'];
@@ -94,7 +96,7 @@ service cloud.firestore {
         allow delete: if owns(likerId);
       }
       match /comments/{commentId} {
-        allow read: if true;
+        allow read: if signedIn();
         allow create: if signedIn() && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
