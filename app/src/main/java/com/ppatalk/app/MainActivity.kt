@@ -1804,6 +1804,7 @@ private fun PhotoCropDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     var displayName by remember { mutableStateOf(initialName) }
     var username by remember { mutableStateOf("") }
     var profileVisibility by remember { mutableStateOf("public") }
@@ -1936,10 +1937,15 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 val storage = FirebaseStorage.getInstance().reference
                 val originalRef = storage.child("$folder/original.jpg")
                 val displayRef = storage.child(if (isCover) "$folder/cover.jpg" else "$folder/profile.jpg")
-                originalRef.putBytes(originalBytes)
+                val originalMimeType = context.contentResolver.getType(photoEditorUri!!) ?: "image/jpeg"
+                val originalMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType(originalMimeType).build()
+                val croppedMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType("image/jpeg").build()
+                originalRef.putBytes(originalBytes, originalMetadata)
                     .addOnSuccessListener {
                         originalRef.downloadUrl.addOnSuccessListener { originalDownload ->
-                            displayRef.putBytes(croppedBytes)
+                            displayRef.putBytes(croppedBytes, croppedMetadata)
                                 .addOnSuccessListener {
                                     displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
                                         val updates = mapOf(
