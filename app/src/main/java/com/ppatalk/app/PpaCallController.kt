@@ -50,7 +50,16 @@ class PpaCallController(
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context.applicationContext).createInitializationOptions()
         )
-        factory = PeerConnectionFactory.builder().createPeerConnectionFactory()
+        // Explicitly configure video codecs; relying on the default factory can
+        // leave video media sections without negotiated codec capabilities.
+        factory = PeerConnectionFactory.builder()
+            .setVideoEncoderFactory(
+                DefaultVideoEncoderFactory(egl.eglBaseContext, true, true)
+            )
+            .setVideoDecoderFactory(
+                DefaultVideoDecoderFactory(egl.eglBaseContext)
+            )
+            .createPeerConnectionFactory()
     }
 
     fun startOutgoing(type: String) {
