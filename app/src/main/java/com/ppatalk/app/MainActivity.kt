@@ -2456,6 +2456,7 @@ fun PublicProfileScreen(
     var loading by remember(uid) { mutableStateOf(true) }
     var error by remember(uid) { mutableStateOf("") }
     var friendStatus by remember(uid) { mutableStateOf("Add Friend") }
+    var isFriendActionRunning by remember(uid) { mutableStateOf(false) }
     var actionMessage by remember(uid) { mutableStateOf("") }
     var selectedTab by remember(uid) { mutableStateOf("All") }
 
@@ -2538,18 +2539,49 @@ fun PublicProfileScreen(
                     Text("Followers", fontWeight = FontWeight.SemiBold)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = {
-                        if (friendStatus == "Add Friend") {
-                            sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { _, detail -> actionMessage = detail }
-                        } else if (friendStatus == "Respond to Request") {
-                            actionMessage = "Friends tab mein request accept karein."
-                        }
-                    }, modifier = Modifier.weight(1f)) {
-                        Icon(if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd, null)
-                        Spacer(Modifier.width(6.dp)); Text(friendStatus)
+                    Button(
+                        enabled = !isFriendActionRunning && friendStatus != "Friends" && friendStatus != "Requested",
+                        onClick = {
+                            isFriendActionRunning = true
+                            actionMessage = if (friendStatus == "Respond to Request") "Accepting friend request..." else "Sending friend request..."
+                            if (friendStatus == "Respond to Request") {
+                                acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Friends"
+                                }
+                            } else {
+                                // Update the button immediately while Firestore confirms the request.
+                                friendStatus = "Requested"
+                                sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (!success && !detail.contains("already sent", ignoreCase = true)) {
+                                        friendStatus = "Add Friend"
+                                    } else {
+                                        friendStatus = "Requested"
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (isFriendActionRunning) CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary
+                        ) else Icon(
+                            if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd,
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isFriendActionRunning && friendStatus == "Requested") "Sending..." else friendStatus)
                     }
-                    OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
+                    OutlinedButton(
+                        onClick = { onOpenChat(uid, displayName) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Chat, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Message")
                     }
                 }
                 if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
