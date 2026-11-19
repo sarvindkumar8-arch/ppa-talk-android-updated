@@ -643,8 +643,27 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(uid, lifecycleOwner) {
         val db = FirebaseFirestore.getInstance()
+        val publicProfileRef = db.collection("publicProfiles").document(uid)
+        // Existing accounts created before profile visibility was added may have no
+        // visibility field. Default those legacy profiles to public exactly once.
+        publicProfileRef.get().addOnSuccessListener { profile ->
+            if (!profile.exists()) {
+                publicProfileRef.set(mapOf(
+                    "uid" to uid,
+                    "displayName" to displayName.ifBlank { "PPA Talk user" },
+                    "profileVisibility" to "public",
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ), com.google.firebase.firestore.SetOptions.merge())
+            } else if (!profile.contains("profileVisibility")) {
+                publicProfileRef.set(mapOf(
+                    "profileVisibility" to "public",
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ), com.google.firebase.firestore.SetOptions.merge())
+            }
+        }
         fun setPresence(online: Boolean) {
-            db.collection("publicProfiles").document(uid).set(
+            publicProfileRef.set(
                 mapOf("isOnline" to online, "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
                 com.google.firebase.firestore.SetOptions.merge()
             )
