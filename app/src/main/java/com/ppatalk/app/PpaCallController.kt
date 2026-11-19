@@ -186,6 +186,12 @@ class PpaCallController(
                 val liveRoom = LiveKit.create(context.applicationContext)
                 room = liveRoom
 
+                // The call dialog can create its renderers before the token request
+                // finishes and before the LiveKit room exists. Initialize any
+                // already-attached views now so the local preview is not blank.
+                localRenderer?.let { liveRoom.initVideoRenderer(it) }
+                remoteRenderer?.let { liveRoom.initVideoRenderer(it) }
+
                 eventJob = scope.launch {
                     liveRoom.events.collect { event ->
                             when (event) {
