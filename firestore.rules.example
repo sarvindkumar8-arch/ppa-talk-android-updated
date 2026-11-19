@@ -26,16 +26,18 @@ service cloud.firestore {
     // Public directory contains only fields safe to show to signed-in users.
     // Never put email, phone, date of birth, gender, or other private details here.
     match /publicProfiles/{userId} {
-      allow read: if signedIn();
+      allow read: if owns(userId)
+        || !("profileVisibility" in resource.data)
+        || resource.data.profileVisibility == "public";
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'updatedAt', 'createdAt'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'profileVisibility', 'updatedAt', 'createdAt'
         ])
         && request.resource.data.uid == userId;
       allow update: if owns(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'updatedAt'
+          'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'bio', 'profileVisibility', 'updatedAt'
         ]);
       allow delete: if owns(userId);
     }
