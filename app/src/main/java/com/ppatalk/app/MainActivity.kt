@@ -1691,6 +1691,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 @Composable
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
     var displayName by remember { mutableStateOf(initialName) }
+    var username by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var dateOfBirth by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("") }
@@ -1745,6 +1746,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 isError = true
             } else if (snapshot != null) {
                 displayName = snapshot.getString("displayName") ?: initialName
+                username = snapshot.getString("username") ?: ""
                 bio = snapshot.getString("bio") ?: ""
                 photoUrl = snapshot.getString("photoUrl") ?: ""
                 coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
@@ -1902,6 +1904,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(displayName.ifBlank { "PPA Talk user" }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            if (username.isNotBlank()) Text("@$username", style = MaterialTheme.typography.bodyMedium, color = RoyalBlue)
             if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(postCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Posts", color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -1930,6 +1933,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             if (loading) CircularProgressIndicator()
             OutlinedTextField(value = displayName, onValueChange = { displayName = it },
                 label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = username, onValueChange = { username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '.' } },
+                label = { Text("Username") }, prefix = { Text("@") },
+                supportingText = { Text("4–20 characters: a-z, 0-9, underscore or dot. Must be unique.") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = email, onValueChange = {}, readOnly = true,
                 label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
@@ -1982,8 +1989,12 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             Button(
                 onClick = {
                     val cleanName = displayName.trim()
+                    val cleanUsername = username.trim().lowercase()
                     if (cleanName.isBlank()) {
                         message = "Display name khali nahi ho sakta."
+                        isError = true
+                    } else if (!cleanUsername.matches(Regex("^[a-z0-9_.]{4,20}$"))) {
+                        message = "Username 4–20 characters ka ho: a-z, 0-9, underscore ya dot."
                         isError = true
                     } else {
                         saving = true
@@ -1999,15 +2010,32 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             "hometown" to hometown.trim(), "updatedAt" to timestamp
                         )
                         val publicUpdates = mapOf(
-                            "uid" to uid, "displayName" to cleanName, "bio" to bio.trim(),
+                            "uid" to uid, "displayName" to cleanName, "username" to cleanUsername, "bio" to bio.trim(),
                             "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
                             "updatedAt" to timestamp
                         )
-                        val batch = db.batch()
-                        batch.set(db.collection("users").document(uid), privateUpdates, com.google.firebase.firestore.SetOptions.merge())
-                        batch.set(db.collection("publicProfiles").document(uid), publicUpdates, com.google.firebase.firestore.SetOptions.merge())
-                        batch.commit()
-                            .addOnSuccessListener {
+                        val usernameRef = db.collection("usernameClaims").document(cleanUsername)
+                        val profileRef = db.collection("publicProfiles").document(uid)
+                        val usersRef = db.collection("users").document(uid)
+                        db.runTransaction { transaction ->
+                            val newClaim = transaction.get(usernameRef)
+                            if (newClaim.exists() && newClaim.getString("uid") != uid) {
+                                throw com.google.firebase.firestore.FirebaseFirestoreException(
+                                    "Username already taken. Please choose another.",
+                                    com.google.firebase.firestore.FirebaseFirestoreException.Code.ABORTED
+                                )
+                            }
+                            val oldUsername = transaction.get(profileRef).getString("username").orEmpty()
+                            if (oldUsername.isNotBlank() && oldUsername != cleanUsername) {
+                                val oldClaimRef = db.collection("usernameClaims").document(oldUsername)
+                                val oldClaim = transaction.get(oldClaimRef)
+                                if (oldClaim.exists() && oldClaim.getString("uid") == uid) transaction.delete(oldClaimRef)
+                            }
+                            transaction.set(usernameRef, mapOf("uid" to uid, "username" to cleanUsername, "createdAt" to timestamp))
+                            transaction.set(usersRef, privateUpdates, com.google.firebase.firestore.SetOptions.merge())
+                            transaction.set(profileRef, publicUpdates, com.google.firebase.firestore.SetOptions.merge())
+                            null
+                        }.addOnSuccessListener {
                                 FirebaseAuth.getInstance().currentUser
                                     ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
                                         .setDisplayName(cleanName).build())
