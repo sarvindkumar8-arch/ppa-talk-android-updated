@@ -1878,6 +1878,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var school by remember { mutableStateOf("") }
     var favoritePlace by remember { mutableStateOf("") }
     var hometown by remember { mutableStateOf("") }
+    var currentCity by remember { mutableStateOf("") }
+    var work by remember { mutableStateOf("") }
+    var education by remember { mutableStateOf("") }
+    var relationshipStatus by remember { mutableStateOf("") }
+    var interests by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
     var coverPhotoUrl by remember { mutableStateOf("") }
     var photoOriginalUrl by remember { mutableStateOf("") }
@@ -1946,6 +1951,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 school = snapshot.getString("school") ?: ""
                 favoritePlace = snapshot.getString("favoritePlace") ?: ""
                 hometown = snapshot.getString("hometown") ?: ""
+                currentCity = snapshot.getString("currentCity") ?: ""
+                work = snapshot.getString("work") ?: ""
+                education = snapshot.getString("education") ?: ""
+                relationshipStatus = snapshot.getString("relationshipStatus") ?: ""
+                interests = snapshot.getString("interests") ?: ""
                 loading = false
             }
         }
@@ -1960,6 +1970,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 bio = snapshot.getString("bio") ?: ""
                 photoUrl = snapshot.getString("photoUrl") ?: ""
                 coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+                currentCity = snapshot.getString("currentCity") ?: currentCity
+                work = snapshot.getString("work") ?: work
+                education = snapshot.getString("education") ?: education
+                relationshipStatus = snapshot.getString("relationshipStatus") ?: relationshipStatus
+                interests = snapshot.getString("interests") ?: interests
                 photoOriginalUrl = snapshot.getString("photoOriginalUrl") ?: photoUrl
                 coverPhotoOriginalUrl = snapshot.getString("coverPhotoOriginalUrl") ?: coverPhotoUrl
             }
@@ -2309,6 +2324,16 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             OutlinedTextField(value = hometown, onValueChange = { hometown = it },
                 label = { Text("Hometown") }, placeholder = { Text("Your hometown") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = currentCity, onValueChange = { currentCity = it },
+                label = { Text("Current city") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = work, onValueChange = { work = it },
+                label = { Text("Work / Company and role") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = education, onValueChange = { education = it },
+                label = { Text("Education / College") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = relationshipStatus, onValueChange = { relationshipStatus = it },
+                label = { Text("Relationship status") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = interests, onValueChange = { interests = it },
+                label = { Text("Interests") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Text("Email is linked to your login account. Avoid sharing private details publicly.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth())
@@ -2333,13 +2358,15 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             "dateOfBirth" to dateOfBirth.trim(), "gender" to gender,
                             "phoneNumber" to phoneNumber.trim(), "hobby" to hobby.trim(),
                             "school" to school.trim(), "favoritePlace" to favoritePlace.trim(),
-                            "hometown" to hometown.trim(), "updatedAt" to timestamp
+                            "hometown" to hometown.trim(), "currentCity" to currentCity.trim(), "work" to work.trim(), "education" to education.trim(), "relationshipStatus" to relationshipStatus.trim(), "interests" to interests.trim(), "updatedAt" to timestamp
                         )
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "username" to cleanUsername, "bio" to bio.trim(),
                             "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
                             "hobby" to hobby.trim(), "school" to school.trim(),
                             "favoritePlace" to favoritePlace.trim(), "hometown" to hometown.trim(),
+                            "currentCity" to currentCity.trim(), "work" to work.trim(), "education" to education.trim(),
+                            "relationshipStatus" to relationshipStatus.trim(), "interests" to interests.trim(),
                             "profileVisibility" to profileVisibility,
                             "updatedAt" to timestamp
                         )
