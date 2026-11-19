@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.FlowCollector
+import io.livekit.android.events.collect
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -141,8 +141,7 @@ class PpaCallController(
                 room = liveRoom
 
                 eventJob = scope.launch {
-                    liveRoom.events.collect(object : FlowCollector<RoomEvent> {
-                        override suspend fun emit(event: RoomEvent) {
+                    liveRoom.events.collect { event ->
                             when (event) {
                                 is RoomEvent.TrackSubscribed -> {
                                     val track = event.track
@@ -165,7 +164,6 @@ class PpaCallController(
                                 else -> Unit
                             }
                         }
-                    })
                 }
 
                 liveRoom.connect(serverUrl, token)
