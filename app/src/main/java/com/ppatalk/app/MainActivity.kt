@@ -1692,6 +1692,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
     var displayName by remember { mutableStateOf(initialName) }
     var username by remember { mutableStateOf("") }
+    var usernameCheckMessage by remember { mutableStateOf("") }
+    var usernameIsTaken by remember { mutableStateOf(false) }
     var bio by remember { mutableStateOf("") }
     var dateOfBirth by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("") }
@@ -1710,6 +1712,33 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var friendCount by remember { mutableStateOf(0) }
     var profileTab by remember { mutableStateOf("All") }
     var showStoryComposer by remember { mutableStateOf(false) }
+
+    LaunchedEffect(username, uid) {
+        val cleanUsername = username.trim().lowercase()
+        usernameCheckMessage = ""
+        usernameIsTaken = false
+        if (cleanUsername.isBlank() || !cleanUsername.matches(Regex("^[a-z0-9_.]{4,20}$"))) {
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(450)
+        FirebaseFirestore.getInstance().collection("usernameClaims").document(cleanUsername).get()
+            .addOnSuccessListener { claim ->
+                if (username.trim().lowercase() != cleanUsername) return@addOnSuccessListener
+                val ownerUid = claim.getString("uid")
+                if (claim.exists() && ownerUid != uid) {
+                    usernameIsTaken = true
+                    usernameCheckMessage = "This username is already taken. Please choose another."
+                } else {
+                    usernameIsTaken = false
+                    usernameCheckMessage = if (claim.exists()) "This is your current username." else "Username available."
+                }
+            }
+            .addOnFailureListener {
+                if (username.trim().lowercase() == cleanUsername) {
+                    usernameCheckMessage = "Username availability check nahi ho paya. Internet check karein."
+                }
+            }
+    }
 
     DisposableEffect(uid) {
         val db = FirebaseFirestore.getInstance()
@@ -1937,6 +1966,14 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 label = { Text("Username") }, prefix = { Text("@") },
                 supportingText = { Text("4–20 characters: a-z, 0-9, underscore or dot. Must be unique.") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
+            if (usernameCheckMessage.isNotBlank()) {
+                Text(
+                    usernameCheckMessage,
+                    color = if (usernameIsTaken) MaterialTheme.colorScheme.error else RoyalBlue,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
             OutlinedTextField(value = email, onValueChange = {}, readOnly = true,
                 label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
