@@ -2498,6 +2498,7 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
 fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit) {
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
+    val activity = context as? Activity
     val chatId = remember(currentUid, friendUid) { listOf(currentUid, friendUid).sorted().joinToString("_") }
     var messages by remember(chatId) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var draft by remember(chatId) { mutableStateOf("") }
@@ -2510,6 +2511,18 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     var incomingCallType by remember { mutableStateOf("audio") }
     var pendingCallId by remember { mutableStateOf<String?>(null) }
     var requestedCallType by remember { mutableStateOf("audio") }
+
+    // Keep the display awake on both caller and receiver while a call controller is active.
+    // Restore the previous window setting as soon as the call ends or this screen is disposed.
+    DisposableEffect(callController) {
+        val window = activity?.window
+        val keepScreenOnFlag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        val wasAlreadyEnabled = (window?.attributes?.flags ?: 0) and keepScreenOnFlag != 0
+        if (callController != null) window?.addFlags(keepScreenOnFlag)
+        onDispose {
+            if (!wasAlreadyEnabled) window?.clearFlags(keepScreenOnFlag)
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
