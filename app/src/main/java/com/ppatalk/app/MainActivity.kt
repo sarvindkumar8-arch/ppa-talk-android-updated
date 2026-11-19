@@ -2274,12 +2274,27 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("All", "Reels", "Photos", "More").forEach { tab ->
-                    FilterChip(selected = profileTab == tab, onClick = { profileTab = tab }, label = { Text(tab) })
+                    FilterChip(selected = profileTab == tab, onClick = {
+                    profileTab = tab
+                    if (tab == "Photos") galleryFilter = "All photos"
+                    if (tab == "Reels") galleryFilter = "All reels"
+                }, label = { Text(tab) })
                 }
             }
             if (profileTab == "Photos" || profileTab == "Reels") {
                 val isReels = profileTab == "Reels"
-                val filteredItems = galleryItems.filter { item ->
+                val currentProfilePhotos = listOfNotNull(
+                    (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let {
+                        ProfileGalleryItem("current-profile", it, photoUrl.ifBlank { it }, "image", "Profile pictures", "Profile photo")
+                    },
+                    (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let {
+                        ProfileGalleryItem("current-cover", it, coverPhotoUrl.ifBlank { it }, "image", "Cover photos", "Cover photo")
+                    }
+                )
+                val gallerySource = galleryItems + currentProfilePhotos.filter { current ->
+                    galleryItems.none { it.url == current.url }
+                }
+                val filteredItems = gallerySource.filter { item ->
                     if (isReels) item.type == "video" else item.type == "image" && when (galleryFilter) {
                         "Cover photos" -> item.category == "Cover photos"
                         "Profile pictures" -> item.category == "Profile pictures"
