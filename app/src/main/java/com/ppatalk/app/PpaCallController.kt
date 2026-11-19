@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -141,29 +141,31 @@ class PpaCallController(
                 room = liveRoom
 
                 eventJob = scope.launch {
-                    liveRoom.events.collect { event ->
-                        when (event) {
-                            is RoomEvent.TrackSubscribed -> {
-                                val track = event.track
-                                if (track is VideoTrack) {
-                                    remoteVideo = track
-                                    remoteRenderer?.let { track.addRenderer(it) }
-                                    onStatus("Connected • remote video received")
+                    liveRoom.events.collect(object : FlowCollector<RoomEvent> {
+                        override suspend fun emit(event: RoomEvent) {
+                            when (event) {
+                                is RoomEvent.TrackSubscribed -> {
+                                    val track = event.track
+                                    if (track is VideoTrack) {
+                                        remoteVideo = track
+                                        remoteRenderer?.let { track.addRenderer(it) }
+                                        onStatus("Connected • remote video received")
+                                    }
                                 }
-                            }
-                            is RoomEvent.ParticipantConnected -> onStatus("Connected • waiting for video")
-                            is RoomEvent.ParticipantDisconnected -> onStatus("Other participant disconnected")
-                            is RoomEvent.Disconnected -> if (!released) onStatus("Connection interrupted")
-                            is RoomEvent.TrackUnsubscribed -> {
-                                val track = event.track
-                                if (track is VideoTrack && remoteVideo === track) {
-                                    remoteVideo = null
-                                    onStatus("Remote video paused")
+                                is RoomEvent.ParticipantConnected -> onStatus("Connected • waiting for video")
+                                is RoomEvent.ParticipantDisconnected -> onStatus("Other participant disconnected")
+                                is RoomEvent.Disconnected -> if (!released) onStatus("Connection interrupted")
+                                is RoomEvent.TrackUnsubscribed -> {
+                                    val track = event.track
+                                    if (track is VideoTrack && remoteVideo === track) {
+                                        remoteVideo = null
+                                        onStatus("Remote video paused")
+                                    }
                                 }
+                                else -> Unit
                             }
-                            else -> Unit
                         }
-                    }
+                    })
                 }
 
                 liveRoom.connect(serverUrl, token)
