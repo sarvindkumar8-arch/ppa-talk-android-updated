@@ -1692,6 +1692,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
     var displayName by remember { mutableStateOf(initialName) }
     var username by remember { mutableStateOf("") }
+    var profileVisibility by remember { mutableStateOf("public") }
     var usernameCheckMessage by remember { mutableStateOf("") }
     var usernameIsTaken by remember { mutableStateOf(false) }
     var bio by remember { mutableStateOf("") }
@@ -1776,6 +1777,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             } else if (snapshot != null) {
                 displayName = snapshot.getString("displayName") ?: initialName
                 username = snapshot.getString("username") ?: ""
+                profileVisibility = snapshot.getString("profileVisibility") ?: "public"
                 bio = snapshot.getString("bio") ?: ""
                 photoUrl = snapshot.getString("photoUrl") ?: ""
                 coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
@@ -1979,6 +1981,18 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
                 placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
                 minLines = 3, maxLines = 4)
+            Text("Profile privacy", style = MaterialTheme.typography.titleMedium,
+                color = Orange, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (profileVisibility == "private") "Private profile" else "Public profile", fontWeight = FontWeight.SemiBold)
+                    Text(if (profileVisibility == "private") "Only you can view your profile." else "Other signed-in PPA Talk users can view your profile.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = profileVisibility == "private", onCheckedChange = {
+                    profileVisibility = if (it) "private" else "public"
+                })
+            }
             Text("Personal details", style = MaterialTheme.typography.titleMedium,
                 color = Orange, fontWeight = FontWeight.Bold)
             OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
@@ -2049,6 +2063,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "username" to cleanUsername, "bio" to bio.trim(),
                             "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                            "profileVisibility" to profileVisibility,
                             "updatedAt" to timestamp
                         )
                         val usernameRef = db.collection("usernameClaims").document(cleanUsername)
@@ -2106,24 +2121,36 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
     var bio by remember(uid) { mutableStateOf("") }
     var photoUrl by remember(uid) { mutableStateOf("") }
     var coverPhotoUrl by remember(uid) { mutableStateOf("") }
+    var isPrivate by remember(uid) { mutableStateOf(false) }
     var loading by remember(uid) { mutableStateOf(true) }
     var error by remember(uid) { mutableStateOf("") }
     DisposableEffect(uid) {
         val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
             .addSnapshotListener { snapshot, exception ->
-                if (exception != null) { error = exception.localizedMessage ?: "Profile load nahi ho payi."; loading = false }
+                if (exception != null) {
+                    error = if (exception.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED)
+                        "This profile is private." else (exception.localizedMessage ?: "Profile load nahi ho payi.")
+                    loading = false
+                }
                 else if (snapshot != null && snapshot.exists()) {
                     displayName = snapshot.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
                     username = snapshot.getString("username").orEmpty()
                     bio = snapshot.getString("bio").orEmpty()
                     photoUrl = snapshot.getString("photoUrl").orEmpty()
                     coverPhotoUrl = snapshot.getString("coverPhotoUrl").orEmpty()
+                    isPrivate = snapshot.getString("profileVisibility") == "private"
                     loading = false
                 } else { error = "Is user ki public profile abhi available nahi hai."; loading = false }
             }
         onDispose { registration.remove() }
     }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    if (isPrivate) {
+        Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(56.dp))
+            Text("This profile is private", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Only this user can view their profile.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    } else Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.padding(start = 20.dp, top = 16.dp))
         Box(Modifier.fillMaxWidth().height(180.dp).padding(horizontal = 12.dp)) {
             Card(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.large) {
@@ -2269,7 +2296,7 @@ fun FriendsScreen(
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(uid) {
-        val usersListener = db.collection("publicProfiles").addSnapshotListener { snap, error ->
+        val usersListener = db.collection("publicProfiles").whereEqualTo("profileVisibility", "public").addSnapshotListener { snap, error ->
             if (error != null) status = error.localizedMessage ?: "People directory load nahi hui. Firestore rules check karein."
             if (snap != null) users = snap.documents.mapNotNull { doc ->
                 if (doc.id == uid) null else PPAUser(doc.id,
@@ -2315,7 +2342,7 @@ fun FriendsScreen(
         onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
     }
     DisposableEffect(uid) {
-        val registration = db.collection("publicProfiles").addSnapshotListener { snap, _ ->
+        val registration = db.collection("publicProfiles").whereEqualTo("profileVisibility", "public").addSnapshotListener { snap, _ ->
             if (snap != null) onlineFriends = snap.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
         }
         onDispose { registration.remove() }
@@ -2471,7 +2498,7 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
     var people by remember(uid) { mutableStateOf<List<PPAUser>>(emptyList()) }
     var onlinePeople by remember(uid) { mutableStateOf<Set<String>>(emptySet()) }
     DisposableEffect(uid) {
-        val presenceRegistration = db.collection("publicProfiles").addSnapshotListener { snapshot, _ ->
+        val presenceRegistration = db.collection("publicProfiles").whereEqualTo("profileVisibility", "public").addSnapshotListener { snapshot, _ ->
             if (snapshot != null) onlinePeople = snapshot.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
         }
         onDispose { presenceRegistration.remove() }
