@@ -45,6 +45,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
@@ -2509,6 +2511,15 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     var callError by remember { mutableStateOf("") }
     var incomingCallId by remember { mutableStateOf<String?>(null) }
     var incomingCallType by remember { mutableStateOf("audio") }
+    var friendPhotoUrl by remember(friendUid) { mutableStateOf("") }
+
+    DisposableEffect(friendUid) {
+        val profileListener = db.collection("publicProfiles").document(friendUid)
+            .addSnapshotListener { snapshot, _ ->
+                friendPhotoUrl = snapshot?.getString("photoUrl").orEmpty()
+            }
+        onDispose { profileListener.remove() }
+    }
     var pendingCallId by remember { mutableStateOf<String?>(null) }
     var requestedCallType by remember { mutableStateOf("audio") }
 
@@ -2682,24 +2693,20 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     }
 
     if (incomingCallId != null && callController == null) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text(if (incomingCallType == "video") "Incoming video call" else "Incoming voice call") },
-            text = { Text("${friendName} is calling you.") },
-            confirmButton = {
-                TextButton(onClick = { requestCall(incomingCallType, incomingCallId) }) { Text("Accept") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    val id = incomingCallId
-                    incomingCallId = null
-                    if (id != null) {
-                        (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(id.hashCode())
-                        db.collection("callSessions").document(id).update(
+        IncomingCallScreen(
+            callerName = friendName,
+            callerPhotoUrl = friendPhotoUrl,
+            callType = incomingCallType,
+            onAccept = { requestCall(incomingCallType, incomingCallId) },
+            onReject = {
+                val id = incomingCallId
+                incomingCallId = null
+                if (id != null) {
+                    (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(id.hashCode())
+                    db.collection("callSessions").document(id).update(
                         mapOf("status" to "rejected", "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-                        )
-                    }
-                }) { Text("Reject") }
+                    )
+                }
             }
         )
     }
@@ -2715,6 +2722,125 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                 callStatus = "Call ended"
             }
         )
+    }
+}
+
+
+@Composable
+fun IncomingCallScreen(
+    callerName: String,
+    callerPhotoUrl: String,
+    callType: String,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color(0xFF101827)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 42.dp)
+            ) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        "PPA TALK",
+                        color = Color(0xFF79A6FF),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        if (callType == "video") "Incoming video call" else "Incoming voice call",
+                        color = Color(0xFFCBD5E1),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Surface(
+                        modifier = Modifier.size(150.dp),
+                        shape = CircleShape,
+                        color = Color(0xFF26364F)
+                    ) {
+                        if (callerPhotoUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = callerPhotoUrl,
+                                contentDescription = "$callerName profile photo",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = "Caller profile",
+                                    tint = Color(0xFF9FB7E8),
+                                    modifier = Modifier.size(112.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        callerName.ifBlank { "PPA Talk user" },
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "is calling you…",
+                        color = Color(0xFFB8C4D8),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                Row(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(
+                            onClick = onReject,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            color = Color(0xFFE53945),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.CallEnd, contentDescription = "Reject call", tint = Color.White, modifier = Modifier.size(32.dp))
+                            }
+                        }
+                        Text("Reject", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(
+                            onClick = onAccept,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            color = Color(0xFF19A65A),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    if (callType == "video") Icons.Default.Videocam else Icons.Default.Call,
+                                    contentDescription = "Accept call",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                        Text("Accept", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
     }
 }
 
