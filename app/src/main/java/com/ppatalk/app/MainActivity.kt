@@ -1,6 +1,16 @@
 package com.ppatalk.app
 
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.graphics.Paint
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.media.AudioAttributes
@@ -1687,6 +1697,105 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 }
 
 
+
+@Composable
+private fun PhotoCropDialog(
+    uri: Uri,
+    isCover: Boolean,
+    onCancel: () -> Unit,
+    onSave: (ByteArray) -> Unit
+) {
+    val context = LocalContext.current
+    val bitmap = remember(uri) {
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        }.getOrNull()
+    }
+    var zoom by remember(uri) { mutableFloatStateOf(1f) }
+    var offsetX by remember(uri) { mutableFloatStateOf(0f) }
+    var offsetY by remember(uri) { mutableFloatStateOf(0f) }
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    var viewportHeight by remember { mutableIntStateOf(0) }
+
+    Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(if (isCover) "Adjust cover photo" else "Adjust profile photo",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Photo ko drag karke position set karein aur slider se size chhota-bada karein.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (bitmap != null) {
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .aspectRatio(if (isCover) 16f / 9f else 1f)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(Color.Black)
+                            .onSizeChanged { viewportWidth = it.width; viewportHeight = it.height }
+                            .pointerInput(uri) {
+                                detectTransformGestures { _, pan, zoomChange, _ ->
+                                    zoom = (zoom * zoomChange).coerceIn(1f, 5f)
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                }
+                            }
+                    ) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Photo crop preview",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                scaleX = zoom
+                                scaleY = zoom
+                                translationX = offsetX
+                                translationY = offsetY
+                            }
+                        )
+                    }
+                    Text("Zoom", style = MaterialTheme.typography.labelLarge)
+                    Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 1f..5f)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(onClick = { zoom = 1f; offsetX = 0f; offsetY = 0f }, modifier = Modifier.weight(1f)) {
+                            Text("Reset")
+                        }
+                        TextButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
+                        Button(
+                            enabled = viewportWidth > 0 && viewportHeight > 0,
+                            onClick = {
+                                val outWidth = if (isCover) 1600 else 1080
+                                val outHeight = if (isCover) 900 else 1080
+                                val output = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+                                val canvas = android.graphics.Canvas(output)
+                                val baseScale = maxOf(outWidth.toFloat() / bitmap.width, outHeight.toFloat() / bitmap.height)
+                                val finalScale = baseScale * zoom
+                                val matrix = Matrix().apply {
+                                    setScale(finalScale, finalScale)
+                                    postTranslate(
+                                        (outWidth - bitmap.width * finalScale) / 2f + offsetX * outWidth / viewportWidth,
+                                        (outHeight - bitmap.height * finalScale) / 2f + offsetY * outHeight / viewportHeight
+                                    )
+                                }
+                                canvas.drawBitmap(bitmap, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+                                val stream = java.io.ByteArrayOutputStream()
+                                output.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+                                output.recycle()
+                                onSave(stream.toByteArray())
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Save & Upload") }
+                    }
+                } else {
+                    Text("Image open nahi ho paayi. Dusri photo select karein.", color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onCancel) { Text("Close") }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
@@ -1713,6 +1822,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var friendCount by remember { mutableStateOf(0) }
     var profileTab by remember { mutableStateOf("All") }
     var showStoryComposer by remember { mutableStateOf(false) }
+    var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
+    var photoEditorIsCover by remember { mutableStateOf(false) }
 
     LaunchedEffect(username, uid) {
         val cleanUsername = username.trim().lowercase()
@@ -1788,72 +1899,60 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            saving = true
-            message = "Profile photo upload ho rahi hai..."
-            isError = false
-            val imageRef = FirebaseStorage.getInstance().reference.child("profile_photos/$uid/profile.jpg")
-            imageRef.putFile(uri)
-                .addOnSuccessListener {
-                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                            .set(mapOf("photoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
-                            .addOnSuccessListener {
-                                saving = false
-                                photoUrl = downloadUri.toString()
-                                message = "Profile photo update ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Photo URL save nahi hua."
-                            }
-                    }.addOnFailureListener { exception ->
-                        saving = false
-                        isError = true
-                        message = exception.localizedMessage ?: "Photo URL nahi mil paya."
-                    }
-                }
-                .addOnFailureListener { exception ->
-                    saving = false
-                    isError = true
-                    message = exception.localizedMessage ?: "Photo upload failed. Firebase Storage rules check karein."
-                }
+            photoEditorUri = uri
+            photoEditorIsCover = false
         }
     }
 
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            saving = true
-            message = "Cover photo upload ho rahi hai..."
-            isError = false
-            val imageRef = FirebaseStorage.getInstance().reference.child("cover_photos/$uid/cover.jpg")
-            imageRef.putFile(uri)
-                .addOnSuccessListener {
-                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                            .set(mapOf("coverPhotoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
-                            .addOnSuccessListener {
-                                saving = false
-                                coverPhotoUrl = downloadUri.toString()
-                                message = "Cover photo update ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Cover photo URL save nahi hua."
-                            }
-                    }.addOnFailureListener { exception ->
+            photoEditorUri = uri
+            photoEditorIsCover = true
+        }
+    }
+
+    if (photoEditorUri != null) {
+        PhotoCropDialog(
+            uri = photoEditorUri!!,
+            isCover = photoEditorIsCover,
+            onCancel = { photoEditorUri = null },
+            onSave = { jpegBytes ->
+                saving = true
+                message = if (photoEditorIsCover) "Cover photo upload ho rahi hai..." else "Profile photo upload ho rahi hai..."
+                isError = false
+                val field = if (photoEditorIsCover) "coverPhotoUrl" else "photoUrl"
+                val storagePath = if (photoEditorIsCover) "cover_photos/$uid/cover.jpg" else "profile_photos/$uid/profile.jpg"
+                val imageRef = FirebaseStorage.getInstance().reference.child(storagePath)
+                imageRef.putBytes(jpegBytes)
+                    .addOnSuccessListener {
+                        imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
+                            FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                                .set(mapOf(field to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                                .addOnSuccessListener {
+                                    saving = false
+                                    if (photoEditorIsCover) coverPhotoUrl = downloadUri.toString()
+                                    else photoUrl = downloadUri.toString()
+                                    photoEditorUri = null
+                                    message = if (photoEditorIsCover) "Cover photo update ho gayi." else "Profile photo update ho gayi."
+                                }
+                                .addOnFailureListener { exception ->
+                                    saving = false
+                                    isError = true
+                                    message = exception.localizedMessage ?: "Photo URL save nahi hua."
+                                }
+                        }.addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = exception.localizedMessage ?: "Photo URL nahi mil paya."
+                        }
+                    }
+                    .addOnFailureListener { exception ->
                         saving = false
                         isError = true
-                        message = exception.localizedMessage ?: "Cover photo URL nahi mil paya."
+                        message = exception.localizedMessage ?: "Photo upload failed. Firebase Storage rules check karein."
                     }
-                }
-                .addOnFailureListener { exception ->
-                    saving = false
-                    isError = true
-                    message = exception.localizedMessage ?: "Cover upload failed. Firebase Storage rules check karein."
-                }
-        }
+            }
+        )
     }
 
     Column(
