@@ -47,7 +47,15 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.username == username
-        && username.matches('^[a-z0-9_.]{4,20}
+        && username.matches('^[a-z0-9_.]{4,20}$')
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'createdAt']);
+      allow update: if owns(resource.data.uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.username == username
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'createdAt']);
+      allow delete: if owns(resource.data.uid);
+    }
+
     match /phoneAuthCredentials/{credentialId} {
       allow read, write: if false;
     }
