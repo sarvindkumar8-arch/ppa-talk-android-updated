@@ -1067,12 +1067,27 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () ->
     var profilePhotoUrl by remember(uid) { mutableStateOf("") }
 
     DisposableEffect(uid) {
-        val registration = FirebaseFirestore.getInstance()
-            .collection("publicProfiles").document(uid)
+        val db = FirebaseFirestore.getInstance()
+        // Resolve the avatar from the lightweight directory first, then profile/private
+        // documents as fallbacks so the composer never stays on the placeholder
+        // when one profile document is missing or still syncing.
+        val directoryRegistration = db.collection("profileDirectory").document(uid)
             .addSnapshotListener { snapshot, _ ->
-                profilePhotoUrl = snapshot?.getString("photoUrl").orEmpty()
+                snapshot?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it }
             }
-        onDispose { registration.remove() }
+        val profileRegistration = db.collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                snapshot?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it }
+            }
+        val userRegistration = db.collection("users").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                snapshot?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it }
+            }
+        onDispose {
+            directoryRegistration.remove()
+            profileRegistration.remove()
+            userRegistration.remove()
+        }
     }
 
     Card(
@@ -1357,9 +1372,15 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 ) {
                     var authorPhotoUrl by remember(post.uid) { mutableStateOf("") }
                     DisposableEffect(post.uid) {
-                        val registration = db.collection("publicProfiles").document(post.uid)
-                            .addSnapshotListener { profile, _ -> authorPhotoUrl = profile?.getString("photoUrl").orEmpty() }
-                        onDispose { registration.remove() }
+                        val directoryRegistration = db.collection("profileDirectory").document(post.uid)
+                            .addSnapshotListener { profile, _ ->
+                                profile?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { authorPhotoUrl = it }
+                            }
+                        val profileRegistration = db.collection("publicProfiles").document(post.uid)
+                            .addSnapshotListener { profile, _ ->
+                                profile?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { authorPhotoUrl = it }
+                            }
+                        onDispose { directoryRegistration.remove(); profileRegistration.remove() }
                     }
                     if (authorPhotoUrl.isNotBlank()) AsyncImage(model = authorPhotoUrl,
                         contentDescription = "Open author profile",
