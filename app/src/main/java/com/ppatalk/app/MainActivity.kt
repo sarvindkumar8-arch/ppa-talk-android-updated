@@ -2251,54 +2251,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
         }
 
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(displayName.ifBlank { "PPA Talk user" }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-            if (username.isNotBlank()) Text("@$username", style = MaterialTheme.typography.bodyMedium, color = RoyalBlue)
-            if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(postCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Posts", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(friendCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Friends", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("—", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Followers", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { message = "Profile dashboard: $postCount posts and $friendCount friends." }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Default.BarChart, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Dashboard")
-                }
-                OutlinedButton(onClick = { showStoryComposer = true }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Default.AddCircle, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add to story")
-                }
-            }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("All", "Reels", "Photos", "More").forEach { tab ->
-                    FilterChip(selected = profileTab == tab, onClick = { profileTab = tab }, label = { Text(tab) })
-                }
-            }
-            if (profileTab == "Photos") {
-                Text("Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                val savedPhotos = listOfNotNull(
-                    (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let { "Profile photo" to it },
-                    (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let { "Cover photo" to it }
-                )
-                if (savedPhotos.isEmpty()) {
-                    Text("Abhi koi photo nahi hai. Profile ya cover photo upload karne par yahan dikhegi.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        savedPhotos.forEach { (label, imageUrl) ->
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                AsyncImage(model = imageUrl, contentDescription = label,
-                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.small),
-                                    contentScale = ContentScale.Crop)
-                                Text(label, style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        repeat(2 - savedPhotos.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-            Text("Personal details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
+
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
