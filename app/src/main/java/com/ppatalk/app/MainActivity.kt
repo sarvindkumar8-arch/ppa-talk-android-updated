@@ -2470,6 +2470,7 @@ fun PublicProfileScreen(
     var work by remember(uid) { mutableStateOf("") }
     var education by remember(uid) { mutableStateOf("") }
     var relationship by remember(uid) { mutableStateOf("") }
+    var currentCity by remember(uid) { mutableStateOf("") }
     var interests by remember(uid) { mutableStateOf("") }
     var isPrivate by remember(uid) { mutableStateOf(false) }
     var loading by remember(uid) { mutableStateOf(true) }
@@ -2507,6 +2508,7 @@ fun PublicProfileScreen(
                     hobby = snapshot.getString("hobby").orEmpty()
                     school = snapshot.getString("school").orEmpty()
                     favoritePlace = snapshot.getString("favoritePlace").orEmpty()
+                    currentCity = snapshot.getString("currentCity").orEmpty()
                     hometown = snapshot.getString("hometown").orEmpty()
                     work = snapshot.getString("work").orEmpty()
                     education = snapshot.getString("education").orEmpty()
@@ -2681,26 +2683,62 @@ fun PublicProfileScreen(
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
             if (selectedTab == "All") {
-                val details = listOf(
-                    "Current city" to favoritePlace, "Hometown" to hometown,
-                    "Work" to work, "Education" to school.ifBlank { education },
-                    "Relationship" to relationship, "Hobbies" to hobby, "Interests" to interests
-                ).filter { it.second.isNotBlank() }
-                if (details.isNotEmpty()) Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Personal details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        details.forEach { (label, value) ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.width(12.dp))
-                                Column {
-                                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(value, fontWeight = FontWeight.SemiBold)
+                @Composable
+                fun DetailSection(title: String, rows: List<Pair<String, String>>, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+                    val visibleRows = rows.filter { it.second.isNotBlank() }
+                    if (visibleRows.isNotEmpty()) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            visibleRows.forEach { (label, value) ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(icon, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(34.dp))
+                                    Spacer(Modifier.width(18.dp))
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        if (label.isNotBlank()) Text(label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(value, style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.SemiBold)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                DetailSection("Personal details", listOf(
+                    "Current city" to currentCity.ifBlank { favoritePlace },
+                    "Hometown" to hometown,
+                    "Relationship" to relationship
+                ), Icons.Default.Home)
+
+                DetailSection("Work", listOf(
+                    "" to work
+                ), Icons.Default.Work)
+
+                DetailSection("Education", listOf(
+                    "" to school.ifBlank { education }
+                ), Icons.Default.School)
+
+                DetailSection("Hobbies", listOf(
+                    "" to hobby
+                ), Icons.Default.Favorite)
+
+                DetailSection("Interests", listOf(
+                    "" to interests
+                ), Icons.Default.Info)
+
+                DetailSection("Contact info", listOf(
+                    "PPA Talk username" to username.takeIf { it.isNotBlank() }?.let { "@$it" }.orEmpty()
+                ), Icons.Default.AlternateEmail)
             } else {
                 Text(if (selectedTab == "Reels") "Reels will appear here." else "Photos will appear here.",
                     modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
