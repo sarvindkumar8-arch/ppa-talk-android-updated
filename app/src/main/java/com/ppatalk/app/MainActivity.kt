@@ -2799,126 +2799,155 @@ fun FriendsScreen(
         onDispose { registration.remove() }
     }
 
-    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Column(Modifier.weight(1f)) {
-                Text("Friends", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                Text("${friends.size} friends • ${onlineFriends.intersect(friends.map { it.uid }.toSet()).size} active now",
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    var selectedFriendsTab by remember(uid) { mutableStateOf("Requests") }
+    var showSearch by remember(uid) { mutableStateOf(false) }
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
+            Text("Friends", style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showSearch = !showSearch; search = "" }) {
+                Icon(Icons.Default.Search, contentDescription = "Search friends")
             }
-            IconButton(onClick = { search = "" }) { Icon(Icons.Default.PersonAddAlt1, contentDescription = "Find friends") }
         }
-        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
-            singleLine = true, shape = CircleShape, label = { Text("Search friends") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = search.isBlank(), onClick = { search = "" }, label = { Text("All friends") })
-            FilterChip(selected = search == "__online__", onClick = { search = "__online__" }, label = { Text("Online") })
-            FilterChip(selected = search == "__requests__", onClick = { search = "__requests__" }, label = { Text("Requests ${requests.size}") })
+        if (showSearch) {
+            OutlinedTextField(
+                value = search, onValueChange = { search = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                singleLine = true, shape = CircleShape, label = { Text("Search people or friends") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = { IconButton(onClick = { search = ""; showSearch = false }) {
+                    Icon(Icons.Default.Close, contentDescription = "Close search")
+                } }
+            )
         }
-        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        Text("Friend requests (${requests.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (requests.isEmpty() && search != "__requests__") Text("No new friend requests.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (search.isBlank() || search == "__requests__") requests.forEach { request ->
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { onOpenProfile(request["fromUid"].orEmpty()) },
-                        modifier = Modifier.weight(1f), contentPadding = PaddingValues(0.dp)) {
-                        Text(request["fromName"] ?: "PPA Talk user", fontWeight = FontWeight.SemiBold)
-                    }
-                    TextButton(onClick = {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = selectedFriendsTab == "Online", onClick = { selectedFriendsTab = "Online" },
+                label = { Text("🟢 ${onlineFriends.intersect(friends.map { it.uid }.toSet()).size} online") })
+            FilterChip(selected = selectedFriendsTab == "Suggestions", onClick = { selectedFriendsTab = "Suggestions" },
+                label = { Text("Suggestions") })
+            FilterChip(selected = selectedFriendsTab == "Friends", onClick = { selectedFriendsTab = "Friends" },
+                label = { Text("Your friends") })
+            FilterChip(selected = selectedFriendsTab == "Requests", onClick = { selectedFriendsTab = "Requests" },
+                label = { Text("Requests ${requests.size}") })
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        when (selectedFriendsTab) {
+            "Requests" -> {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("Friend requests", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f))
+                    Text("${requests.size}", color = Color(0xFFD33B4A), style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { selectedFriendsTab = "Suggestions" }) { Text("See all") }
+                }
+                if (requests.isEmpty()) Text("No new friend requests.", modifier = Modifier.padding(18.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    items(requests, key = { it["id"].orEmpty() }) { request ->
                         val fromUid = request["fromUid"].orEmpty()
-                        db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "accepted")
-                            .addOnSuccessListener {
-                                db.collection("publicProfiles").document(uid).get().addOnSuccessListener { mine ->
-                                    db.collection("publicProfiles").document(fromUid).get().addOnSuccessListener { theirs ->
-                                        val batch = db.batch()
-                                        batch.set(db.collection("friends").document(uid).collection("list").document(fromUid),
-                                            mapOf("displayName" to (theirs.getString("displayName") ?: request["fromName"]),
-                                                "uid" to fromUid, "photoUrl" to (theirs.getString("photoUrl") ?: "")))
-                                        batch.set(db.collection("friends").document(fromUid).collection("list").document(uid),
-                                            mapOf("displayName" to (mine.getString("displayName") ?: currentName),
-                                                "uid" to uid, "photoUrl" to (mine.getString("photoUrl") ?: "")))
-                                        batch.commit().addOnSuccessListener { status = "Friend request accepted." }
-                                            .addOnFailureListener { status = it.localizedMessage ?: "Friend list update failed." }
-                                    }.addOnFailureListener { status = it.localizedMessage ?: "Could not load friend profile." }
-                                }.addOnFailureListener { status = it.localizedMessage ?: "Could not load your profile." }
-                            }.addOnFailureListener { status = it.localizedMessage ?: "Could not accept request." }
-                    }) { Text("Accept") }
-                    TextButton(onClick = {
-                        db.collection("friendRequests").document(request["id"].orEmpty()).update("status", "rejected")
-                            .addOnSuccessListener { status = "Request declined." }
-                            .addOnFailureListener { status = it.localizedMessage ?: "Could not decline request. Check Firestore rules." }
-                    }) { Text("Reject", color = MaterialTheme.colorScheme.error) }
-                }
-            }
-        }
-        if (search != "__requests__") Text("Your friends (${friends.size})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        if (friends.isEmpty() && search != "__requests__") Text("Your accepted friends will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        friends.filter { friend ->
-            (search != "__online__" || friend.uid in onlineFriends) &&
-            (search.isBlank() || search == "__online__" || friend.name.contains(search, true))
-        }.forEach { friend ->
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp)) {
-                        Surface(modifier = Modifier.size(44.dp).align(Alignment.TopStart), shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant, onClick = { onOpenProfile(friend.uid) }) {
-                            if (friend.photoUrl.isNotBlank()) AsyncImage(model = friend.photoUrl,
-                                contentDescription = "Open friend profile",
-                                modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                            else Icon(Icons.Default.AccountCircle, contentDescription = "Open profile", tint = RoyalBlue)
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Surface(modifier = Modifier.size(88.dp).clickable { onOpenProfile(fromUid) },
+                                shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = "Friend profile",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                            }
+                            Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(request["fromName"] ?: "PPA Talk user", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenProfile(fromUid) })
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(onClick = {
+                                        acceptFriendRequestSafely(db, uid, fromUid, currentName,
+                                            request["fromName"].orEmpty()) { success, detail -> status = detail }
+                                    }, modifier = Modifier.weight(1f)) { Text("Confirm") }
+                                    OutlinedButton(onClick = {
+                                        db.collection("friendRequests").document(request["id"].orEmpty())
+                                            .update("status", "rejected")
+                                            .addOnSuccessListener { status = "Request deleted." }
+                                            .addOnFailureListener { status = it.localizedMessage ?: "Could not delete request." }
+                                    }, modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                                        Text("Delete")
+                                    }
+                                }
+                            }
                         }
-                        if (friend.uid in onlineFriends) Surface(
-                            modifier = Modifier.size(13.dp).align(Alignment.BottomEnd),
-                            shape = CircleShape, color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)
-                        ) {}
-                    }
-                    TextButton(onClick = { onOpenProfile(friend.uid) }, modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(start = 10.dp)) {
-                        Column(horizontalAlignment = Alignment.Start) {
-                            Text(friend.name, fontWeight = FontWeight.SemiBold)
-                            Text(if (friend.uid in onlineFriends) "Active now" else "Offline",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (friend.uid in onlineFriends) Color(0xFF239B56) else MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Button(onClick = { onMessage(friend.uid, friend.name) }) {
-                        Icon(Icons.Default.Chat, contentDescription = null)
-                        Spacer(Modifier.width(5.dp)); Text("Message")
                     }
                 }
             }
-        }
-        Text("Find people", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        val matches = users.filter { person ->
-            person.name.contains(search, true) &&
-                friends.none { friend -> friend.uid == person.uid } &&
-                requests.none { request -> request["fromUid"] == person.uid }
-        }.take(30)
-        if (matches.isEmpty()) Text("No people found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        matches.forEach { person ->
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(modifier = Modifier.size(40.dp), shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant, onClick = { onOpenProfile(person.uid) }) {
-                        if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl,
-                            contentDescription = "Open profile photo",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        else Icon(Icons.Default.Person, contentDescription = null, tint = RoyalBlue)
-                    }
-                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                        TextButton(onClick = { onOpenProfile(person.uid) }, contentPadding = PaddingValues(0.dp)) {
-                            Text(person.name, fontWeight = FontWeight.SemiBold)
+            "Friends", "Online" -> {
+                val visibleFriends = friends.filter {
+                    (selectedFriendsTab != "Online" || it.uid in onlineFriends) &&
+                        (search.isBlank() || it.name.contains(search, true))
+                }
+                Text(if (selectedFriendsTab == "Online") "Friends online" else "Your friends (${visibleFriends.size})",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
+                if (visibleFriends.isEmpty()) Text("No friends to show here yet.",
+                    modifier = Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    items(visibleFriends, key = { it.uid }) { friend ->
+                        Row(Modifier.fillMaxWidth().clickable { onOpenProfile(friend.uid) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(66.dp)) {
+                                Surface(Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                    if (friend.photoUrl.isNotBlank()) AsyncImage(model = friend.photoUrl,
+                                        contentDescription = friend.name, modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                        contentScale = ContentScale.Crop)
+                                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+                                }
+                                if (friend.uid in onlineFriends) Surface(Modifier.size(15.dp).align(Alignment.BottomEnd),
+                                    shape = CircleShape, color = Color(0xFF31C46C),
+                                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
+                            }
+                            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                Text(friend.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                Text(if (friend.uid in onlineFriends) "Active now" else "Your friend",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Button(onClick = { onMessage(friend.uid, friend.name) }) { Text("Message") }
                         }
                     }
-                    if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    else OutlinedButton(onClick = {
-                        sendFriendRequestSafely(db, uid, person.uid, currentName, person.name) { _, detail ->
-                            status = detail
+                }
+            }
+            "Suggestions" -> {
+                val matches = users.filter { person ->
+                    person.name.contains(search, true) &&
+                        friends.none { it.uid == person.uid } &&
+                        requests.none { it["fromUid"] == person.uid }
+                }.take(50)
+                Text("People you may know", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
+                if (matches.isEmpty()) Text("No suggestions found.", modifier = Modifier.padding(18.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    items(matches, key = { it.uid }) { person ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Surface(Modifier.size(66.dp).clickable { onOpenProfile(person.uid) },
+                                shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl,
+                                    contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop)
+                                else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+                            }
+                            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                Text(person.name, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenProfile(person.uid) })
+                                Text("Suggested for you", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            else Button(onClick = {
+                                sendFriendRequestSafely(db, uid, person.uid, currentName, person.name) { _, detail -> status = detail }
+                            }) { Text("Add Friend") }
                         }
-                    }) { Text("Add Friend") }
+                    }
                 }
             }
         }
