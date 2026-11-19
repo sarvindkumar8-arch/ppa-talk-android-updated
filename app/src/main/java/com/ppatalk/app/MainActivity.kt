@@ -1987,9 +1987,17 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             isCover = photoEditorIsCover,
             onCancel = { photoEditorUri = null },
             onSave = { originalBytes, croppedBytes ->
-                saving = true
-                message = if (photoEditorIsCover) "Original cover photo upload ho rahi hai..." else "Original profile photo upload ho rahi hai..."
-                isError = false
+                val selectedUri = photoEditorUri
+                if (selectedUri == null) {
+                    saving = false
+                    isError = true
+                    message = "Selected photo dobara choose karein."
+                } else {
+                    saving = true
+                    message = if (photoEditorIsCover) "Original cover photo upload ho rahi hai..." else "Original profile photo upload ho rahi hai..."
+                    isError = false
+                    // Close the editor so upload progress and any error are visible on the Profile screen.
+                    photoEditorUri = null
                 val isCover = photoEditorIsCover
                 val originalField = if (isCover) "coverPhotoOriginalUrl" else "photoOriginalUrl"
                 val displayField = if (isCover) "coverPhotoUrl" else "photoUrl"
@@ -1997,7 +2005,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 val storage = FirebaseStorage.getInstance().reference
                 val originalRef = storage.child("$folder/original.jpg")
                 val displayRef = storage.child(if (isCover) "$folder/cover.jpg" else "$folder/profile.jpg")
-                val originalMimeType = context.contentResolver.getType(photoEditorUri!!) ?: "image/jpeg"
+                val originalMimeType = context.contentResolver.getType(selectedUri) ?: "image/jpeg"
                 val originalMetadata = com.google.firebase.storage.StorageMetadata.Builder()
                     .setContentType(originalMimeType).build()
                 val croppedMetadata = com.google.firebase.storage.StorageMetadata.Builder()
@@ -2081,6 +2089,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         isError = true
                         message = exception.localizedMessage ?: "Original photo upload failed. Firebase Storage rules check karein."
                     }
+                }
             }
         )
     }
