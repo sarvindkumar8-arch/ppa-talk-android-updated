@@ -184,6 +184,7 @@ class PpaCallController(
         joining = true
         onStatus("Connecting securely…")
         scope.launch {
+            var connectionStage = "Firebase token request"
             try {
                 val response = functions.getHttpsCallable("createLiveKitToken")
                     .call(mapOf("callId" to id)).await()
@@ -194,6 +195,7 @@ class PpaCallController(
                 val token = result["token"] as? String
                     ?: error("LiveKit access token is missing.")
 
+                connectionStage = "LiveKit room connection"
                 val liveRoom = LiveKit.create(context.applicationContext)
                 room = liveRoom
 
@@ -230,6 +232,7 @@ class PpaCallController(
                 }
 
                 liveRoom.connect(serverUrl, token)
+                connectionStage = "Microphone initialization"
                 val participant = liveRoom.localParticipant
 
                 // Do not report a successful call if the media engine failed to
@@ -277,9 +280,10 @@ class PpaCallController(
                 ).addOnFailureListener { Log.w("PPATalkLiveKit", "Could not update accepted status", it) }
                 onStatus(if (callType == "video") "Connected • waiting for remote video" else "Connected")
             } catch (t: Throwable) {
-                Log.e("PPATalkLiveKit", "Could not join room", t)
+                Log.e("PPATalkLiveKit", "Could not join room during $connectionStage", t)
                 joining = false
-                onError(t.localizedMessage ?: "Could not connect the call.")
+                val detail = t.localizedMessage ?: t.message ?: "No error details"
+                onError("$connectionStage failed (${t.javaClass.simpleName}): $detail")
             }
         }
     }
