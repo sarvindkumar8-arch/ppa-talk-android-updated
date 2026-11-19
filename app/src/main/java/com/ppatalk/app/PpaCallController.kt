@@ -204,16 +204,20 @@ class PpaCallController(
             val videoTrack = factory.createVideoTrack("ppa_video_$uid", source)
             localVideo = videoTrack
             videoTrack.setEnabled(true)
-            // Add the camera track through the standard Unified Plan track API.
-            // This creates the sender/transceiver and associates the stream ID in
-            // the same way on caller and callee, avoiding mismatched pre-created
-            // transceivers when the incoming offer is applied.
-            val videoSender = peer?.addTrack(videoTrack, listOf("ppa_stream"))
-            if (videoSender == null) {
-                onError("Could not add local video track to the call.")
+            // Restore the previously working bidirectional transceiver setup.
+            // The addTrack experiment caused ICE/audio regression on the test phones.
+            val videoTransceiver = peer?.addTransceiver(
+                videoTrack,
+                RtpTransceiver.RtpTransceiverInit(
+                    RtpTransceiver.RtpTransceiverDirection.SEND_RECV,
+                    listOf("ppa_stream")
+                )
+            )
+            if (videoTransceiver == null) {
+                onError("Could not create video transceiver.")
                 return
             }
-            Log.d("PPATalkWebRTC", "Local video sender added: trackId=${videoSender.track()?.id()}, streams=ppa_stream")
+            Log.d("PPATalkWebRTC", "Local video transceiver created: mid=${videoTransceiver.mid}, direction=${videoTransceiver.direction}")
             localRenderer?.let { localVideo?.addSink(it) }
         }
     }
