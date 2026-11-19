@@ -24,7 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlin.math.roundToInt
-import org.webrtc.SurfaceViewRenderer
+import io.livekit.android.renderer.SurfaceViewRenderer
 
 @Composable
 fun PpaCallDialog(
