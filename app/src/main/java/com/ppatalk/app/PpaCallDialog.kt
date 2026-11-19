@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -211,9 +212,13 @@ private fun CameraSwitchControl(onClick: () -> Unit) {
             shape = CircleShape,
             color = Color(0x5507111F)
         ) {
-            TextButton(onClick = onClick, modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(0.dp)) {
-                Text("Flip", color = Color.White, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    imageVector = Icons.Default.FlipCameraAndroid,
+                    contentDescription = "Switch camera",
+                    tint = Color.White,
+                    modifier = Modifier.size(27.dp)
+                )
             }
         }
         Text("Camera", color = Color.White, style = MaterialTheme.typography.labelMedium)
