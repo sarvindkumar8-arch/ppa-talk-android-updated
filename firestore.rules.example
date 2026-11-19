@@ -42,6 +42,19 @@ service cloud.firestore {
       allow delete: if owns(userId);
     }
 
+    // Minimal discoverability card for every account, including private profiles.
+    // Contains only name, username, avatar, cover and visibility; no bio or personal details.
+    match /profileDirectory/{userId} {
+      allow read: if signedIn();
+      allow create, update: if owns(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
+          'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt'
+        ]);
+      allow delete: if owns(userId);
+    }
+
     // Username reservations: one document per normalized username.
     // A user can only reserve a name for their own account.
     match /usernameClaims/{username} {
