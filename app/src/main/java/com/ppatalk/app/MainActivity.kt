@@ -2985,9 +2985,85 @@ fun IncomingCallScreen(
 
 @Composable
 fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val auth = remember { FirebaseAuth.getInstance() }
+    val account = auth.currentUser
+    var emailVerified by remember { mutableStateOf(account?.isEmailVerified == true) }
+    var securityMessage by remember { mutableStateOf("") }
+    var securityBusy by remember { mutableStateOf(false) }
+
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary)
+
+        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Account security", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("Account", fontWeight = FontWeight.SemiBold)
+                Text(account?.email ?: account?.phoneNumber ?: "Signed-in PPA Talk account",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (account?.email != null) {
+                    Text(if (emailVerified) "Email status: Verified" else "Email status: Not verified",
+                        color = if (emailVerified) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            securityBusy = true
+                            securityMessage = ""
+                            account.reload().addOnCompleteListener { reloadTask ->
+                                if (reloadTask.isSuccessful) {
+                                    emailVerified = auth.currentUser?.isEmailVerified == true
+                                    securityMessage = if (emailVerified) "Your email is verified."
+                                        else "Email is not verified yet. Check your inbox."
+                                } else {
+                                    securityMessage = reloadTask.exception?.localizedMessage ?: "Could not refresh email status."
+                                }
+                                securityBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Refresh verification status") }
+                    if (!emailVerified) {
+                        Button(
+                            enabled = !securityBusy,
+                            onClick = {
+                                securityBusy = true
+                                securityMessage = ""
+                                account.sendEmailVerification().addOnCompleteListener { task ->
+                                    securityMessage = if (task.isSuccessful) "Verification email sent. Check your inbox and spam folder."
+                                        else task.exception?.localizedMessage ?: "Could not send verification email."
+                                    securityBusy = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Resend verification email") }
+                    }
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            securityBusy = true
+                            securityMessage = ""
+                            auth.sendPasswordResetEmail(account.email!!)
+                                .addOnCompleteListener { task ->
+                                    securityMessage = if (task.isSuccessful) "Password reset link sent. Check your inbox and spam folder."
+                                        else task.exception?.localizedMessage ?: "Could not send password reset email."
+                                    securityBusy = false
+                                }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Reset password") }
+                } else {
+                    Text("This account uses mobile-number authentication.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (securityMessage.isNotBlank()) {
+                    Text(securityMessage, style = MaterialTheme.typography.bodySmall,
+                        color = if (securityMessage.contains("sent", ignoreCase = true) || securityMessage.contains("verified", ignoreCase = true))
+                            Color(0xFF2E7D32) else MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2998,8 +3074,8 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                 Switch(checked = isDarkMode, onCheckedChange = onThemeModeChange)
             }
         }
-        Text("Your theme choice is saved on this device.", style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Your theme choice is saved on this device. Log out from the account menu.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
