@@ -84,7 +84,7 @@ class PpaCallController(
         val ref = db.collection("callSessions").document(id)
         ref.update(
             mapOf(
-                "status" to "accepting",
+                "status" to "accepted",
                 "acceptedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
