@@ -286,10 +286,20 @@ exports.createLiveKitToken = onCall({
   const apiKey = LIVEKIT_API_KEY.value();
   const apiSecret = LIVEKIT_API_SECRET.value();
   const serverUrl = LIVEKIT_URL.value();
+  const urlHost = (() => {
+    try { return new URL(serverUrl).host; } catch (_) { return "invalid-url"; }
+  })();
   if (!apiKey || !apiSecret || !serverUrl || !/^wss:\/\//.test(serverUrl)) {
+    console.error("LiveKit token config invalid", {
+      hasApiKey: Boolean(apiKey),
+      hasApiSecret: Boolean(apiSecret),
+      hasServerUrl: Boolean(serverUrl),
+      urlProtocolValid: /^wss:\/\//.test(serverUrl || "")
+    });
     throw new HttpsError("failed-precondition", "LiveKit server configuration is incomplete.");
   }
 
+  const now = Math.floor(Date.now() / 1000);
   const token = new AccessToken(apiKey, apiSecret, {
     identity: uid,
     ttl: "10m"
@@ -302,9 +312,44 @@ exports.createLiveKitToken = onCall({
     canPublishData: true
   });
 
+  const jwt = await token.toJwt();
+  // Decode only the JWT payload for diagnostics; never log the token or API secret.
+  let claims;
+  try {
+    const payloadPart = jwt.split(".")[1];
+    claims = JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8"));
+  } catch (error) {
+    console.error("LiveKit JWT payload decode failed", { errorName: error?.name || "Error" });
+    throw new HttpsError("internal", "Could not validate the generated LiveKit token.");
+  }
+
+  const diagnostic = {
+    urlHost,
+    identityMatches: claims.sub === uid,
+    issuerMatchesApiKey: claims.iss === apiKey,
+    hasRoomJoinGrant: claims.video?.roomJoin === true,
+    roomMatchesCall: claims.video?.room === callId,
+    canPublish: claims.video?.canPublish === true,
+    canSubscribe: claims.video?.canSubscribe === true,
+    issuedAtPresent: Number.isFinite(claims.iat),
+    notBeforePresent: claims.nbf == null || Number.isFinite(claims.nbf),
+    expiresAtPresent: Number.isFinite(claims.exp),
+    expiresInSeconds: Number.isFinite(claims.exp) ? claims.exp - now : null
+  };
+  console.info("LiveKit token diagnostics", diagnostic);
+
+  if (!diagnostic.identityMatches || !diagnostic.issuerMatchesApiKey ||
+      !diagnostic.hasRoomJoinGrant || !diagnostic.roomMatchesCall ||
+      !diagnostic.canPublish || !diagnostic.canSubscribe ||
+      !diagnostic.issuedAtPresent || !diagnostic.expiresAtPresent ||
+      diagnostic.expiresInSeconds <= 0) {
+    console.error("LiveKit generated token failed local validation", diagnostic);
+    throw new HttpsError("internal", "Generated LiveKit token did not pass validation.");
+  }
+
   return {
     serverUrl,
-    token: await token.toJwt(),
+    token: jwt,
     roomName: callId,
     identity: uid
   };
