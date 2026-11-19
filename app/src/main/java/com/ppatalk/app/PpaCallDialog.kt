@@ -159,7 +159,7 @@ fun PpaCallDialog(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color(0xFF101827))
+                        .background(Color.Transparent)
                         .navigationBarsPadding()
                         .padding(horizontal = 12.dp, vertical = 24.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -189,7 +189,7 @@ fun PpaCallDialog(
                     Surface(
                         modifier = Modifier.size(66.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.error
+                        color = Color(0x66E53935)
                     ) {
                         IconButton(onClick = onEnd, modifier = Modifier.fillMaxSize()) {
                             Icon(Icons.Default.CallEnd, contentDescription = "End call",
@@ -209,7 +209,7 @@ private fun CameraSwitchControl(onClick: () -> Unit) {
         Surface(
             modifier = Modifier.size(58.dp),
             shape = CircleShape,
-            color = Color(0xFF243447)
+            color = Color(0x5507111F)
         ) {
             TextButton(onClick = onClick, modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(0.dp)) {
@@ -232,7 +232,7 @@ private fun CallControl(
         Surface(
             modifier = Modifier.size(58.dp),
             shape = CircleShape,
-            color = if (active) Color(0xFF245B91) else Color(0xFF243447)
+            color = if (active) Color(0x6655A9FF) else Color(0x5507111F)
         ) {
             IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
                 Icon(icon, contentDescription = label, tint = Color.White,
