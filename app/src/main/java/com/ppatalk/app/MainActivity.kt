@@ -1707,38 +1707,79 @@ private fun PhotoCropDialog(
 ) {
     val context = LocalContext.current
     val bitmap = remember(uri) {
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-        }.getOrNull()
+        runCatching { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }.getOrNull()
     }
     var zoom by remember(uri) { mutableFloatStateOf(1f) }
     var offsetX by remember(uri) { mutableFloatStateOf(0f) }
     var offsetY by remember(uri) { mutableFloatStateOf(0f) }
     var viewportWidth by remember { mutableIntStateOf(0) }
     var viewportHeight by remember { mutableIntStateOf(0) }
+    var isCropping by remember(uri) { mutableStateOf(true) }
+    var originalBytes by remember(uri) { mutableStateOf<ByteArray?>(null) }
+    var croppedBytes by remember(uri) { mutableStateOf<ByteArray?>(null) }
+
+    fun makeCrop(source: Bitmap): ByteArray {
+        val outWidth = if (isCover) 1600 else 1080
+        val outHeight = if (isCover) 900 else 1080
+        val output = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(output)
+        canvas.drawColor(android.graphics.Color.BLACK)
+        val fitScale = minOf(viewportWidth.toFloat() / source.width, viewportHeight.toFloat() / source.height)
+        val imageScale = fitScale * zoom
+        val frameWidth = if (isCover) minOf(viewportWidth * 0.9f, viewportHeight * 0.9f * (16f / 9f))
+            else minOf(viewportWidth, viewportHeight) * 0.82f
+        val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
+        val frameLeft = (viewportWidth - frameWidth) / 2f
+        val frameTop = (viewportHeight - frameHeight) / 2f
+        val outputScale = outWidth.toFloat() / frameWidth
+        val imageLeft = viewportWidth / 2f + offsetX - source.width * imageScale / 2f
+        val imageTop = viewportHeight / 2f + offsetY - source.height * imageScale / 2f
+        val matrix = Matrix().apply {
+            setScale(imageScale * outputScale, imageScale * outputScale)
+            postTranslate((imageLeft - frameLeft) * outputScale, (imageTop - frameTop) * outputScale)
+        }
+        canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        val stream = java.io.ByteArrayOutputStream()
+        output.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+        output.recycle()
+        return stream.toByteArray()
+    }
 
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 18.dp),
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surface
         ) {
-            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(if (isCover) "Adjust cover photo" else "Adjust profile photo",
-                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "Puri original photo preview mein dikhegi. Frame ke andar ka hissa profile/cover par set hoga. Photo ko drag ya pinch karke adjust karein.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (bitmap != null) {
+            if (bitmap == null) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Image open nahi ho paayi. Dusri photo select karein.", color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onCancel) { Text("Close") }
+                }
+            } else if (isCropping) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onCancel) { Text("‹ Back") }
+                        Text("Crop", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            if (original != null) {
+                                originalBytes = original
+                                croppedBytes = makeCrop(bitmap)
+                                isCropping = false
+                            }
+                        }, enabled = viewportWidth > 0 && viewportHeight > 0) { Text("DONE") }
+                    }
+                    Text("Puri photo ko drag aur pinch karke frame mein set karein.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Box(
-                        Modifier.fillMaxWidth()
-                            .aspectRatio(if (isCover) 16f / 9f else 1f)
-                            .background(Color(0xFF202633))
+                        Modifier.fillMaxWidth().height(480.dp)
+                            .background(Color(0xFF292929))
                             .onSizeChanged { viewportWidth = it.width; viewportHeight = it.height }
                             .pointerInput(uri) {
                                 detectTransformGestures { _, pan, zoomChange, _ ->
-                                    zoom = (zoom * zoomChange).coerceIn(0.5f, 6f)
+                                    zoom = (zoom * zoomChange).coerceIn(0.25f, 6f)
                                     offsetX += pan.x
                                     offsetY += pan.y
                                 }
@@ -1746,7 +1787,7 @@ private fun PhotoCropDialog(
                     ) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Full original photo preview",
+                            contentDescription = "Full original photo for cropping",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize().graphicsLayer {
                                 scaleX = zoom
@@ -1757,70 +1798,63 @@ private fun PhotoCropDialog(
                         )
                         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                             val frameWidth = if (isCover) minOf(size.width * 0.9f, size.height * 0.9f * (16f / 9f))
-                                else minOf(size.width, size.height) * 0.72f
+                                else minOf(size.width, size.height) * 0.82f
                             val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
                             val left = (size.width - frameWidth) / 2f
                             val top = (size.height - frameHeight) / 2f
-                            val frame = androidx.compose.ui.geometry.Rect(left, top, left + frameWidth, top + frameHeight)
+                            val frameRect = androidx.compose.ui.geometry.Rect(left, top, left + frameWidth, top + frameHeight)
+                            val mask = androidx.compose.ui.graphics.Path().apply {
+                                fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
+                                addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
+                                if (isCover) addRect(frameRect) else addOval(frameRect)
+                            }
+                            drawPath(mask, Color.Black.copy(alpha = 0.58f))
                             if (isCover) {
-                                drawRect(Color.White.copy(alpha = 0.95f), topLeft = androidx.compose.ui.geometry.Offset(frame.left, frame.top),
-                                    size = androidx.compose.ui.geometry.Size(frame.width, frame.height),
+                                drawRect(Color(0xFF1877F2), topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                                    size = androidx.compose.ui.geometry.Size(frameWidth, frameHeight),
                                     style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
                             } else {
-                                drawCircle(Color.White.copy(alpha = 0.95f), radius = frameWidth / 2f,
-                                    center = frame.center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                                drawCircle(Color(0xFF1877F2), radius = frameWidth / 2f, center = frameRect.center,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
                             }
                         }
                     }
                     Text("Zoom", style = MaterialTheme.typography.labelLarge)
-                    Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 0.5f..6f)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(onClick = { zoom = 1f; offsetX = 0f; offsetY = 0f }, modifier = Modifier.weight(1f)) {
-                            Text("Reset")
-                        }
-                        TextButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
-                        Button(
-                            enabled = viewportWidth > 0 && viewportHeight > 0,
-                            onClick = {
-                                val outWidth = if (isCover) 1600 else 1080
-                                val outHeight = if (isCover) 900 else 1080
-                                val output = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
-                                val canvas = android.graphics.Canvas(output)
-                                canvas.drawColor(android.graphics.Color.BLACK)
-                                val fitScale = minOf(
-                                    viewportWidth.toFloat() / bitmap.width,
-                                    viewportHeight.toFloat() / bitmap.height
-                                )
-                                val imageScale = fitScale * zoom
-                                val frameWidth = if (isCover) minOf(viewportWidth * 0.9f, viewportHeight * 0.9f * (16f / 9f))
-                                    else minOf(viewportWidth, viewportHeight) * 0.72f
-                                val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
-                                val frameLeft = (viewportWidth - frameWidth) / 2f
-                                val frameTop = (viewportHeight - frameHeight) / 2f
-                                val outputScale = outWidth.toFloat() / frameWidth
-                                val imageLeft = viewportWidth / 2f + offsetX - bitmap.width * imageScale / 2f
-                                val imageTop = viewportHeight / 2f + offsetY - bitmap.height * imageScale / 2f
-                                val matrix = Matrix().apply {
-                                    setScale(imageScale * outputScale, imageScale * outputScale)
-                                    postTranslate(
-                                        (imageLeft - frameLeft) * outputScale,
-                                        (imageTop - frameTop) * outputScale
-                                    )
-                                }
-                                canvas.drawBitmap(bitmap, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
-                                val stream = java.io.ByteArrayOutputStream()
-                                output.compress(Bitmap.CompressFormat.JPEG, 95, stream)
-                                output.recycle()
-                                val originalBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                if (originalBytes == null) return@Button
-                                onSave(originalBytes, stream.toByteArray())
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Save & Upload") }
+                    Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 0.25f..6f)
+                    OutlinedButton(onClick = { zoom = 1f; offsetX = 0f; offsetY = 0f }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Reset position")
                     }
-                } else {
-                    Text("Image open nahi ho paayi. Dusri photo select karein.", color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = onCancel) { Text("Close") }
+                }
+            } else {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { isCropping = true }) { Text("‹ Crop") }
+                        Text("Preview", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        Button(onClick = {
+                            val original = originalBytes
+                            val crop = croppedBytes
+                            if (original != null && crop != null) onSave(original, crop)
+                        }) { Text("SAVE") }
+                    }
+                    Text("Preview your ${if (isCover) "cover" else "profile"} photo",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    croppedBytes?.let { bytes ->
+                        val preview = remember(bytes) {
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                        }
+                        if (preview != null) {
+                            Image(bitmap = preview, contentDescription = "Final photo preview",
+                                modifier = Modifier.fillMaxWidth()
+                                    .aspectRatio(if (isCover) 16f / 9f else 1f)
+                                    .clip(if (isCover) MaterialTheme.shapes.medium else CircleShape),
+                                contentScale = ContentScale.Crop)
+                        }
+                    }
+                    OutlinedButton(onClick = { isCropping = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Crop / Adjust again")
+                    }
+                    TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
                 }
             }
         }
