@@ -260,9 +260,10 @@ class PpaCallController(
         remoteRenderer?.release()
         localRenderer = null
         remoteRenderer = null
-        scope.launch {
-            try { room?.disconnect() } catch (_: Throwable) { }
-            room = null
+        val activeRoom = room
+        room = null
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try { activeRoom?.disconnect() } catch (_: Throwable) { }
         }
         scope.cancel()
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
