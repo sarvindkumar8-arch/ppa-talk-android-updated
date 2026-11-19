@@ -1820,7 +1820,6 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var isError by remember { mutableStateOf(false) }
     var postCount by remember { mutableStateOf(0) }
     var friendCount by remember { mutableStateOf(0) }
-    var photoPosts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var profileTab by remember { mutableStateOf("All") }
     var showStoryComposer by remember { mutableStateOf(false) }
     var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
@@ -1861,15 +1860,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         val friendsRegistration = db.collection("friends").document(uid).collection("list").addSnapshotListener { snap, _ ->
             if (snap != null) friendCount = snap.size()
         }
-        val photosRegistration = db.collection("posts").whereEqualTo("uid", uid)
-            .whereEqualTo("mediaType", "image").addSnapshotListener { snap, _ ->
-                if (snap != null) photoPosts = snap.documents.map { doc ->
-                    FeedPost(doc.id, uid, doc.getString("authorName") ?: "PPA Talk user",
-                        doc.getString("text").orEmpty(), doc.getTimestamp("createdAt")?.toDate(),
-                        doc.getString("mediaUrl").orEmpty(), "image", doc.getString("postType") ?: "post")
-                }.sortedByDescending { it.createdAt?.time ?: 0L }
-            }
-        onDispose { postsRegistration.remove(); friendsRegistration.remove(); photosRegistration.remove() }
+        onDispose { postsRegistration.remove(); friendsRegistration.remove() }
     }
 
     DisposableEffect(uid) {
@@ -1940,30 +1931,36 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                 .addOnSuccessListener {
                                     if (photoEditorIsCover) coverPhotoUrl = downloadUri.toString()
                                     else photoUrl = downloadUri.toString()
-                                    val photoPost = hashMapOf(
-                                        "uid" to uid,
-                                        "authorName" to displayName.ifBlank { "PPA Talk user" },
-                                        "text" to if (photoEditorIsCover) "Updated their cover photo." else "Updated their profile photo.",
-                                        "mediaUrl" to downloadUri.toString(),
-                                        "mediaType" to "image",
-                                        "postType" to "post",
-                                        "photoKind" to if (photoEditorIsCover) "cover" else "profile",
-                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                    )
-                                    FirebaseFirestore.getInstance().collection("posts").add(photoPost)
-                                        .addOnSuccessListener {
-                                            saving = false
-                                            photoEditorUri = null
-                                            message = if (photoEditorIsCover)
-                                                "Cover photo update ho gayi aur Photos section + Feed mein share ho gayi."
-                                            else "Profile photo update ho gayi aur Photos section + Feed mein share ho gayi."
-                                        }
-                                        .addOnFailureListener { exception ->
-                                            saving = false
-                                            isError = true
-                                            photoEditorUri = null
-                                            message = "Photo profile par save ho gayi, lekin Feed post nahi ban paayi: ${exception.localizedMessage ?: "permission denied"}"
-                                        }
+                                    if (profileVisibility == "public") {
+                                        val photoPost = hashMapOf(
+                                            "uid" to uid,
+                                            "authorName" to displayName.ifBlank { "PPA Talk user" },
+                                            "text" to if (photoEditorIsCover) "Updated their cover photo." else "Updated their profile photo.",
+                                            "mediaUrl" to downloadUri.toString(),
+                                            "mediaType" to "image",
+                                            "postType" to "post",
+                                            "photoKind" to if (photoEditorIsCover) "cover" else "profile",
+                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        )
+                                        FirebaseFirestore.getInstance().collection("posts").add(photoPost)
+                                            .addOnSuccessListener {
+                                                saving = false
+                                                photoEditorUri = null
+                                                message = if (photoEditorIsCover)
+                                                    "Cover photo update ho gayi aur Photos section + Feed mein share ho gayi."
+                                                else "Profile photo update ho gayi aur Photos section + Feed mein share ho gayi."
+                                            }
+                                            .addOnFailureListener { exception ->
+                                                saving = false
+                                                isError = true
+                                                photoEditorUri = null
+                                                message = "Photo profile par save ho gayi, lekin Feed post nahi ban paayi: ${exception.localizedMessage ?: "permission denied"}"
+                                            }
+                                    } else {
+                                        saving = false
+                                        photoEditorUri = null
+                                        message = "Photo save ho gayi. Private profile hone ke karan Feed par share nahi ki gayi."
+                                    }
                                 }
                                 .addOnFailureListener { exception ->
                                     saving = false
@@ -2086,19 +2083,25 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
             if (profileTab == "Photos") {
                 Text("Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (photoPosts.isEmpty()) {
-                    Text("Abhi koi photo nahi hai. Profile ya cover photo upload karne par yahan save hogi.",
+                val savedPhotos = listOfNotNull(
+                    photoUrl.takeIf { it.isNotBlank() }?.let { "Profile photo" to it },
+                    coverPhotoUrl.takeIf { it.isNotBlank() }?.let { "Cover photo" to it }
+                )
+                if (savedPhotos.isEmpty()) {
+                    Text("Abhi koi photo nahi hai. Profile ya cover photo upload karne par yahan dikhegi.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    photoPosts.chunked(3).forEach { photoRow ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            photoRow.forEach { photo ->
-                                AsyncImage(model = photo.mediaUrl, contentDescription = photo.text,
-                                    modifier = Modifier.weight(1f).aspectRatio(1f).clip(MaterialTheme.shapes.small),
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        savedPhotos.forEach { (label, imageUrl) ->
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                AsyncImage(model = imageUrl, contentDescription = label,
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.small),
                                     contentScale = ContentScale.Crop)
+                                Text(label, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            repeat(3 - photoRow.size) { Spacer(Modifier.weight(1f)) }
                         }
+                        repeat(2 - savedPhotos.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
