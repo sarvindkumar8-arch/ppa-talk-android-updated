@@ -646,27 +646,39 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         val publicProfileRef = db.collection("publicProfiles").document(uid)
         // Existing accounts created before profile visibility was added may have no
         // visibility field. Default those legacy profiles to public exactly once.
+        val directoryRef = db.collection("profileDirectory").document(uid)
         publicProfileRef.get().addOnSuccessListener { profile ->
             if (!profile.exists()) {
                 publicProfileRef.set(mapOf(
-                    "uid" to uid,
-                    "displayName" to displayName.ifBlank { "PPA Talk user" },
+                    "uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
                     "profileVisibility" to "public",
                     "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 ), com.google.firebase.firestore.SetOptions.merge())
-            } else if (!profile.contains("profileVisibility")) {
-                publicProfileRef.set(mapOf(
-                    "profileVisibility" to "public",
+                directoryRef.set(mapOf("uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
+                    "profileVisibility" to "public", "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                    com.google.firebase.firestore.SetOptions.merge())
+            } else {
+                if (!profile.contains("profileVisibility")) {
+                    publicProfileRef.set(mapOf("profileVisibility" to "public",
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                        com.google.firebase.firestore.SetOptions.merge())
+                }
+                directoryRef.set(mapOf(
+                    "uid" to uid,
+                    "displayName" to (profile.getString("displayName") ?: displayName.ifBlank { "PPA Talk user" }),
+                    "username" to profile.getString("username").orEmpty(),
+                    "photoUrl" to profile.getString("photoUrl").orEmpty(),
+                    "coverPhotoUrl" to profile.getString("coverPhotoUrl").orEmpty(),
+                    "profileVisibility" to (profile.getString("profileVisibility") ?: "public"),
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 ), com.google.firebase.firestore.SetOptions.merge())
             }
         }
         fun setPresence(online: Boolean) {
-            publicProfileRef.set(
-                mapOf("isOnline" to online, "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
-                com.google.firebase.firestore.SetOptions.merge()
-            )
+            val presence = mapOf("isOnline" to online, "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+            publicProfileRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
+            directoryRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
         }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -2391,6 +2403,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         )
                         val usernameRef = db.collection("usernameClaims").document(cleanUsername)
                         val profileRef = db.collection("publicProfiles").document(uid)
+                        val directoryRef = db.collection("profileDirectory").document(uid)
                         val usersRef = db.collection("users").document(uid)
                         db.runTransaction { transaction ->
                             // Complete every transaction read before the first write.
@@ -2413,6 +2426,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             }
                             transaction.set(usernameRef, mapOf("uid" to uid, "username" to cleanUsername, "createdAt" to timestamp))
                             transaction.set(profileRef, publicUpdates, com.google.firebase.firestore.SetOptions.merge())
+                            transaction.set(directoryRef, mapOf(
+                                "uid" to uid, "displayName" to cleanName, "username" to cleanUsername,
+                                "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                                "profileVisibility" to profileVisibility, "updatedAt" to timestamp
+                            ), com.google.firebase.firestore.SetOptions.merge())
                             null
                         }.addOnSuccessListener {
                             // Keep private fields in users/{uid}; never copy them to publicProfiles.
