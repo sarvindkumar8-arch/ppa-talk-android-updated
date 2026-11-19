@@ -26,7 +26,18 @@ service cloud.firestore {
     // Public directory contains only fields safe to show to signed-in users.
     // Never put email, phone, date of birth, gender, or other private details here.
     match /publicProfiles/{userId} {
+      function isAcceptedFriend() {
+        return signedIn()
+          && exists(/databases/$(database)/documents/friends/$(userId)/list/$(request.auth.uid))
+          && (
+            (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid))
+              && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid)).data.status == 'accepted')
+            || (exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId))
+              && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == 'accepted')
+          );
+      }
       allow read: if owns(userId)
+        || isAcceptedFriend()
         || !("profileVisibility" in resource.data)
         || resource.data.profileVisibility == "public";
       allow create: if owns(userId)
