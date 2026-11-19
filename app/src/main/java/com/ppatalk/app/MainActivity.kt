@@ -2102,71 +2102,84 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             fontWeight = FontWeight.Bold, color = RoyalBlue,
             modifier = Modifier.padding(start = 20.dp, top = 16.dp))
 
-        // Facebook-style cover banner with an upload/change control.
-        Box(
-            modifier = Modifier.fillMaxWidth().height(190.dp).padding(horizontal = 12.dp)
-        ) {
-            Card(
-                modifier = Modifier.fillMaxSize(),
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
+        // Facebook-style cover with overlapping circular profile photo.
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(224.dp)) {
+            Card(Modifier.fillMaxWidth().height(190.dp), shape = MaterialTheme.shapes.large) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (coverPhotoUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = coverPhotoUrl,
-                            contentDescription = "Profile cover photo",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                        AsyncImage(model = coverPhotoUrl, contentDescription = "Profile cover photo",
+                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Photo, contentDescription = null,
-                                tint = RoyalBlue, modifier = Modifier.size(38.dp))
+                            Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(38.dp))
                             Text("Your cover photo", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
             FilledIconButton(
-                onClick = { coverPicker.launch("image/*") },
-                enabled = !saving,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = RoyalBlue, contentColor = Color.White
-                )
+                onClick = { coverPicker.launch("image/*") }, enabled = !saving,
+                modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
+            ) { Icon(Icons.Default.CameraAlt, contentDescription = "Change cover photo") }
+            Surface(
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp),
+                shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface)
             ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = "Change cover photo")
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Box(
-                modifier = Modifier.size(104.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (photoUrl.isNotBlank()) {
-                    AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(104.dp).clip(CircleShape),
-                        contentScale = ContentScale.Crop)
-                } else {
-                    Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo placeholder",
-                        modifier = Modifier.size(104.dp), tint = RoyalBlue)
+                Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
+                    if (photoUrl.isNotBlank()) {
+                        AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                    } else Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo",
+                        modifier = Modifier.fillMaxSize(), tint = RoyalBlue)
+                    FilledIconButton(
+                        onClick = { imagePicker.launch("image/*") }, enabled = !saving,
+                        modifier = Modifier.align(Alignment.BottomEnd).size(36.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
+                    ) { Icon(Icons.Default.CameraAlt, contentDescription = "Edit profile photo", modifier = Modifier.size(18.dp)) }
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(displayName.ifBlank { "PPA Talk user" },
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("PPA Talk member", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !saving) {
-                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Edit profile photo")
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(displayName.ifBlank { "PPA Talk user" }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            if (username.isNotBlank()) Text("@$username", style = MaterialTheme.typography.bodyMedium, color = RoyalBlue)
+            if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(postCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Posts", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(friendCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Friends", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("—", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Followers", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { message = "Profile dashboard: $postCount posts and $friendCount friends." }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Edit, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Edit Profile")
+                }
+                OutlinedButton(onClick = { showStoryComposer = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.AddCircle, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add to Story")
+                }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Reels", "Photos", "More").forEach { tab ->
+                    FilterChip(selected = profileTab == tab, onClick = { profileTab = tab }, label = { Text(tab) })
+                }
+            }
+            if (profileTab == "Photos") {
+                Text("Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                val savedPhotos = listOfNotNull(
+                    (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let { "Profile photo" to it },
+                    (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let { "Cover photo" to it }
+                )
+                if (savedPhotos.isEmpty()) Text("Abhi koi photo nahi hai.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    savedPhotos.forEach { (label, imageUrl) ->
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AsyncImage(model = imageUrl, contentDescription = label,
+                                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.small),
+                                contentScale = ContentScale.Crop)
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    repeat(2 - savedPhotos.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
