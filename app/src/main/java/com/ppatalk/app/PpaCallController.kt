@@ -424,7 +424,7 @@ class PpaCallController(
                 track.addSink(renderer)
             }
         }
-        onStatus("Remote video stream received")
+        onStatus("Remote video track received • waiting for frames")
     }
 
     fun attachLocalRenderer(renderer: SurfaceViewRenderer) {
@@ -437,7 +437,17 @@ class PpaCallController(
     }
 
     fun attachRemoteRenderer(renderer: SurfaceViewRenderer) {
-        renderer.init(egl.eglBaseContext, null)
+        renderer.init(egl.eglBaseContext, object : RendererCommon.RendererEvents {
+            override fun onFirstFrameRendered() {
+                Log.d("PPATalkWebRTC", "Remote renderer: first video frame rendered")
+                onStatus("Remote video displaying")
+            }
+
+            override fun onFrameResolutionChanged(videoWidth: Int, videoHeight: Int, rotation: Int) {
+                Log.d("PPATalkWebRTC", "Remote renderer frame: ${videoWidth}x${videoHeight}, rotation=$rotation")
+                onStatus("Remote video frame: ${videoWidth}x${videoHeight}")
+            }
+        })
         renderer.setEnableHardwareScaler(true)
         renderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
         renderer.setMirror(false)
