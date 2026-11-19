@@ -1017,6 +1017,7 @@ fun HomeFeed(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
+    var hiddenPostIds by remember { mutableStateOf(setOf<String>()) }
     DisposableEffect(Unit) {
         val registration = FirebaseFirestore.getInstance().collection("posts")
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -1059,8 +1060,9 @@ fun HomeFeed(
         if (loading) item { CircularProgressIndicator() }
         if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
         if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
-        items(posts, key = { it.id }) { post ->
-            FeedPostCard(post, currentUid, onOpenAuthorProfile = { onOpenUserProfile(post.uid) }) { selectedPost = post }
+        items(posts.filterNot { it.id in hiddenPostIds }, key = { it.id }) { post ->
+            FeedPostCard(post, currentUid, onOpenAuthorProfile = { onOpenUserProfile(post.uid) },
+                onHidePost = { hiddenPostIds = hiddenPostIds + post.id }) { selectedPost = post }
         }
     }
     selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
@@ -1323,7 +1325,8 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {}, onCommentsClick: () -> Unit) {
+fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {},
+    onHidePost: () -> Unit = {}, onCommentsClick: () -> Unit) {
     var liked by remember(post.id, currentUid) { mutableStateOf(false) }
     var selectedReaction by remember(post.id, currentUid) { mutableStateOf("") }
     var showReactionPicker by remember(post.id, currentUid) { mutableStateOf(false) }
@@ -1333,6 +1336,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     var friendState by remember(post.uid, currentUid) { mutableStateOf("Add Friend") }
     var friendBusy by remember(post.uid, currentUid) { mutableStateOf(false) }
     var friendMessage by remember(post.uid, currentUid) { mutableStateOf("") }
+    var postMenuExpanded by remember(post.id) { mutableStateOf(false) }
+    var showLikesDialog by remember(post.id) { mutableStateOf(false) }
+    var feedNotice by remember(post.id) { mutableStateOf("") }
     val db = remember { FirebaseFirestore.getInstance() }
 
     DisposableEffect(post.uid, currentUid) {
@@ -1401,7 +1407,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (post.uid != currentUid) {
+                if (post.uid != currentUid && friendState != "Friends") {
                     OutlinedButton(
                         enabled = !friendBusy && friendState in listOf("Add Friend", "Respond"),
                         onClick = {
@@ -1437,9 +1443,38 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         })
                     }
                 }
+                Box {
+                    IconButton(onClick = { postMenuExpanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Post options") }
+                    DropdownMenu(expanded = postMenuExpanded, onDismissRequest = { postMenuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Interested") }, leadingIcon = { Icon(Icons.Default.AddCircleOutline, null) },
+                            onClick = { postMenuExpanded = false; feedNotice = "We'll show you more posts like this." })
+                        DropdownMenuItem(text = { Text("Not interested") }, leadingIcon = { Icon(Icons.Default.RemoveCircleOutline, null) },
+                            onClick = { postMenuExpanded = false; onHidePost() })
+                        DropdownMenuItem(text = { Text(if (post.postType == "reel") "Save reel" else "Save post") },
+                            leadingIcon = { Icon(Icons.Default.BookmarkBorder, null) },
+                            onClick = {
+                                postMenuExpanded = false
+                                db.collection("users").document(currentUid).collection("savedPosts").document(post.id)
+                                    .set(mapOf("postId" to post.id, "ownerUid" to post.uid,
+                                        "savedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                                    .addOnSuccessListener { feedNotice = "Saved." }
+                                    .addOnFailureListener { feedNotice = it.localizedMessage ?: "Save failed. Rules update required." }
+                            })
+                        DropdownMenuItem(text = { Text("Report post or reel") }, leadingIcon = { Icon(Icons.Default.Report, null) },
+                            onClick = {
+                                postMenuExpanded = false
+                                db.collection("postReports").add(mapOf("postId" to post.id, "postOwnerUid" to post.uid,
+                                    "reporterUid" to currentUid, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                                    .addOnSuccessListener { feedNotice = "Report submitted." }
+                                    .addOnFailureListener { feedNotice = it.localizedMessage ?: "Report failed. Rules update required." }
+                            })
+                    }
+                }
+                IconButton(onClick = onHidePost) { Icon(Icons.Default.Close, contentDescription = "Hide post from my feed") }
             }
             if (friendMessage.isNotBlank()) Text(friendMessage, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)
+            if (feedNotice.isNotBlank()) Text(feedNotice, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(12.dp))
             if (post.text.isNotBlank()) Text(post.text)
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
@@ -1498,7 +1533,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                             Icon(Icons.Default.FavoriteBorder, contentDescription = "Like", tint = RoyalBlue)
                         }
                     }
-                    Text(likeCount.toString(), style = MaterialTheme.typography.labelMedium)
+                    Text(likeCount.toString(), modifier = Modifier.clickable { showLikesDialog = true }, style = MaterialTheme.typography.labelMedium)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCommentsClick) {
@@ -1519,25 +1554,60 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
             }
             if (post.uid == currentUid) {
-                var menuExpanded by remember(post.id) { mutableStateOf(false) }
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Post options")
-                    }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Delete post") },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                            onClick = {
-                                menuExpanded = false
-                                db.collection("posts").document(post.id).delete()
-                            }
-                        )
-                    }
+                TextButton(onClick = { db.collection("posts").document(post.id).delete() }) {
+                    Icon(Icons.Default.Delete, contentDescription = null); Text("Delete post")
                 }
             }
         }
     }
+    if (showLikesDialog) PostLikesDialog(post, onDismiss = { showLikesDialog = false })
+}
+
+
+@Composable
+fun PostLikesDialog(post: FeedPost, onDismiss: () -> Unit) {
+    var likers by remember(post.id) { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var loading by remember(post.id) { mutableStateOf(true) }
+    DisposableEffect(post.id) {
+        val db = FirebaseFirestore.getInstance()
+        val registration = db.collection("posts").document(post.id).collection("likes").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                val ids = snapshot.documents.map { it.getString("uid").orEmpty().ifBlank { it.id } }.distinct()
+                if (ids.isEmpty()) { likers = emptyList(); loading = false }
+                else {
+                    val profiles = mutableListOf<Pair<String, String>>()
+                    var completed = 0
+                    ids.forEach { uid ->
+                        db.collection("profileDirectory").document(uid).get().addOnSuccessListener { profile ->
+                            profiles.add((profile.getString("displayName") ?: "PPA Talk user") to profile.getString("photoUrl").orEmpty())
+                        }.addOnCompleteListener {
+                            completed++
+                            if (completed == ids.size) { likers = profiles.toList(); loading = false }
+                        }
+                    }
+                }
+            }
+        }
+        onDispose { registration.remove() }
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("People who reacted") },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                if (loading) CircularProgressIndicator()
+                else if (likers.isEmpty()) Text("No reactions yet.")
+                else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(likers) { (name, photo) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (photo.isNotBlank()) AsyncImage(model = photo, contentDescription = null,
+                                modifier = Modifier.size(38.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                            else Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(38.dp))
+                            Spacer(Modifier.width(10.dp)); Text(name, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.weight(1f)); Text("👍", color = RoyalBlue)
+                        }
+                    }
+                }
+            }
+        }, confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } })
 }
 
 @Composable
