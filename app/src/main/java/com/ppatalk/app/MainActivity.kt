@@ -1703,7 +1703,7 @@ private fun PhotoCropDialog(
     uri: Uri,
     isCover: Boolean,
     onCancel: () -> Unit,
-    onSave: (ByteArray) -> Unit
+    onSave: (ByteArray, ByteArray) -> Unit
 ) {
     val context = LocalContext.current
     val bitmap = remember(uri) {
@@ -1732,7 +1732,7 @@ private fun PhotoCropDialog(
                     Box(
                         Modifier.fillMaxWidth()
                             .aspectRatio(if (isCover) 16f / 9f else 1f)
-                            .clip(MaterialTheme.shapes.medium)
+                            .clip(if (isCover) MaterialTheme.shapes.medium else CircleShape)
                             .background(Color.Black)
                             .onSizeChanged { viewportWidth = it.width; viewportHeight = it.height }
                             .pointerInput(uri) {
@@ -1782,7 +1782,12 @@ private fun PhotoCropDialog(
                                 val stream = java.io.ByteArrayOutputStream()
                                 output.compress(Bitmap.CompressFormat.JPEG, 90, stream)
                                 output.recycle()
-                                onSave(stream.toByteArray())
+                                val originalBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                if (originalBytes == null) {
+                                    output.recycle()
+                                    return@Button
+                                }
+                                onSave(originalBytes, stream.toByteArray())
                             },
                             modifier = Modifier.weight(1f)
                         ) { Text("Save & Upload") }
@@ -1814,6 +1819,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var hometown by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
     var coverPhotoUrl by remember { mutableStateOf("") }
+    var photoOriginalUrl by remember { mutableStateOf("") }
+    var coverPhotoOriginalUrl by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -1892,6 +1899,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 bio = snapshot.getString("bio") ?: ""
                 photoUrl = snapshot.getString("photoUrl") ?: ""
                 coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+                photoOriginalUrl = snapshot.getString("photoOriginalUrl") ?: photoUrl
+                coverPhotoOriginalUrl = snapshot.getString("coverPhotoOriginalUrl") ?: coverPhotoUrl
             }
         }
         onDispose { privateRegistration.remove(); publicRegistration.remove() }
@@ -1916,67 +1925,95 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             uri = photoEditorUri!!,
             isCover = photoEditorIsCover,
             onCancel = { photoEditorUri = null },
-            onSave = { jpegBytes ->
+            onSave = { originalBytes, croppedBytes ->
                 saving = true
-                message = if (photoEditorIsCover) "Cover photo upload ho rahi hai..." else "Profile photo upload ho rahi hai..."
+                message = if (photoEditorIsCover) "Original cover photo upload ho rahi hai..." else "Original profile photo upload ho rahi hai..."
                 isError = false
-                val field = if (photoEditorIsCover) "coverPhotoUrl" else "photoUrl"
-                val storagePath = if (photoEditorIsCover) "cover_photos/$uid/cover.jpg" else "profile_photos/$uid/profile.jpg"
-                val imageRef = FirebaseStorage.getInstance().reference.child(storagePath)
-                imageRef.putBytes(jpegBytes)
+                val isCover = photoEditorIsCover
+                val originalField = if (isCover) "coverPhotoOriginalUrl" else "photoOriginalUrl"
+                val displayField = if (isCover) "coverPhotoUrl" else "photoUrl"
+                val folder = if (isCover) "cover_photos/$uid" else "profile_photos/$uid"
+                val storage = FirebaseStorage.getInstance().reference
+                val originalRef = storage.child("$folder/original.jpg")
+                val displayRef = storage.child(if (isCover) "$folder/cover.jpg" else "$folder/profile.jpg")
+                originalRef.putBytes(originalBytes)
                     .addOnSuccessListener {
-                        imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                            FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                                .set(mapOf(field to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                        originalRef.downloadUrl.addOnSuccessListener { originalDownload ->
+                            displayRef.putBytes(croppedBytes)
                                 .addOnSuccessListener {
-                                    if (photoEditorIsCover) coverPhotoUrl = downloadUri.toString()
-                                    else photoUrl = downloadUri.toString()
-                                    if (profileVisibility == "public") {
-                                        val photoPost = hashMapOf(
-                                            "uid" to uid,
-                                            "authorName" to displayName.ifBlank { "PPA Talk user" },
-                                            "text" to if (photoEditorIsCover) "Updated their cover photo." else "Updated their profile photo.",
-                                            "mediaUrl" to downloadUri.toString(),
-                                            "mediaType" to "image",
-                                            "postType" to "post",
-                                            "photoKind" to if (photoEditorIsCover) "cover" else "profile",
-                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
+                                        val updates = mapOf(
+                                            originalField to originalDownload.toString(),
+                                            displayField to displayDownload.toString(),
+                                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                         )
-                                        FirebaseFirestore.getInstance().collection("posts").add(photoPost)
+                                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
                                             .addOnSuccessListener {
-                                                saving = false
-                                                photoEditorUri = null
-                                                message = if (photoEditorIsCover)
-                                                    "Cover photo update ho gayi aur Photos section + Feed mein share ho gayi."
-                                                else "Profile photo update ho gayi aur Photos section + Feed mein share ho gayi."
+                                                if (isCover) {
+                                                    coverPhotoUrl = displayDownload.toString()
+                                                    coverPhotoOriginalUrl = originalDownload.toString()
+                                                } else {
+                                                    photoUrl = displayDownload.toString()
+                                                    photoOriginalUrl = originalDownload.toString()
+                                                }
+                                                if (profileVisibility == "public") {
+                                                    val photoPost = hashMapOf(
+                                                        "uid" to uid,
+                                                        "authorName" to displayName.ifBlank { "PPA Talk user" },
+                                                        "text" to if (isCover) "Updated their cover photo." else "Updated their profile photo.",
+                                                        "mediaUrl" to originalDownload.toString(),
+                                                        "mediaType" to "image",
+                                                        "postType" to "post",
+                                                        "photoKind" to if (isCover) "cover" else "profile",
+                                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                    )
+                                                    FirebaseFirestore.getInstance().collection("posts").add(photoPost)
+                                                        .addOnSuccessListener {
+                                                            saving = false
+                                                            photoEditorUri = null
+                                                            message = if (isCover)
+                                                                "Original cover photo save ho gayi aur Feed + Photos mein share ho gayi."
+                                                            else "Original profile photo save ho gayi aur Feed + Photos mein share ho gayi."
+                                                        }
+                                                        .addOnFailureListener { exception ->
+                                                            saving = false
+                                                            isError = true
+                                                            photoEditorUri = null
+                                                            message = "Photo profile par save ho gayi, lekin Feed post nahi ban paayi: ${exception.localizedMessage ?: "permission denied"}"
+                                                        }
+                                                } else {
+                                                    saving = false
+                                                    photoEditorUri = null
+                                                    message = "Original photo save ho gayi. Private profile hone ke karan Feed par share nahi ki gayi."
+                                                }
                                             }
                                             .addOnFailureListener { exception ->
                                                 saving = false
                                                 isError = true
-                                                photoEditorUri = null
-                                                message = "Photo profile par save ho gayi, lekin Feed post nahi ban paayi: ${exception.localizedMessage ?: "permission denied"}"
+                                                message = exception.localizedMessage ?: "Photo details save nahi hui."
                                             }
-                                    } else {
+                                    }.addOnFailureListener { exception ->
                                         saving = false
-                                        photoEditorUri = null
-                                        message = "Photo save ho gayi. Private profile hone ke karan Feed par share nahi ki gayi."
+                                        isError = true
+                                        message = exception.localizedMessage ?: "Display photo URL nahi mil paya."
                                     }
                                 }
                                 .addOnFailureListener { exception ->
                                     saving = false
                                     isError = true
-                                    message = exception.localizedMessage ?: "Photo URL save nahi hua."
+                                    message = exception.localizedMessage ?: "Display photo upload failed."
                                 }
                         }.addOnFailureListener { exception ->
                             saving = false
                             isError = true
-                            message = exception.localizedMessage ?: "Photo URL nahi mil paya."
+                            message = exception.localizedMessage ?: "Original photo URL nahi mil paya."
                         }
                     }
                     .addOnFailureListener { exception ->
                         saving = false
                         isError = true
-                        message = exception.localizedMessage ?: "Photo upload failed. Firebase Storage rules check karein."
+                        message = exception.localizedMessage ?: "Original photo upload failed. Firebase Storage rules check karein."
                     }
             }
         )
@@ -2084,8 +2121,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             if (profileTab == "Photos") {
                 Text("Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 val savedPhotos = listOfNotNull(
-                    photoUrl.takeIf { it.isNotBlank() }?.let { "Profile photo" to it },
-                    coverPhotoUrl.takeIf { it.isNotBlank() }?.let { "Cover photo" to it }
+                    (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let { "Profile photo" to it },
+                    (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let { "Cover photo" to it }
                 )
                 if (savedPhotos.isEmpty()) {
                     Text("Abhi koi photo nahi hai. Profile ya cover photo upload karne par yahan dikhegi.",
