@@ -2990,6 +2990,10 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
     var emailVerified by remember { mutableStateOf(account?.isEmailVerified == true) }
     var securityMessage by remember { mutableStateOf("") }
     var securityBusy by remember { mutableStateOf(false) }
+    var showChangePassword by remember { mutableStateOf(false) }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmNewPassword by remember { mutableStateOf("") }
 
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
@@ -3041,17 +3045,14 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                     OutlinedButton(
                         enabled = !securityBusy,
                         onClick = {
-                            securityBusy = true
+                            currentPassword = ""
+                            newPassword = ""
+                            confirmNewPassword = ""
                             securityMessage = ""
-                            auth.sendPasswordResetEmail(account.email!!)
-                                .addOnCompleteListener { task ->
-                                    securityMessage = if (task.isSuccessful) "Password reset link sent. Check your inbox and spam folder."
-                                        else task.exception?.localizedMessage ?: "Could not send password reset email."
-                                    securityBusy = false
-                                }
+                            showChangePassword = true
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Reset password") }
+                    ) { Text("Change password") }
                 } else {
                     Text("This account uses mobile-number authentication.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3076,6 +3077,83 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
         }
         Text("Your theme choice is saved on this device. Log out from the account menu.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    if (showChangePassword && account?.email != null) {
+        AlertDialog(
+            onDismissRequest = { if (!securityBusy) showChangePassword = false },
+            title = { Text("Change password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = currentPassword, onValueChange = { currentPassword = it },
+                        label = { Text("Current password") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newPassword, onValueChange = { newPassword = it },
+                        label = { Text("New password (at least 8 characters)") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmNewPassword, onValueChange = { confirmNewPassword = it },
+                        label = { Text("Confirm new password") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !securityBusy,
+                    onClick = {
+                        when {
+                            currentPassword.isBlank() -> securityMessage = "Enter your current password."
+                            newPassword.length < 8 -> securityMessage = "New password must be at least 8 characters."
+                            newPassword != confirmNewPassword -> securityMessage = "New passwords do not match."
+                            currentPassword == newPassword -> securityMessage = "Choose a password different from your current password."
+                            else -> {
+                                securityBusy = true
+                                securityMessage = ""
+                                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(
+                                    account.email!!, currentPassword
+                                )
+                                account.reauthenticate(credential).addOnCompleteListener { reauthTask ->
+                                    if (!reauthTask.isSuccessful) {
+                                        securityMessage = reauthTask.exception?.localizedMessage
+                                            ?: "Current password is incorrect. Please try again."
+                                        securityBusy = false
+                                    } else {
+                                        account.updatePassword(newPassword).addOnCompleteListener { updateTask ->
+                                            securityMessage = if (updateTask.isSuccessful) {
+                                                showChangePassword = false
+                                                currentPassword = ""
+                                                newPassword = ""
+                                                confirmNewPassword = ""
+                                                "Password changed successfully."
+                                            } else {
+                                                updateTask.exception?.localizedMessage ?: "Could not change password."
+                                            }
+                                            securityBusy = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ) { Text(if (securityBusy) "Please wait…" else "Update password") }
+            },
+            dismissButton = {
+                TextButton(enabled = !securityBusy, onClick = { showChangePassword = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
