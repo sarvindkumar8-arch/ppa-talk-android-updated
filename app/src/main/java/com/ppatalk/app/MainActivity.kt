@@ -2119,9 +2119,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                         "authorName" to displayName.ifBlank { "PPA Talk user" },
                                                         "text" to if (isCover) "Updated their cover photo." else "Updated their profile photo.",
                                                         "mediaUrl" to originalDownload.toString(),
+                                                        "thumbnailUrl" to displayDownload.toString(),
                                                         "mediaType" to "image",
                                                         "postType" to "post",
                                                         "photoKind" to if (isCover) "cover" else "profile",
+                                                        "profileVisibility" to profileVisibility,
                                                         "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                     )
                                                     FirebaseFirestore.getInstance().collection("posts").add(photoPost)
