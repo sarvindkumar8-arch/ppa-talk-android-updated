@@ -1618,83 +1618,140 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
     var commentText by remember(post.id) { mutableStateOf("") }
     var replyTo by remember(post.id) { mutableStateOf<FeedComment?>(null) }
     var sending by remember(post.id) { mutableStateOf(false) }
-    var message by remember(post.id) { mutableStateOf("") }
     var currentName by remember(currentUid) { mutableStateOf("PPA Talk user") }
+    var currentPhoto by remember(currentUid) { mutableStateOf("") }
+    var sortNewest by remember(post.id) { mutableStateOf(false) }
+    var sortMenu by remember(post.id) { mutableStateOf(false) }
+    var likes by remember(post.id) { mutableIntStateOf(0) }
     val db = remember { FirebaseFirestore.getInstance() }
     DisposableEffect(post.id) {
-        val registration = db.collection("posts").document(post.id).collection("comments")
-            .orderBy("createdAt", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, _ ->
+        val commentsReg = db.collection("posts").document(post.id).collection("comments")
+            .orderBy("createdAt", Query.Direction.ASCENDING).addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) comments = snapshot.documents.map { doc ->
                     FeedComment(doc.id, doc.getString("uid") ?: "", doc.getString("authorName") ?: "PPA Talk user",
                         doc.getString("text") ?: "", doc.getString("parentId") ?: "", doc.getTimestamp("createdAt")?.toDate())
                 }
             }
-        onDispose { registration.remove() }
+        val likesReg = db.collection("posts").document(post.id).collection("likes")
+            .addSnapshotListener { snapshot, _ -> if (snapshot != null) likes = snapshot.size() }
+        onDispose { commentsReg.remove(); likesReg.remove() }
     }
     LaunchedEffect(currentUid) {
-        db.collection("publicProfiles").document(currentUid).get()
-            .addOnSuccessListener { currentName = it.getString("displayName") ?: currentName }
+        db.collection("publicProfiles").document(currentUid).get().addOnSuccessListener {
+            currentName = it.getString("displayName") ?: currentName
+            currentPhoto = it.getString("photoUrl").orEmpty()
+        }
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Comments") },
-        text = {
-            Column(Modifier.fillMaxWidth().heightIn(max = 440.dp)) {
-                Text(post.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3)
-                Spacer(Modifier.height(10.dp))
-                LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val topLevel = comments.filter { it.parentId.isBlank() }
-                    if (topLevel.isEmpty()) item { Text("No comments yet. Start the conversation!") }
-                    items(topLevel, key = { it.id }) { comment ->
-                        Column(Modifier.fillMaxWidth()) {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                                    Text(comment.authorName, fontWeight = FontWeight.Bold, color = RoyalBlue)
-                                    Text(comment.text)
-                                    TextButton(onClick = { replyTo = comment }) { Text("Reply") }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("👍 $likes", color = RoyalBlue, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.weight(1f))
+                    Text("Comments", style = MaterialTheme.typography.titleMedium)
+                }
+                HorizontalDivider()
+                Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    Row(Modifier.clickable { sortMenu = true }, verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (sortNewest) "Newest" else "Most relevant", fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Sort")
+                    }
+                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                        DropdownMenuItem(text = { Text("Most relevant") }, onClick = { sortNewest = false; sortMenu = false })
+                        DropdownMenuItem(text = { Text("Newest") }, onClick = { sortNewest = true; sortMenu = false })
+                    }
+                }
+                val topLevel = comments.filter { it.parentId.isBlank() }
+                val ordered = if (sortNewest) topLevel.sortedByDescending { it.createdAt } else topLevel
+                LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    if (ordered.isEmpty()) item { Text("No comments yet. Be the first to comment!") }
+                    items(ordered, key = { it.id }) { comment ->
+                        var authorPhoto by remember(comment.uid) { mutableStateOf("") }
+                        LaunchedEffect(comment.uid) {
+                            db.collection("profileDirectory").document(comment.uid).get()
+                                .addOnSuccessListener { authorPhoto = it.getString("photoUrl").orEmpty() }
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.Top) {
+                                if (authorPhoto.isNotBlank()) AsyncImage(model = authorPhoto, contentDescription = null,
+                                    modifier = Modifier.size(42.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                                else Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(42.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(comment.authorName, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(comment.createdAt?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(it) } ?: "",
+                                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text(comment.text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        TextButton(onClick = { replyTo = comment }) { Text("Reply") }
+                                        val count = comments.count { it.parentId == comment.id }
+                                        if (count > 0) TextButton(onClick = { replyTo = comment }) {
+                                            Text("View $count replies")
+                                        }
+                                        Spacer(Modifier.weight(1f))
+                                        IconButton(onClick = {
+                                            db.collection("posts").document(post.id).collection("comments").document(comment.id)
+                                                .collection("reactions").document(currentUid).set(mapOf("uid" to currentUid, "reaction" to "👍"))
+                                        }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbUpOffAlt, contentDescription = "Like comment") }
+                                        IconButton(onClick = {
+                                            db.collection("posts").document(post.id).collection("comments").document(comment.id)
+                                                .collection("reactions").document(currentUid).set(mapOf("uid" to currentUid, "reaction" to "👎"))
+                                        }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbDownOffAlt, contentDescription = "Dislike comment") }
+                                    }
                                 }
                             }
                             comments.filter { it.parentId == comment.id }.forEach { reply ->
-                                Row(Modifier.fillMaxWidth().padding(start = 24.dp, top = 5.dp)) {
-                                    Icon(Icons.Default.SubdirectoryArrowRight, contentDescription = null, tint = Orange,
-                                        modifier = Modifier.padding(end = 6.dp))
+                                Row(Modifier.padding(start = 52.dp, top = 6.dp), verticalAlignment = Alignment.Top) {
+                                    Icon(Icons.Default.SubdirectoryArrowRight, contentDescription = null, tint = Orange)
+                                    Spacer(Modifier.width(6.dp))
                                     Column {
-                                        Text(reply.authorName, fontWeight = FontWeight.SemiBold, color = RoyalBlue)
+                                        Text(reply.authorName, fontWeight = FontWeight.SemiBold)
                                         Text(reply.text)
+                                        TextButton(onClick = { replyTo = reply }) { Text("Reply") }
                                     }
                                 }
                             }
                         }
                     }
                 }
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly) {
+                    listOf("❤️", "🙌", "🔥", "👏", "😢", "😍", "😮", "😂").forEach { emoji ->
+                        TextButton(onClick = { commentText += emoji }, contentPadding = PaddingValues(horizontal = 5.dp)) {
+                            Text(emoji, style = MaterialTheme.typography.titleLarge)
+                        }
+                    }
+                }
                 if (replyTo != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Replying to " + replyTo!!.authorName, modifier = Modifier.weight(1f),
-                            color = Orange, style = MaterialTheme.typography.labelSmall)
+                    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Replying to " + replyTo!!.authorName, modifier = Modifier.weight(1f), color = RoyalBlue)
                         TextButton(onClick = { replyTo = null }) { Text("Cancel") }
                     }
                 }
-                OutlinedTextField(value = commentText, onValueChange = { commentText = it },
-                    modifier = Modifier.fillMaxWidth(), label = { Text(if (replyTo == null) "Write a comment" else "Write a reply") }, maxLines = 3)
-                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (currentPhoto.isNotBlank()) AsyncImage(model = currentPhoto, contentDescription = null,
+                        modifier = Modifier.size(38.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                    else Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(38.dp))
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedTextField(value = commentText, onValueChange = { commentText = it }, modifier = Modifier.weight(1f),
+                        placeholder = { Text("Comment as $currentName") }, shape = CircleShape, maxLines = 3)
+                    IconButton(enabled = !sending && commentText.isNotBlank() && commentText.trim().length <= 1000, onClick = {
+                        sending = true
+                        val data = hashMapOf("uid" to currentUid, "authorName" to currentName, "text" to commentText.trim(),
+                            "parentId" to (replyTo?.id ?: ""), "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                        db.collection("posts").document(post.id).collection("comments").add(data)
+                            .addOnSuccessListener { commentText = ""; replyTo = null; sending = false }
+                            .addOnFailureListener { sending = false }
+                    }) { Icon(Icons.Default.Send, contentDescription = "Send comment", tint = RoyalBlue) }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(enabled = !sending && commentText.isNotBlank() && commentText.trim().length <= 1000, onClick = {
-                sending = true; message = ""
-                val comment = hashMapOf("uid" to currentUid, "authorName" to currentName,
-                    "text" to commentText.trim(), "parentId" to (replyTo?.id ?: ""),
-                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-                db.collection("posts").document(post.id).collection("comments").add(comment)
-                    .addOnSuccessListener { commentText = ""; replyTo = null; sending = false }
-                    .addOnFailureListener { exception ->
-                        sending = false; message = exception.localizedMessage ?: "Comment/reply failed. Check Firestore rules."
-                    }
-            }) { Text(if (sending) "Sending..." else "Send") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
-    )
+        }
+    }
 }
 
 @Composable
