@@ -2514,9 +2514,24 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val granted = permissions.values.all { it }
-        if (!granted) {
-            callError = "Call ke liye microphone aur video call ke liye camera permission zaroori hai."
+        val denied = permissions.filterValues { !it }.keys
+        val incomingId = pendingCallId
+        pendingCallId = null
+        if (denied.isNotEmpty()) {
+            val deniedNames = denied.mapNotNull { permission ->
+                when (permission) {
+                    android.Manifest.permission.RECORD_AUDIO -> "Microphone"
+                    android.Manifest.permission.CAMERA -> "Camera"
+                    else -> null
+                }
+            }.joinToString(" and ")
+            callError = "$deniedNames permission denied. Allow it in Android Settings > Apps > PPA Talk > Permissions."
+            if (incomingId != null) {
+                db.collection("callSessions").document(incomingId).update(mapOf(
+                    "status" to "rejected",
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ))
+            }
         } else {
             val controller = PpaCallController(
                 context, currentUid, friendUid,
@@ -2531,8 +2546,6 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                 }
             )
             callController = controller
-            val incomingId = pendingCallId
-            pendingCallId = null
             if (incomingId != null) controller.acceptIncoming(incomingId)
             else controller.startOutgoing(requestedCallType)
         }
@@ -2541,16 +2554,11 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     fun requestCall(type: String, incomingId: String? = null) {
         requestedCallType = type
         pendingCallId = incomingId
+        callError = ""
         if (incomingId != null) {
             incomingCallId = null
             (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(incomingId.hashCode())
-            db.collection("callSessions").document(incomingId).update(mapOf(
-                "status" to "accepting",
-                "acceptedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-            )).addOnFailureListener { callError = it.localizedMessage ?: "Could not accept incoming call." }
         }
-        callError = ""
         val permissions = if (type == "video") {
             arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
         } else arrayOf(android.Manifest.permission.RECORD_AUDIO)
