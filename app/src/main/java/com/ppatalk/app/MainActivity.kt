@@ -951,6 +951,7 @@ fun ReelsScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedReel by remember { mutableStateOf<FeedPost?>(null) }
+    var hiddenReelIds by remember { mutableStateOf(setOf<String>()) }
 
     DisposableEffect(Unit) {
         val registration = FirebaseFirestore.getInstance().collection("posts")
@@ -990,9 +991,10 @@ fun ReelsScreen(
         if (!loading && reels.isEmpty() && error.isBlank()) {
             item { Text("Abhi koi Reel nahi hai. Create Post mein Video / Reel select karke share karein.") }
         }
-        items(reels, key = { it.id }) { reel ->
+        items(reels.filterNot { it.id in hiddenReelIds }, key = { it.id }) { reel ->
             FeedPostCard(reel, currentUid,
-                onOpenAuthorProfile = { onOpenUserProfile(reel.uid) }) {
+                onOpenAuthorProfile = { onOpenUserProfile(reel.uid) },
+                onHidePost = { hiddenReelIds = hiddenReelIds + reel.id }) {
                 selectedReel = reel
             }
         }
@@ -1539,7 +1541,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     IconButton(onClick = onCommentsClick) {
                         Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = RoyalBlue)
                     }
-                    Text(commentCount.toString(), style = MaterialTheme.typography.labelMedium)
+                    Text(commentCount.toString(), modifier = Modifier.clickable(onClick = onCommentsClick), style = MaterialTheme.typography.labelMedium)
                 }
                 val context = LocalContext.current
                 IconButton(onClick = {
