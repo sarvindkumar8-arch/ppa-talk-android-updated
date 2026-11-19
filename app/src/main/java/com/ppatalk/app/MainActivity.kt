@@ -2714,6 +2714,7 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     callController?.let { controller ->
         PpaCallDialog(
             controller = controller,
+            callerName = friendName,
             callType = requestedCallType,
             status = callStatus.ifBlank { "Connecting…" },
             onEnd = {
