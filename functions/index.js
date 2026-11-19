@@ -131,6 +131,34 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false
 });
 
 
+// Delete chat messages whose per-message expiry time has passed.
+// The client only writes expireAt; Admin SDK performs the actual cleanup.
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+
+exports.deleteExpiredChatMessages = onSchedule({
+  schedule: "every 15 minutes",
+  region: REGION,
+  maxInstances: 1,
+  timeZone: "UTC"
+}, async () => {
+  let deleted = 0;
+  // Bound each invocation so a large backlog cannot run indefinitely.
+  for (let page = 0; page < 10; page++) {
+    const expired = await db.collectionGroup("messages")
+      .where("expireAt", "<=", new Date())
+      .orderBy("expireAt", "asc")
+      .limit(400)
+      .get();
+    if (expired.empty) break;
+    const batch = db.batch();
+    expired.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    deleted += expired.size;
+    if (expired.size < 400) break;
+  }
+  console.info("Expired chat message cleanup completed", { deleted });
+});
+
 // Send an FCM push whenever a new outgoing call session is created.
 // The server reads recipient device tokens; clients never get access to other users' tokens.
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
