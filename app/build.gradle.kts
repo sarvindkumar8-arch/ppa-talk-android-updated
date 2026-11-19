@@ -75,10 +75,9 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-functions")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("com.google.firebase:firebase-messaging")
-    // LiveKit media engine for reliable real-time voice and video calls.
-    implementation("io.livekit:livekit-android:2.30.0")
+    // Restore the previously used WebRTC media engine for voice and video calls.
+    implementation("io.github.webrtc-sdk:android:150.7871.04")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
