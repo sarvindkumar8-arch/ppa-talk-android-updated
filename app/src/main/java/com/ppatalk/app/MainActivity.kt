@@ -2065,6 +2065,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 @Composable
 fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
     var displayName by remember(uid) { mutableStateOf("PPA Talk user") }
+    var username by remember(uid) { mutableStateOf("") }
     var bio by remember(uid) { mutableStateOf("") }
     var photoUrl by remember(uid) { mutableStateOf("") }
     var coverPhotoUrl by remember(uid) { mutableStateOf("") }
@@ -2076,6 +2077,7 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
                 if (exception != null) { error = exception.localizedMessage ?: "Profile load nahi ho payi."; loading = false }
                 else if (snapshot != null && snapshot.exists()) {
                     displayName = snapshot.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                    username = snapshot.getString("username").orEmpty()
                     bio = snapshot.getString("bio").orEmpty()
                     photoUrl = snapshot.getString("photoUrl").orEmpty()
                     coverPhotoUrl = snapshot.getString("coverPhotoUrl").orEmpty()
@@ -2096,7 +2098,11 @@ fun PublicProfileScreen(uid: String, modifier: Modifier = Modifier) {
             if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo", modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
             else Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo", modifier = Modifier.size(100.dp), tint = RoyalBlue)
             Spacer(Modifier.width(14.dp))
-            Column { Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text("PPA Talk member", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Column {
+                Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (username.isNotBlank()) Text("@$username", style = MaterialTheme.typography.bodyMedium, color = RoyalBlue)
+                Text("PPA Talk member", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         if (loading) CircularProgressIndicator(Modifier.padding(20.dp))
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 20.dp))
