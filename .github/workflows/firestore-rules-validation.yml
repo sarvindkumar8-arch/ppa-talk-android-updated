@@ -43,7 +43,7 @@ jobs:
         run: firebase emulators:exec --only firestore,storage --project demo-ppa-talk "node --test tests/firebase/*.test.cjs"
 
   verify-google-workload-identity:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/security-hardening/profile-media-app-check'
+    if: github.ref == 'refs/heads/security-hardening/profile-media-app-check'
     runs-on: ubuntu-latest
     permissions:
       contents: read
