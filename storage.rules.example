@@ -20,7 +20,7 @@ service firebase.storage {
                     && request.resource.contentType.matches('image/.*');
     }
     match /cover_photos/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadProfileMedia(uid);
       allow write: if owns(uid)
                     && request.resource.size < 15 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
