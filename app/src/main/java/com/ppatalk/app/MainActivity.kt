@@ -2406,6 +2406,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 listOf("All", "Reels", "Photos", "More").forEach { tab ->
                     FilterChip(selected = profileTab == tab, onClick = {
                     profileTab = tab
+                    showProfileSetup = false
                     if (tab == "Photos") galleryFilter = "All photos"
                     if (tab == "Reels") galleryFilter = "All reels"
                 }, label = { Text(tab) })
@@ -2456,6 +2457,50 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             }
         }
 
+
+        if (!showProfileSetup && (profileTab == "All" || profileTab == "More")) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(if (profileTab == "All") "About" else "More about you",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                val profileDetails = listOf(
+                    "Name" to displayName,
+                    "Username" to username.takeIf { it.isNotBlank() }?.let { "@$it" }.orEmpty(),
+                    "Bio" to bio,
+                    "Email" to email,
+                    "Date of birth" to dateOfBirth,
+                    "Gender" to gender,
+                    "Phone" to phoneNumber,
+                    "Hobby" to hobby,
+                    "School / College" to school,
+                    "Favorite place" to favoritePlace,
+                    "Hometown" to hometown,
+                    "Current city" to currentCity,
+                    "Work" to work,
+                    "Education" to education,
+                    "Relationship status" to relationshipStatus,
+                    "Interests" to interests
+                ).filter { it.second.isNotBlank() }
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (profileDetails.isEmpty()) {
+                            Text("Abhi profile details add nahi ki gayi hain. Details add karne ke liye Edit Profile par click karein.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            profileDetails.forEach { (label, value) ->
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(label, style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(value, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if (showProfileSetup) {
         Column(
