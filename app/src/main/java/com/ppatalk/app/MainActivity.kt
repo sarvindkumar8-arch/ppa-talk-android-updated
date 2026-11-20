@@ -987,15 +987,16 @@ private fun acceptFriendRequestSafely(
         val request = transaction.get(requestRef)
         if (!request.exists()) throw IllegalStateException("Friend request no longer exists.")
         val status = request.getString("status")
-        if (status == "pending") {
-            transaction.update(requestRef, "status", "accepted")
-        } else if (status != "accepted") {
+        if (status != "pending" && status != "accepted") {
             throw IllegalStateException("This friend request is no longer pending.")
         }
 
         // Complete all reads before issuing writes in the transaction.
         val mine = transaction.get(mineRef)
         val theirs = transaction.get(theirsRef)
+        if (status == "pending") {
+            transaction.update(requestRef, "status", "accepted")
+        }
         transaction.set(myFriendRef, mapOf(
             "uid" to friendUid,
             "displayName" to (theirs.getString("displayName") ?: friendName),
