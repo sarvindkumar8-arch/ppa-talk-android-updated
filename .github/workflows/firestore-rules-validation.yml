@@ -1,4 +1,5 @@
 name: Firebase Security Rules Validation
+# Re-run read-only Firebase Rules API permission check after IAM role update
 
 concurrency:
   group: firebase-security-rules-${{ github.ref }}
