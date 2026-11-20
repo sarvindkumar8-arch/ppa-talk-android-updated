@@ -1,0 +1,56 @@
+name: Deploy PPA Talk Firebase Security
+
+on:
+  workflow_dispatch:
+    inputs:
+      migrate_legacy_media:
+        description: "Run legacy download-token migration after deployment (only after compatible app release)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure Firebase service account
+        env:
+          FIREBASE_SERVICE_ACCOUNT_PPA_TALK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PPA_TALK }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FIREBASE_SERVICE_ACCOUNT_PPA_TALK:-}" ]]; then
+            echo "::error::Add the FIREBASE_SERVICE_ACCOUNT_PPA_TALK repository secret before deployment."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_PPA_TALK" > "$RUNNER_TEMP/firebase-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Install Cloud Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Deploy Firestore rules, Storage rules and Cloud Functions
+        run: firebase deploy --only firestore:rules,storage,functions --project ppa-talk --non-interactive
+
+      - name: Migrate legacy media URLs and revoke download tokens
+        if: ${{ inputs.migrate_legacy_media }}
+        working-directory: functions
+        run: node migrate-media.js --apply
+
+      - name: Remove service account file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-service-account.json"
