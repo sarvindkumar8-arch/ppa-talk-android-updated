@@ -933,8 +933,11 @@ private fun unfriendSafely(
     val batch = db.batch()
     batch.delete(db.collection("friends").document(currentUid).collection("list").document(friendUid))
     batch.delete(db.collection("friends").document(friendUid).collection("list").document(currentUid))
+    // Clear accepted request records in both directions so either person can
+    // send a fresh request after the friendship is removed.
     batch.delete(db.collection("friendRequests").document(friendUid + "_" + currentUid))
-    batch.commit().addOnSuccessListener { onResult(true, "Friend removed successfully.") }
+    batch.delete(db.collection("friendRequests").document(currentUid + "_" + friendUid))
+    batch.commit().addOnSuccessListener { onResult(true, "Friend removed. You can send a new friend request.") }
         .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not remove friend. Check Firestore rules.") }
 }
 
