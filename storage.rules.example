@@ -19,15 +19,14 @@ service firebase.storage {
     }
 
     function isAcceptedFriend(uid) {
-      let friendEntry = /databases/(default)/documents/friends/$(uid)/list/$(request.auth.uid);
       let outgoing = /databases/(default)/documents/friendRequests/$(uid + '_' + request.auth.uid);
       let incoming = /databases/(default)/documents/friendRequests/$(request.auth.uid + '_' + uid);
-      return signedIn()
-        && firestore.exists(friendEntry)
-        && (
-          (firestore.exists(outgoing) && firestore.get(outgoing).data.status == 'accepted')
-          || (firestore.exists(incoming) && firestore.get(incoming).data.status == 'accepted')
-        );
+      // The accepted request is the source of truth. Do not require the
+      // reciprocal friends-list mirror to exist before allowing profile media.
+      return signedIn() && (
+        (firestore.exists(outgoing) && firestore.get(outgoing).data.status == 'accepted')
+        || (firestore.exists(incoming) && firestore.get(incoming).data.status == 'accepted')
+      );
     }
 
     function canReadProfileMedia(uid) {
