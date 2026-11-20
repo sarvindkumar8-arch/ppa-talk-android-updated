@@ -16,8 +16,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      HAS_ENCRYPTED_KEY: ${{ secrets.DEBUG_KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Checkout Repository
@@ -38,67 +36,55 @@ jobs:
         run: |
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
-
-      # Preferred: encrypted repository secrets. The cache fallback is only
-      # for bootstrapping until the owner adds the four signing secrets.
-      - name: Restore debug keystore cache (fallback only)
-        if: ${{ env.HAS_ENCRYPTED_KEY != 'true' }}
-        uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: ppa-talk-debug-keystore-v1
+          gradle-version: '8.9'
 
-      - name: Configure encrypted signing keystore
-        if: ${{ env.HAS_ENCRYPTED_KEY == 'true' }}
+      # A debug APK must remain buildable even when optional release-signing
+      # secrets are missing or malformed. Never publish an unsigned release APK.
+      - name: Restore and validate optional release keystore
+        id: signing
         env:
-          KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.DEBUG_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$KEYSTORE_BASE64"
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_ALIAS"
-          test -n "$KEY_PASSWORD"
-          mkdir -p "$HOME/.android"
-          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$HOME/.android/debug.keystore"
-          keytool -list -keystore "$HOME/.android/debug.keystore" \
-            -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-          {
-            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
-            echo "KEY_ALIAS=$KEY_ALIAS"
-            echo "KEY_PASSWORD=$KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
-          echo "Encrypted repository keystore loaded and validated."
+          KEYSTORE_TMP="app/ppa-talk-debug-new.jks.tmp"
+          KEYSTORE_FILE="app/ppa-talk-debug-new.jks"
+          rm -f "$KEYSTORE_TMP" "$KEYSTORE_FILE"
 
-      - name: Create debug keystore if cache is empty
-        if: ${{ env.HAS_ENCRYPTED_KEY != 'true' }}
-        run: |
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -v \
-              -keystore "$HOME/.android/debug.keystore" \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" && -n "${ANDROID_KEY_PASSWORD:-}" ]] &&
+             printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_TMP" 2>/dev/null &&
+             keytool -list -keystore "$KEYSTORE_TMP" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
+            mv "$KEYSTORE_TMP" "$KEYSTORE_FILE"
+            chmod 600 "$KEYSTORE_FILE"
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Optional release keystore validated."
           else
-            echo "Restored existing cached PPA Talk debug keystore."
+            rm -f "$KEYSTORE_TMP" "$KEYSTORE_FILE"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Release signing secrets are missing or invalid. Debug APK will still be built; release APK will be skipped."
           fi
-
-      - name: Print Debug Signing Certificate Fingerprints
-        run: gradle signingReport --no-daemon
 
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Build Custom Signed Release APK
+        if: steps.signing.outputs.available == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon
+
+      - name: Upload Debug and Optional Release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: PPA-Talk-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: PPA-Talk-Android-APKs
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
           if-no-files-found: error
