@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/chat-voice-video-calling
+      - phase1-apk117-rebuild
   workflow_dispatch:
 
 permissions:
