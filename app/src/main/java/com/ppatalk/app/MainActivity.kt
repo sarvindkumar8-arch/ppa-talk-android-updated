@@ -2362,6 +2362,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                 .addOnSuccessListener {
                                     displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
                                         val updates = mapOf(
+                                            "uid" to uid,
                                             originalField to originalDownload.toString(),
                                             displayField to displayDownload.toString(),
                                             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
