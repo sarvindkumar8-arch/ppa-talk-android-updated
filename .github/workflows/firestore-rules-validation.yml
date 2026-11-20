@@ -1,7 +1,7 @@
 name: Firebase Security Rules Validation
 
 concurrency:
-  group: firebase-security-rules-{{ github.ref }
+  group: firebase-security-rules-${{ github.ref }}
   cancel-in-progress: true
 
 on:
