@@ -50,6 +50,9 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Authenticate to Google Cloud using GitHub OIDC
         uses: google-github-actions/auth@v2
         with:
