@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, beforeEach, test } = require("node:test");
 const {
@@ -174,8 +175,10 @@ test("either friend can unfriend: remove both list entries and mark accepted req
   batch.update(doc(aliceDb, "friendRequests/alice_bob"), { status: "rejected" });
   await assertSucceeds(batch.commit());
 
-  await assertFails(getDoc(doc(db("alice"), "friends/alice/list/bob")));
-  await assertFails(getDoc(doc(db("bob"), "friends/bob/list/alice")));
+  const aliceFriendEntry = await getDoc(doc(db("alice"), "friends/alice/list/bob"));
+  const bobFriendEntry = await getDoc(doc(db("bob"), "friends/bob/list/alice"));
+  assert.equal(aliceFriendEntry.exists(), false);
+  assert.equal(bobFriendEntry.exists(), false);
   await assertSucceeds(getDoc(doc(db("alice"), "friendRequests/alice_bob")));
 });
 
