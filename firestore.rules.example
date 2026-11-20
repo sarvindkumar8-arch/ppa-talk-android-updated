@@ -174,9 +174,9 @@ service cloud.firestore {
     match /friends/{userId}/list/{friendId} {
       function hasAcceptedRequest() {
         return (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId))
-          && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId)).data.status == 'accepted')
+          && getAfter(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId)).data.status == 'accepted')
           || (exists(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId))
-          && get(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId)).data.status == 'accepted');
+          && getAfter(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId)).data.status == 'accepted');
       }
       allow read: if owns(userId);
       allow create, update: if signedIn()
