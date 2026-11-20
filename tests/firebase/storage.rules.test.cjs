@@ -18,7 +18,7 @@ const {
   deleteObject,
 } = require("firebase/storage");
 
-const projectId = "demo-ppa-talk";
+const projectId = "demo-ppa-talk-storage-rules";
 let testEnv;
 const rules = fs.readFileSync(
   path.join(__dirname, "../../storage.rules.example"),
