@@ -975,22 +975,43 @@ private fun acceptFriendRequestSafely(
     onResult: (Boolean, String) -> Unit
 ) {
     val requestRef = db.collection("friendRequests").document(friendUid + "_" + currentUid)
-    // Use profileDirectory (signed-in readable) instead of publicProfiles:
-    // the sender's profile may be private until this request is accepted.
-    db.collection("profileDirectory").document(currentUid).get().addOnSuccessListener { mine ->
-        db.collection("profileDirectory").document(friendUid).get().addOnSuccessListener { theirs ->
-            val batch = db.batch()
-            batch.update(requestRef, "status", "accepted")
-            batch.set(db.collection("friends").document(currentUid).collection("list").document(friendUid),
-                mapOf("uid" to friendUid, "displayName" to (theirs.getString("displayName") ?: friendName),
-                    "photoUrl" to (theirs.getString("photoUrl") ?: "")))
-            batch.set(db.collection("friends").document(friendUid).collection("list").document(currentUid),
-                mapOf("uid" to currentUid, "displayName" to (mine.getString("displayName") ?: currentName),
-                    "photoUrl" to (mine.getString("photoUrl") ?: "")))
-            batch.commit().addOnSuccessListener { onResult(true, "Friend request accepted. You are now friends.") }
-                .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not accept request or update friend lists.") }
-        }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load friend's directory entry.") }
-    }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load your directory entry.") }
+    val mineRef = db.collection("profileDirectory").document(currentUid)
+    val theirsRef = db.collection("profileDirectory").document(friendUid)
+    val myFriendRef = db.collection("friends").document(currentUid).collection("list").document(friendUid)
+    val theirFriendRef = db.collection("friends").document(friendUid).collection("list").document(currentUid)
+
+    // A single transaction makes acceptance and both reciprocal list entries
+    // atomic. It also repairs a missing mirror if the user retries an already
+    // accepted request after an earlier partial client-side failure.
+    db.runTransaction { transaction ->
+        val request = transaction.get(requestRef)
+        if (!request.exists()) throw IllegalStateException("Friend request no longer exists.")
+        val status = request.getString("status")
+        if (status == "pending") {
+            transaction.update(requestRef, "status", "accepted")
+        } else if (status != "accepted") {
+            throw IllegalStateException("This friend request is no longer pending.")
+        }
+
+        // Complete all reads before issuing writes in the transaction.
+        val mine = transaction.get(mineRef)
+        val theirs = transaction.get(theirsRef)
+        transaction.set(myFriendRef, mapOf(
+            "uid" to friendUid,
+            "displayName" to (theirs.getString("displayName") ?: friendName),
+            "photoUrl" to (theirs.getString("photoUrl") ?: "")
+        ), com.google.firebase.firestore.SetOptions.merge())
+        transaction.set(theirFriendRef, mapOf(
+            "uid" to currentUid,
+            "displayName" to (mine.getString("displayName") ?: currentName),
+            "photoUrl" to (mine.getString("photoUrl") ?: "")
+        ), com.google.firebase.firestore.SetOptions.merge())
+        true
+    }.addOnSuccessListener {
+        onResult(true, "Friend request accepted. You are now friends.")
+    }.addOnFailureListener {
+        onResult(false, it.localizedMessage ?: "Could not accept request or update both friend lists.")
+    }
 }
 
 data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
