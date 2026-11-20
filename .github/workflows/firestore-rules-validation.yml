@@ -82,7 +82,6 @@ jobs:
             cat /tmp/firebase-rules-response.json
             exit 1
           fi
-          fi
 
       - name: Audit deployed Firestore and Storage rules (read-only)
         shell: bash
