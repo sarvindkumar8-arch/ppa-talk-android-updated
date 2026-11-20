@@ -3065,79 +3065,97 @@ fun PublicProfileScreen(
         onDispose { directoryRegistration.remove(); profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
     }
 
-    // A private profile becomes visible to an accepted friend; keep privacy for everyone else.
-    if (isPrivate && friendStatus != "Friends") {
+    // Locked-profile view for non-friends: show only the profile header, friend/message actions,
+    // and a locked Posts notice. The avatar is visible but is deliberately not clickable.
+    // Accepted friends and the profile owner continue to use the full profile UI below.
+    if (isPrivate && currentUid != uid && friendStatus != "Friends") {
         Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.fillMaxWidth().height(205.dp)) {
-                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
-                    modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
-                else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
-                    if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
-                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 28.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(104.dp)
+                ) {
+                    if (photoUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = photoUrl,
+                            contentDescription = "Profile photo",
+                            modifier = Modifier.fillMaxSize().padding(3.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue,
+                            modifier = Modifier.fillMaxSize().padding(12.dp))
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    Text("Friends  ·  Posts", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Spacer(Modifier.height(45.dp))
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        enabled = !isFriendActionRunning,
-                        onClick = {
-                            isFriendActionRunning = true
-                            if (friendStatus == "Friends") {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    enabled = !isFriendActionRunning,
+                    onClick = {
+                        isFriendActionRunning = true
+                        if (friendStatus == "Requested") {
+                            cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
                                 isFriendActionRunning = false
-                                showFriendOptions = true
-                                friendOptionsPage = "menu"
-                            } else if (friendStatus == "Requested") {
-                                cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
-                                    isFriendActionRunning = false
-                                    actionMessage = detail
-                                    if (success) friendStatus = "Add Friend"
-                                }
-                            } else if (friendStatus == "Confirm Request") {
-                                acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
-                                    isFriendActionRunning = false
-                                    actionMessage = detail
-                                    if (success) friendStatus = "Friends"
-                                }
-                            } else {
-                                friendStatus = "Requested"
-                                sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
-                                    isFriendActionRunning = false
-                                    actionMessage = detail
-                                    if (!success && !detail.contains("already sent", ignoreCase = true)) friendStatus = "Add Friend"
-                                    else friendStatus = "Requested"
-                                }
+                                actionMessage = detail
+                                if (success) friendStatus = "Add Friend"
                             }
-                        }, modifier = Modifier.weight(1f)
-                    ) {
-                        if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Icon(if (friendStatus == "Friends") Icons.Default.PersonRemove else Icons.Default.PersonAdd, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Friends") "Friends" else friendStatus)
-                    }
-                    OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
-                    }
-                }
-                if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
-                Card(Modifier.fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(30.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("This profile is private", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Add this person as a friend to see their posts, photos and personal details.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (friendStatus == "Confirm Request") {
+                            acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                isFriendActionRunning = false
+                                actionMessage = detail
+                                if (success) friendStatus = "Friends"
+                            }
+                        } else {
+                            friendStatus = "Requested"
+                            sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                isFriendActionRunning = false
+                                actionMessage = detail
+                                if (!success && !detail.contains("already sent", ignoreCase = true)) friendStatus = "Add Friend"
+                                else friendStatus = "Requested"
+                            }
                         }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Default.PersonAdd, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (isFriendActionRunning) "Please wait..." else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Confirm Request") "Confirm Request" else "Add Friend")
+                }
+                OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Chat, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Message")
+                }
+            }
+            if (actionMessage.isNotBlank()) {
+                Text(actionMessage, modifier = Modifier.padding(horizontal = 18.dp),
+                    color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+            }
+            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("This user locked their profile", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Learn more", color = RoyalBlue)
                     }
                 }
+            }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Posts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Only friends can see this user's posts. Learn more",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     } else {
