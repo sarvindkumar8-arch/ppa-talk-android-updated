@@ -1,0 +1,35 @@
+name: Firestore Rules Validation
+
+on:
+  push:
+    branches:
+      - security-hardening/profile-media-app-check
+    paths:
+      - 'firestore.rules.example'
+      - 'firebase.json'
+      - '.github/workflows/firestore-rules-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-firestore-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Compile rules in Firestore Emulator
+        run: firebase emulators:exec --only firestore --project demo-ppa-talk "echo Firestore Emulator started; rules loaded"
