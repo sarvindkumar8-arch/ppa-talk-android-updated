@@ -206,3 +206,18 @@ test("accepted friend can read private profile when accepted request is in rever
   await assertSucceeds(getDoc(doc(db("bob"), "publicProfiles/alice")));
   await assertFails(getDoc(doc(db("mallory"), "publicProfiles/alice")));
 });
+
+
+test("profile without an explicit public visibility setting defaults to private", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "publicProfiles/alice"), {
+      uid: "alice",
+      displayName: "Alice",
+      username: "alice",
+      bio: "Legacy profile without visibility",
+    });
+  });
+  await assertSucceeds(getDoc(doc(db("alice"), "publicProfiles/alice")));
+  await assertFails(getDoc(doc(db("bob"), "publicProfiles/alice")));
+  await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "publicProfiles", "alice")));
+});
