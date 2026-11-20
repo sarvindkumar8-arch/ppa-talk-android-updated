@@ -3032,7 +3032,8 @@ fun PublicProfileScreen(
         onDispose { directoryRegistration.remove(); profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
     }
 
-    if (isPrivate) {
+    // A private profile becomes visible to an accepted friend; keep privacy for everyone else.
+    if (isPrivate && friendStatus != "Friends") {
         Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().height(205.dp)) {
