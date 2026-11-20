@@ -16,6 +16,12 @@ on:
       - 'tests/firebase/**'
       - '.github/workflows/firestore-rules-validation.yml'
   workflow_dispatch:
+    inputs:
+      deploy_live:
+        description: "Deploy the validated Firestore and Storage rules to Firebase project ppa-talk"
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   validate-firestore-rules:
@@ -142,3 +148,32 @@ jobs:
           }
           audit_release "cloud.firestore" "firestore.rules.example" "Firestore"
           audit_release "firebase.storage" "storage.rules.example" "Storage"
+
+
+  deploy-live-firebase-rules:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_live == true
+    needs: validate-firestore-rules
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud using GitHub OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/469604923642/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
+          service_account: ppa-talk-github-security@ppa-talk.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Deploy validated Firestore and Storage rules
+        run: firebase deploy --only firestore:rules,storage --project ppa-talk --non-interactive
