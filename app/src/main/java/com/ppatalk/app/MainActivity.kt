@@ -917,6 +917,15 @@ private fun sendFriendRequestSafely(
     }
 }
 
+private fun cancelFriendRequestSafely(
+    db: FirebaseFirestore, currentUid: String, friendUid: String,
+    onResult: (Boolean, String) -> Unit
+) {
+    db.collection("friendRequests").document(currentUid + "_" + friendUid).delete()
+        .addOnSuccessListener { onResult(true, "Friend request cancelled.") }
+        .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not cancel friend request.") }
+}
+
 private fun acceptFriendRequestSafely(
     db: FirebaseFirestore, currentUid: String, friendUid: String, currentName: String, friendName: String,
     onResult: (Boolean, String) -> Unit
@@ -1411,10 +1420,16 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
                 if (post.uid != currentUid && friendState != "Friends") {
                     OutlinedButton(
-                        enabled = !friendBusy && friendState in listOf("Add Friend", "Respond"),
+                        enabled = !friendBusy && friendState in listOf("Add Friend", "Respond", "Requested"),
                         onClick = {
                             friendBusy = true
-                            if (friendState == "Respond") {
+                            if (friendState == "Requested") {
+                                cancelFriendRequestSafely(db, currentUid, post.uid) { ok, detail ->
+                                    friendState = if (ok) "Add Friend" else "Requested"
+                                    friendMessage = detail
+                                    friendBusy = false
+                                }
+                            } else if (friendState == "Respond") {
                                 acceptFriendRequestSafely(db, currentUid, post.uid, "PPA Talk user", post.authorName) { ok, detail ->
                                     friendState = if (ok) "Friends" else "Respond"
                                     friendMessage = detail
@@ -1438,7 +1453,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     ) {
                         if (friendBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                         else Text(when (friendState) {
-                            "Requested" -> "Requested"
+                            "Requested" -> "Cancel Request"
                             "Friends" -> "Friends"
                             "Respond" -> "Accept"
                             else -> "Add Friend"
@@ -3005,10 +3020,16 @@ fun PublicProfileScreen(
                 if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
-                        enabled = !isFriendActionRunning && friendStatus != "Friends" && friendStatus != "Requested",
+                        enabled = !isFriendActionRunning && friendStatus != "Friends",
                         onClick = {
                             isFriendActionRunning = true
-                            if (friendStatus == "Respond to Request") {
+                            if (friendStatus == "Requested") {
+                                cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendStatus == "Respond to Request") {
                                 acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
                                     isFriendActionRunning = false
                                     actionMessage = detail
@@ -3028,7 +3049,7 @@ fun PublicProfileScreen(
                         if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         else Icon(if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd, null)
                         Spacer(Modifier.width(6.dp))
-                        Text(if (isFriendActionRunning) "Sending..." else friendStatus)
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else friendStatus)
                     }
                     OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
@@ -3079,7 +3100,13 @@ fun PublicProfileScreen(
                         onClick = {
                             isFriendActionRunning = true
                             actionMessage = if (friendStatus == "Respond to Request") "Accepting friend request..." else "Sending friend request..."
-                            if (friendStatus == "Respond to Request") {
+                            if (friendStatus == "Requested") {
+                                cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendStatus == "Respond to Request") {
                                 acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
                                     isFriendActionRunning = false
                                     actionMessage = detail
