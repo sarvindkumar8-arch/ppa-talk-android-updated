@@ -4,6 +4,24 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function owns(userId) { return signedIn() && request.auth.uid == userId; }
 
+    function isPublicProfile(userId) {
+      return !exists(/databases/$(database)/documents/publicProfiles/$(userId))
+        || get(/databases/$(database)/documents/publicProfiles/$(userId)).data.isPrivate != true;
+    }
+
+    function isAcceptedFriend(userId) {
+      return exists(/databases/$(database)/documents/friends/$(userId)/list/$(request.auth.uid));
+    }
+
+    function canViewPosts(userId) {
+      return signedIn() && (owns(userId) || isPublicProfile(userId) || isAcceptedFriend(userId));
+    }
+
+    function canViewParentPost(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId))
+        && canViewPosts(get(/databases/$(database)/documents/posts/$(postId)).data.uid);
+    }
+
     // Private account/profile data: only the account owner can access it.
     match /users/{userId} {
       allow read: if owns(userId);
@@ -35,7 +53,7 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      allow read: if true;
+      allow read: if canViewPosts(resource.data.uid);
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && ((request.resource.data.text is string && request.resource.data.text.size() <= 5000)
@@ -43,7 +61,7 @@ service cloud.firestore {
       allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
 
       match /likes/{likerId} {
-        allow read: if true;
+        allow read: if canViewParentPost(postId);
         allow create: if owns(likerId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡'];
@@ -54,8 +72,8 @@ service cloud.firestore {
         allow delete: if owns(likerId);
       }
       match /comments/{commentId} {
-        allow read: if true;
-        allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+        allow read: if canViewParentPost(postId);
+        allow create: if canViewParentPost(postId) && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
