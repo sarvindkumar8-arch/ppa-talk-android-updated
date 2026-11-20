@@ -10,7 +10,8 @@ service cloud.firestore {
     }
 
     function isAcceptedFriend(userId) {
-      return exists(/databases/$(database)/documents/friends/$(userId)/list/$(request.auth.uid));
+      return signedIn()
+        && exists(/databases/$(database)/documents/friends/$(userId)/list/$(request.auth.uid));
     }
 
     function canViewPosts(userId) {
@@ -22,7 +23,6 @@ service cloud.firestore {
         && canViewPosts(get(/databases/$(database)/documents/posts/$(postId)).data.uid);
     }
 
-    // Private account/profile data: only the account owner can access it.
     match /users/{userId} {
       allow read: if owns(userId);
       allow create: if owns(userId) && request.resource.data.uid == userId;
@@ -30,24 +30,23 @@ service cloud.firestore {
       allow delete: if owns(userId);
     }
 
-    // Public directory contains only fields safe to show to signed-in users.
-    // Never put email, phone, date of birth, gender, or other private details here.
     match /publicProfiles/{userId} {
       allow read: if signedIn();
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'photoUrl', 'coverPhotoUrl', 'photoPath', 'coverPhotoPath', 'bio', 'isPrivate', 'updatedAt', 'createdAt'
+          'uid', 'displayName', 'photoUrl', 'coverPhotoUrl', 'photoPath',
+          'coverPhotoPath', 'bio', 'isPrivate', 'updatedAt', 'createdAt'
         ])
         && request.resource.data.uid == userId;
       allow update: if owns(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'photoUrl', 'coverPhotoUrl', 'photoPath', 'coverPhotoPath', 'bio', 'isPrivate', 'updatedAt'
+          'displayName', 'photoUrl', 'coverPhotoUrl', 'photoPath',
+          'coverPhotoPath', 'bio', 'isPrivate', 'updatedAt'
         ]);
       allow delete: if owns(userId);
     }
 
-    // Password hashes and phone credentials are server-only.
     match /phoneAuthCredentials/{credentialId} {
       allow read, write: if false;
     }
@@ -56,11 +55,19 @@ service cloud.firestore {
       allow read: if canViewPosts(resource.data.uid);
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
-        && ((request.resource.data.text is string && request.resource.data.text.size() <= 5000)
-          || (request.resource.data.mediaPath is string && request.resource.data.mediaPath.size() > 0))
-        && (!('mediaPath' in request.resource.data)
-          || (request.resource.data.mediaPath is string
-            && request.resource.data.mediaPath.matches('^(post_photos|reels)/' + request.auth.uid + '/[A-Za-z0-9._-]+
+        && (
+          (request.resource.data.text is string && request.resource.data.text.size() <= 5000)
+          || (request.resource.data.mediaPath is string && request.resource.data.mediaPath.size() > 0)
+        )
+        && (
+          !('mediaPath' in request.resource.data)
+          || (
+            request.resource.data.mediaPath is string
+            && request.resource.data.mediaPath.matches(
+              '^(post_photos|reels)/' + request.auth.uid + '/[A-Za-z0-9._-]+$'
+            )
+          )
+        );
       allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
 
       match /likes/{likerId} {
@@ -74,14 +81,19 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reaction', 'createdAt']);
         allow delete: if canViewParentPost(postId) && owns(likerId);
       }
+
       match /comments/{commentId} {
         allow read: if canViewParentPost(postId);
-        allow create: if canViewParentPost(postId) && request.resource.data.uid == request.auth.uid
+        allow create: if canViewParentPost(postId)
+          && signedIn()
+          && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
           && request.resource.data.parentId is string;
-        allow update, delete: if canViewParentPost(postId) && signedIn() && resource.data.uid == request.auth.uid;
+        allow update, delete: if canViewParentPost(postId)
+          && signedIn()
+          && resource.data.uid == request.auth.uid;
       }
     }
 
@@ -110,97 +122,13 @@ service cloud.firestore {
 
     match /friends/{userId}/list/{friendId} {
       function hasAcceptedRequest() {
-        return (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId))
-          && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId)).data.status == 'accepted')
-          || (exists(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId))
-          && get(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId)).data.status == 'accepted');
-      }
-      allow read: if owns(userId);
-      allow create, update: if signedIn()
-        && (request.auth.uid == userId || request.auth.uid == friendId)
-        && hasAcceptedRequest();
-      allow delete: if owns(userId);
-    }
-
-    match /chats/{chatId} {
-      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
-      allow create: if signedIn()
-        && request.resource.data.participantIds is list
-        && request.resource.data.participantIds.size() == 2
-        && request.auth.uid in request.resource.data.participantIds;
-      allow update: if signedIn()
-        && request.auth.uid in resource.data.participantIds
-        && request.resource.data.participantIds == resource.data.participantIds
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
-      match /messages/{messageId} {
-        function isChatParticipant() {
-          return signedIn()
-            && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
-        }
-        allow read: if isChatParticipant();
-        allow create: if isChatParticipant()
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 4000;
-        allow update, delete: if false;
-      }
-    }
-  }
-})));
-      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
-
-      match /likes/{likerId} {
-        allow read: if canViewParentPost(postId);
-        allow create: if canViewParentPost(postId) && owns(likerId)
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡'];
-        allow update: if canViewParentPost(postId) && owns(likerId)
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡']
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reaction', 'createdAt']);
-        allow delete: if canViewParentPost(postId) && owns(likerId);
-      }
-      match /comments/{commentId} {
-        allow read: if canViewParentPost(postId);
-        allow create: if canViewParentPost(postId) && request.resource.data.uid == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 1000
-          && request.resource.data.parentId is string;
-        allow update, delete: if canViewParentPost(postId) && signedIn() && resource.data.uid == request.auth.uid;
-      }
-    }
-
-    match /friendRequests/{requestId} {
-      allow read: if signedIn()
-        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.toUid is string
-        && request.resource.data.toUid != request.auth.uid
-        && request.resource.data.status == 'pending';
-      allow update: if signedIn()
-        && request.resource.data.fromUid == resource.data.fromUid
-        && request.resource.data.toUid == resource.data.toUid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && (
-          (resource.data.toUid == request.auth.uid
-            && request.resource.data.status in ['accepted', 'rejected'])
-          || (resource.data.fromUid == request.auth.uid
-            && resource.data.status == 'rejected'
-            && request.resource.data.status == 'pending')
+        return (
+          exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId))
+          && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId)).data.status == 'accepted'
+        ) || (
+          exists(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId))
+          && get(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId)).data.status == 'accepted'
         );
-      allow delete: if signedIn()
-        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
-    }
-
-    match /friends/{userId}/list/{friendId} {
-      function hasAcceptedRequest() {
-        return (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId))
-          && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + friendId)).data.status == 'accepted')
-          || (exists(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId))
-          && get(/databases/$(database)/documents/friendRequests/$(friendId + '_' + userId)).data.status == 'accepted');
       }
       allow read: if owns(userId);
       allow create, update: if signedIn()
@@ -219,6 +147,7 @@ service cloud.firestore {
         && request.auth.uid in resource.data.participantIds
         && request.resource.data.participantIds == resource.data.participantIds
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
+
       match /messages/{messageId} {
         function isChatParticipant() {
           return signedIn()
