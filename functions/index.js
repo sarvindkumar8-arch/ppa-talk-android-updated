@@ -132,3 +132,65 @@ exports.resetPhonePassword = onCall(
     return { success: true };
   }
 );
+
+
+function storagePathFromInput(value) {
+  if (typeof value !== "string" || value.length > 2048) {
+    throw new HttpsError("invalid-argument", "Invalid media reference.");
+  }
+  if (/^(profile_photos|cover_photos|post_photos|reels)\\/[A-Za-z0-9_-]+\\/[A-Za-z0-9._-]+$/.test(value)) return value;
+  try {
+    const url = new URL(value);
+    if (url.hostname !== "firebasestorage.googleapis.com") throw new Error("host");
+    const match = url.pathname.match(/^\\/v0\\/b\\/[^/]+\\/o\\/(.+)$/);
+    if (!match) throw new Error("path");
+    const path = decodeURIComponent(match[1]);
+    if (!/^(profile_photos|cover_photos|post_photos|reels)\\/[A-Za-z0-9_-]+\\/[A-Za-z0-9._-]+$/.test(path)) throw new Error("path");
+    return path;
+  } catch (_) {
+    throw new HttpsError("invalid-argument", "Unsupported media reference.");
+  }
+}
+
+exports.getSecureMediaUrl = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view media.");
+    const path = storagePathFromInput(request.data?.mediaRef);
+    const [kind, ownerUid] = path.split("/");
+    const viewerUid = request.auth.uid;
+
+    if (kind === "profile_photos" || kind === "cover_photos") {
+      if (ownerUid !== viewerUid) {
+        const profile = await db.collection("publicProfiles").doc(ownerUid).get();
+        if (profile.exists && profile.get("isPrivate") === true) {
+          throw new HttpsError("permission-denied", "This profile is private.");
+        }
+      }
+    } else {
+      const matches = await db.collection("posts")
+        .where("uid", "==", ownerUid)
+        .where("mediaPath", "==", path)
+        .limit(1).get();
+      if (matches.empty) {
+        throw new HttpsError("not-found", "Media is not attached to an available post.");
+      }
+      if (ownerUid !== viewerUid) {
+        const profile = await db.collection("publicProfiles").doc(ownerUid).get();
+        const isPrivate = profile.exists && profile.get("isPrivate") === true;
+        if (isPrivate) {
+          const friendship = await db.doc(`friends/${ownerUid}/list/${viewerUid}`).get();
+          if (!friendship.exists) throw new HttpsError("permission-denied", "This post is private.");
+        }
+      }
+    }
+
+    const bucket = require("firebase-admin/storage").getStorage().bucket();
+    const file = bucket.file(path);
+    const [exists] = await file.exists();
+    if (!exists) throw new HttpsError("not-found", "Media file does not exist.");
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    const [url] = await file.getSignedUrl({ action: "read", expires: expiresAt });
+    return { url, expiresAt };
+  }
+);
