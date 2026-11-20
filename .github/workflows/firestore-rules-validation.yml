@@ -62,3 +62,21 @@ jobs:
 
       - name: Verify short-lived service account access token
         run: gcloud auth print-access-token > /dev/null
+
+      - name: Check read-only access to Firebase Rules API
+        shell: bash
+        run: |
+          token="$(gcloud auth print-access-token)"
+          status="$(curl --silent --show-error --output /tmp/firebase-rules-response.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${token}" \
+            "https://firebaserules.googleapis.com/v1/projects/ppa-talk/rulesets?pageSize=1")"
+          echo "Firebase Rules API HTTP status: ${status}"
+          if [ "${status}" = "200" ]; then
+            echo "Firebase Rules API read access: PASS"
+          elif [ "${status}" = "403" ]; then
+            echo "Firebase Rules API read access: NOT GRANTED (read-only permission needed)"
+            cat /tmp/firebase-rules-response.json
+          else
+            cat /tmp/firebase-rules-response.json
+            exit 1
+          fi
