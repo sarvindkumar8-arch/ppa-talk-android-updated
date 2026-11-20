@@ -1,4 +1,4 @@
-name: Firestore Rules Validation
+name: Firebase Security Rules Validation
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - security-hardening/profile-media-app-check
     paths:
       - 'firestore.rules.example'
+      - 'storage.rules.example'
       - 'firebase.json'
       - 'tests/firebase/**'
       - '.github/workflows/firestore-rules-validation.yml'
@@ -34,5 +35,5 @@ jobs:
           npm install --global firebase-tools
           npm install --no-save --no-package-lock firebase@11.10.0 @firebase/rules-unit-testing@4.0.1
 
-      - name: Run Firestore permission tests in Emulator
-        run: firebase emulators:exec --only firestore --project demo-ppa-talk "node --test tests/firebase/*.test.cjs"
+      - name: Run Firestore and Storage permission tests in Emulators
+        run: firebase emulators:exec --only firestore,storage --project demo-ppa-talk "node --test tests/firebase/*.test.cjs"
