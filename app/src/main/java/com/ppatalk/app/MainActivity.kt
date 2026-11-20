@@ -1234,19 +1234,15 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
             if (post.text.isNotBlank()) Text(post.text)
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
-                AsyncImage(
-                    model = post.mediaUrl,
+                SecureMediaImage(
+                    mediaRef = post.mediaUrl,
                     contentDescription = "Post photo",
                     modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     contentScale = ContentScale.Crop
                 )
             } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
                 Spacer(Modifier.height(10.dp))
-                AndroidView(
-                    factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); setVideoURI(Uri.parse(post.mediaUrl)) } },
-                    update = { view -> if (!view.isPlaying) view.setVideoURI(Uri.parse(post.mediaUrl)) },
-                    modifier = Modifier.fillMaxWidth().height(230.dp)
-                )
+                SecureMediaVideo(mediaRef = post.mediaUrl, modifier = Modifier.fillMaxWidth().height(230.dp))
             }
             Spacer(Modifier.height(8.dp))
             if (showReactionPicker) {
@@ -1470,13 +1466,13 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 message = ""
                 success = false
                 val db = FirebaseFirestore.getInstance()
-                fun savePost(mediaUrl: String) {
+                fun savePost(mediaPath: String) {
                     val post = hashMapOf(
                         "uid" to uid,
                         "authorName" to displayName,
 
                         "text" to postText.trim(),
-                        "mediaUrl" to mediaUrl,
+                        "mediaPath" to mediaPath,
                         "mediaType" to mediaType,
                         "postType" to if (mediaType == "video") "reel" else "post",
                         "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
@@ -1503,10 +1499,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     val folder = if (mediaType == "video") "reels" else "post_photos"
                     val mediaRef = FirebaseStorage.getInstance().reference.child("$folder/$uid/${System.currentTimeMillis()}.$extension")
                     mediaRef.putFile(uri)
-                        .addOnSuccessListener {
-                            mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString()) }
-                                .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media URL could not be loaded." }
-                        }
+                        .addOnSuccessListener { savePost(mediaRef.path) }
                         .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media upload failed. Check Firebase Storage rules." }
                 }
             },
@@ -1563,8 +1556,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             } else if (snapshot != null) {
                 displayName = snapshot.getString("displayName") ?: initialName
                 bio = snapshot.getString("bio") ?: ""
-                photoUrl = snapshot.getString("photoUrl") ?: ""
-                coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+                photoUrl = snapshot.getString("photoPath") ?: snapshot.getString("photoUrl") ?: ""
+                coverPhotoUrl = snapshot.getString("coverPhotoPath") ?: snapshot.getString("coverPhotoUrl") ?: ""
                 isPrivateProfile = snapshot.getBoolean("isPrivate") ?: false
             }
         }
@@ -1579,24 +1572,19 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             val imageRef = FirebaseStorage.getInstance().reference.child("profile_photos/$uid/profile.jpg")
             imageRef.putFile(uri)
                 .addOnSuccessListener {
-                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                            .set(mapOf("photoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
-                            .addOnSuccessListener {
-                                saving = false
-                                photoUrl = downloadUri.toString()
-                                message = "Profile photo update ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Photo URL save nahi hua."
-                            }
-                    }.addOnFailureListener { exception ->
-                        saving = false
-                        isError = true
-                        message = exception.localizedMessage ?: "Photo URL nahi mil paya."
-                    }
+                    FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                        .set(mapOf("photoPath" to imageRef.path, "photoUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                        .addOnSuccessListener {
+                            saving = false
+                            photoUrl = imageRef.path
+                            message = "Profile photo update ho gayi."
+                        }
+                        .addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = exception.localizedMessage ?: "Photo path save nahi hua."
+                        }
                 }
                 .addOnFailureListener { exception ->
                     saving = false
@@ -1614,24 +1602,19 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             val imageRef = FirebaseStorage.getInstance().reference.child("cover_photos/$uid/cover.jpg")
             imageRef.putFile(uri)
                 .addOnSuccessListener {
-                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                            .set(mapOf("coverPhotoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
-                            .addOnSuccessListener {
-                                saving = false
-                                coverPhotoUrl = downloadUri.toString()
-                                message = "Cover photo update ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Cover photo URL save nahi hua."
-                            }
-                    }.addOnFailureListener { exception ->
-                        saving = false
-                        isError = true
-                        message = exception.localizedMessage ?: "Cover photo URL nahi mil paya."
-                    }
+                    FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                        .set(mapOf("coverPhotoPath" to imageRef.path, "coverPhotoUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                        .addOnSuccessListener {
+                            saving = false
+                            coverPhotoUrl = imageRef.path
+                            message = "Cover photo update ho gayi."
+                        }
+                        .addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = exception.localizedMessage ?: "Cover photo path save nahi hua."
+                        }
                 }
                 .addOnFailureListener { exception ->
                     saving = false
@@ -1660,8 +1643,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (coverPhotoUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = coverPhotoUrl,
+                        SecureMediaImage(
+                            mediaRef = coverPhotoUrl,
                             contentDescription = "Profile cover photo",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -1697,7 +1680,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 contentAlignment = Alignment.Center
             ) {
                 if (photoUrl.isNotBlank()) {
-                    AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                    SecureMediaImage(mediaRef = photoUrl, contentDescription = "Profile photo",
                         modifier = Modifier.size(104.dp).clip(CircleShape),
                         contentScale = ContentScale.Crop)
                 } else {
@@ -1821,7 +1804,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         )
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "bio" to bio.trim(),
-                            "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                            "photoPath" to photoUrl, "coverPhotoPath" to coverPhotoUrl,
                             "isPrivate" to isPrivateProfile, "updatedAt" to timestamp
                         )
                         val batch = db.batch()
