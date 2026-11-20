@@ -1061,6 +1061,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
         loading = true
         error = ""
         val authorPosts = mutableMapOf<String, List<FeedPost>>()
+        val receivedAuthors = mutableSetOf<String>()
         val registrations = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
         fun publishPosts() {
             posts = authorPosts.values.flatten()
@@ -1072,6 +1073,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
                 .whereEqualTo("uid", authorUid)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, exception ->
+                    receivedAuthors.add(authorUid)
                     if (exception != null) {
                         error = exception.localizedMessage ?: "Could not load posts for an allowed account."
                         authorPosts.remove(authorUid)
@@ -1085,7 +1087,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
                         }
                     }
                     publishPosts()
-                    loading = registrations.size < permittedAuthors.size
+                    loading = receivedAuthors.size < permittedAuthors.size
                     if (exception == null) error = ""
                 }
             registrations.add(registration)
