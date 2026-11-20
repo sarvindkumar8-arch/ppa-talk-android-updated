@@ -930,22 +930,21 @@ private fun acceptFriendRequestSafely(
     db: FirebaseFirestore, currentUid: String, friendUid: String, currentName: String, friendName: String,
     onResult: (Boolean, String) -> Unit
 ) {
-    db.collection("friendRequests").document(friendUid + "_" + currentUid).update("status", "accepted")
-        .addOnSuccessListener {
-            db.collection("publicProfiles").document(currentUid).get().addOnSuccessListener { mine ->
-                db.collection("publicProfiles").document(friendUid).get().addOnSuccessListener { theirs ->
-                    val batch = db.batch()
-                    batch.set(db.collection("friends").document(currentUid).collection("list").document(friendUid),
-                        mapOf("uid" to friendUid, "displayName" to (theirs.getString("displayName") ?: friendName),
-                            "photoUrl" to (theirs.getString("photoUrl") ?: "")))
-                    batch.set(db.collection("friends").document(friendUid).collection("list").document(currentUid),
-                        mapOf("uid" to currentUid, "displayName" to (mine.getString("displayName") ?: currentName),
-                            "photoUrl" to (mine.getString("photoUrl") ?: "")))
-                    batch.commit().addOnSuccessListener { onResult(true, "Friend request accepted.") }
-                        .addOnFailureListener { onResult(false, it.localizedMessage ?: "Friend list update failed.") }
-                }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load friend's profile.") }
-            }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load your profile.") }
-        }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not accept friend request.") }
+    val requestRef = db.collection("friendRequests").document(friendUid + "_" + currentUid)
+    db.collection("publicProfiles").document(currentUid).get().addOnSuccessListener { mine ->
+        db.collection("publicProfiles").document(friendUid).get().addOnSuccessListener { theirs ->
+            val batch = db.batch()
+            batch.update(requestRef, "status", "accepted")
+            batch.set(db.collection("friends").document(currentUid).collection("list").document(friendUid),
+                mapOf("uid" to friendUid, "displayName" to (theirs.getString("displayName") ?: friendName),
+                    "photoUrl" to (theirs.getString("photoUrl") ?: "")))
+            batch.set(db.collection("friends").document(friendUid).collection("list").document(currentUid),
+                mapOf("uid" to currentUid, "displayName" to (mine.getString("displayName") ?: currentName),
+                    "photoUrl" to (mine.getString("photoUrl") ?: "")))
+            batch.commit().addOnSuccessListener { onResult(true, "Friend request accepted. You are now friends.") }
+                .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not accept request or update friend lists.") }
+        }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load friend's profile.") }
+    }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load your profile.") }
 }
 
 data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
@@ -3118,7 +3117,7 @@ fun PublicProfileScreen(
                                     actionMessage = detail
                                     if (success) friendStatus = "Add Friend"
                                 }
-                            } else if (friendStatus == "Respond to Request") {
+                            } else if (friendStatus == "Confirm Request") {
                                 acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
                                     isFriendActionRunning = false
                                     actionMessage = detail
@@ -3279,7 +3278,7 @@ fun NotificationsScreen(uid: String, modifier: Modifier = Modifier, onOpenFriend
                     loading = false
                 } else if (snapshot != null) {
                     incoming = snapshot.documents.filter {
-                        it.getString("status") in listOf("pending", "accepted", "rejected")
+                        it.getString("status") == "pending"
                     }.map { doc ->
                         mapOf(
                             "fromName" to doc.getString("fromName").orEmpty().ifBlank { "PPA Talk user" },
