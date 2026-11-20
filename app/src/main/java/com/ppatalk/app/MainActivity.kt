@@ -912,6 +912,20 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
+    var isPrivateAccount by remember { mutableStateOf(false) }
+    DisposableEffect(uid) {
+        val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                isPrivateAccount = snapshot?.getBoolean("isPrivate") ?: false
+            }
+        onDispose { registration.remove() }
+    }
+    // Private accounts enter a profile-only experience: no feed, discovery, friends,
+    // reels, marketplace, notifications, or app navigation is rendered.
+    if (isPrivateAccount) {
+        ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.fillMaxSize())
+        return
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -1475,6 +1489,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var hometown by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
     var coverPhotoUrl by remember { mutableStateOf("") }
+    var isPrivateProfile by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -1507,6 +1522,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 bio = snapshot.getString("bio") ?: ""
                 photoUrl = snapshot.getString("photoUrl") ?: ""
                 coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+                isPrivateProfile = snapshot.getBoolean("isPrivate") ?: false
             }
         }
         onDispose { privateRegistration.remove(); publicRegistration.remove() }
@@ -1671,6 +1687,32 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
                 placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
                 minLines = 3, maxLines = 4)
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Private profile", fontWeight = FontWeight.Bold)
+                        Text("Private mode shows only this profile screen in the app.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = isPrivateProfile, onCheckedChange = { enabled ->
+                        isPrivateProfile = enabled
+                        saving = true
+                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                            .update(mapOf("isPrivate" to enabled, "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                            .addOnCompleteListener { task ->
+                                saving = false
+                                if (task.isSuccessful) {
+                                    message = if (enabled) "Private profile enabled." else "Private profile disabled."
+                                    isError = false
+                                } else {
+                                    isPrivateProfile = !enabled
+                                    message = task.exception?.localizedMessage ?: "Privacy setting save nahi hui."
+                                    isError = true
+                                }
+                            }
+                    }, enabled = !saving && !loading)
+                }
+            }
             Text("Personal details", style = MaterialTheme.typography.titleMedium,
                 color = Orange, fontWeight = FontWeight.Bold)
             OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
@@ -1737,7 +1779,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "bio" to bio.trim(),
                             "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
-                            "updatedAt" to timestamp
+                            "isPrivate" to isPrivateProfile, "updatedAt" to timestamp
                         )
                         val batch = db.batch()
                         batch.set(db.collection("users").document(uid), privateUpdates, com.google.firebase.firestore.SetOptions.merge())
