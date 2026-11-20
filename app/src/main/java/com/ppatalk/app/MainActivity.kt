@@ -1029,7 +1029,9 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
-    var permittedAuthors by remember(currentUid) { mutableStateOf(setOf(currentUid)) }
+    var publicAuthorIds by remember(currentUid) { mutableStateOf<Set<String>>(emptySet()) }
+    var friendAuthorIds by remember(currentUid) { mutableStateOf<Set<String>>(emptySet()) }
+    val permittedAuthors = publicAuthorIds + friendAuthorIds + currentUid
     val db = remember { FirebaseFirestore.getInstance() }
 
     // Build the feed allow-list from public accounts plus accepted friends.
@@ -1038,11 +1040,9 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
             if (exception != null) {
                 error = exception.localizedMessage ?: "Could not load public profiles."
             } else if (snapshot != null) {
-                val publicIds = snapshot.documents
+                publicAuthorIds = snapshot.documents
                     .filter { it.getBoolean("isPrivate") != true }
                     .map { it.id }.toSet()
-                val friendIds = permittedAuthors - currentUid
-                permittedAuthors = publicIds + friendIds + currentUid
             }
         }
         val friendsListener = db.collection("friends").document(currentUid).collection("list")
@@ -1050,9 +1050,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
                 if (exception != null) {
                     error = exception.localizedMessage ?: "Could not load your friends."
                 } else if (snapshot != null) {
-                    val friendIds = snapshot.documents.map { it.id }.toSet()
-                    val publicIds = permittedAuthors - currentUid - friendIds
-                    permittedAuthors = publicIds + friendIds + currentUid
+                    friendAuthorIds = snapshot.documents.map { it.id }.toSet()
                 }
             }
         onDispose { profilesListener.remove(); friendsListener.remove() }
