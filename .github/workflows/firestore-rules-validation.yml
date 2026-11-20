@@ -146,8 +146,14 @@ jobs:
               return 1
             fi
           }
-          audit_release "cloud.firestore" "firestore.rules.example" "Firestore"
-          audit_release "firebase.storage" "storage.rules.example" "Storage"
+          audit_failed=0
+          # Run both audits even if one ruleset differs or cannot be read.
+          audit_release "cloud.firestore" "firestore.rules.example" "Firestore" || audit_failed=1
+          audit_release "firebase.storage" "storage.rules.example" "Storage" || audit_failed=1
+          if [ "${audit_failed}" -ne 0 ]; then
+            echo "LIVE RULES AUDIT FAILED: review every mismatch above before deployment."
+            exit 1
+          fi
 
 
   deploy-live-firebase-rules:
