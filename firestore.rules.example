@@ -35,14 +35,14 @@ service cloud.firestore {
     // Never put email, phone, date of birth, gender, or other private details here.
     match /publicProfiles/{userId} {
       function isAcceptedFriend() {
-        return signedIn()
-          && exists(/databases/$(database)/documents/friends/$(userId)/list/$(request.auth.uid))
-          && (
-            (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid))
-              && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid)).data.status == 'accepted')
-            || (exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId))
-              && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == 'accepted')
-          );
+        // Accepted request status is authoritative; friend-list mirrors are
+        // repaired atomically by the client and are not an access prerequisite.
+        return signedIn() && (
+          (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid))
+            && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid)).data.status == 'accepted')
+          || (exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId))
+            && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == 'accepted')
+        );
       }
       // All profile reads require authentication. Public visibility means
       // any signed-in user; private visibility is limited to owner and accepted friends.
