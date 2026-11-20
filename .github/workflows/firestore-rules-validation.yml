@@ -82,3 +82,58 @@ jobs:
             cat /tmp/firebase-rules-response.json
             exit 1
           fi
+          fi
+
+      - name: Audit deployed Firestore and Storage rules (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth print-access-token)"
+          audit_release() {
+            local release_id="$1"
+            local local_file="$2"
+            local label="$3"
+            local release_json ruleset_name ruleset_json live_content live_hash repo_hash
+            local status
+            status="$(curl --silent --show-error --output /tmp/release.json --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${token}" \
+              "https://firebaserules.googleapis.com/v1/projects/ppa-talk/releases/${release_id}")"
+            echo "${label} active release HTTP status: ${status}"
+            if [ "${status}" = "404" ]; then
+              echo "${label}: NO ACTIVE RELEASE FOUND"
+              return 0
+            fi
+            if [ "${status}" != "200" ]; then
+              cat /tmp/release.json
+              return 1
+            fi
+            ruleset_name="$(jq -r '.rulesetName // empty' /tmp/release.json)"
+            if [ -z "${ruleset_name}" ]; then
+              echo "${label}: release has no rulesetName"
+              return 1
+            fi
+            status="$(curl --silent --show-error --output /tmp/ruleset.json --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${token}" \
+              "https://firebaserules.googleapis.com/v1/${ruleset_name}")"
+            echo "${label} deployed ruleset HTTP status: ${status}"
+            if [ "${status}" != "200" ]; then
+              cat /tmp/ruleset.json
+              return 1
+            fi
+            live_content="$(jq -r '.files[0].content // empty' /tmp/ruleset.json)"
+            if [ -z "${live_content}" ]; then
+              echo "${label}: deployed ruleset source is empty or unavailable"
+              return 1
+            fi
+            live_hash="$(printf '%s' "${live_content}" | sha256sum | cut -d' ' -f1)"
+            repo_hash="$(sha256sum "${local_file}" | cut -d' ' -f1)"
+            echo "${label} deployed SHA256: ${live_hash}"
+            echo "${label} repository SHA256: ${repo_hash}"
+            if [ "${live_hash}" = "${repo_hash}" ]; then
+              echo "${label} LIVE RULES MATCH REPOSITORY: PASS"
+            else
+              echo "${label} LIVE RULES DIFFER FROM REPOSITORY: REVIEW REQUIRED"
+            fi
+          }
+          audit_release "cloud.firestore" "firestore.rules.example" "Firestore"
+          audit_release "firebase.storage" "storage.rules.example" "Storage"
