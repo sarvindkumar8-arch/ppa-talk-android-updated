@@ -1886,16 +1886,38 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     var draft by remember(chatId) { mutableStateOf("") }
     var sending by remember(chatId) { mutableStateOf(false) }
     var error by remember(chatId) { mutableStateOf("") }
+    var chatReady by remember(chatId) { mutableStateOf(false) }
 
-    DisposableEffect(chatId) {
-        val registration = db.collection("chats").document(chatId).collection("messages")
-            .orderBy("createdAt", Query.Direction.ASCENDING).addSnapshotListener { snap, exception ->
-                if (exception != null) error = exception.localizedMessage ?: "Messages could not load."
-                else if (snap != null) messages = snap.documents.map { doc ->
-                    mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""), "text" to (doc.getString("text") ?: ""))
+    // Create the parent chat document before attaching the messages listener.
+    // Firestore rules authorize message reads through this parent document.
+    LaunchedEffect(chatId) {
+        val chatRef = db.collection("chats").document(chatId)
+        chatRef.set(
+            mapOf(
+                "participantIds" to listOf(currentUid, friendUid).sorted(),
+                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            ),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnSuccessListener {
+            chatReady = true
+        }.addOnFailureListener { exception ->
+            error = exception.localizedMessage ?: "Chat could not be initialized."
+        }
+    }
+
+    DisposableEffect(chatId, chatReady) {
+        if (!chatReady) {
+            onDispose { }
+        } else {
+            val registration = db.collection("chats").document(chatId).collection("messages")
+                .orderBy("createdAt", Query.Direction.ASCENDING).addSnapshotListener { snap, exception ->
+                    if (exception != null) error = exception.localizedMessage ?: "Messages could not load."
+                    else if (snap != null) messages = snap.documents.map { doc ->
+                        mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""), "text" to (doc.getString("text") ?: ""))
+                    }
                 }
-            }
-        onDispose { registration.remove() }
+            onDispose { registration.remove() }
+        }
     }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
