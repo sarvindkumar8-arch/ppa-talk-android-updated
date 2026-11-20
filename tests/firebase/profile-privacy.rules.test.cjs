@@ -82,7 +82,7 @@ async function seedAcceptedFriendship(ownerUid = "alice", friendUid = "bob") {
 test("public profile is readable by any signed-in user; unauthenticated read is denied", async () => {
   await seedProfile("alice", "public");
   await assertSucceeds(getDoc(doc(db("bob"), "publicProfiles/alice")));
-  await assertFails(getDoc(doc(null), "publicProfiles/alice"));
+  await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "publicProfiles", "alice")));
 });
 
 test("private profile is readable by its owner but denied to a non-friend", async () => {
