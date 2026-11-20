@@ -2923,6 +2923,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PublicProfileScreen(
     uid: String,
