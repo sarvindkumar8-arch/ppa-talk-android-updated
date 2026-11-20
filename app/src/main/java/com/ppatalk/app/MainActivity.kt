@@ -3087,7 +3087,7 @@ fun PublicProfileScreen(
                         if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         else Icon(if (friendStatus == "Friends") Icons.Default.PersonRemove else Icons.Default.PersonAdd, null)
                         Spacer(Modifier.width(6.dp))
-                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Friends") "Unfriend" else friendStatus)
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Friends") "Friends" else friendStatus)
                     }
                     OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
@@ -3179,7 +3179,7 @@ fun PublicProfileScreen(
                             contentDescription = null
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(if (isFriendActionRunning) { if (friendStatus == "Friends") "Removing..." else if (friendStatus == "Requested") "Cancelling..." else "Please wait..." } else if (friendStatus == "Friends") "Unfriend" else friendStatus)
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Friends") "Removing..." else if (friendStatus == "Requested") "Cancelling..." else "Please wait..." } else if (friendStatus == "Friends") "Friends" else friendStatus)
                     }
                     OutlinedButton(
                         onClick = { onOpenChat(uid, displayName) },
