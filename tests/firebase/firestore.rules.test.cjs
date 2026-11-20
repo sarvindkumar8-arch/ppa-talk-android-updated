@@ -19,7 +19,7 @@ const {
   writeBatch,
 } = require("firebase/firestore");
 
-const projectId = "demo-ppa-talk-friend-rules";
+const projectId = "demo-ppa-talk";
 let testEnv;
 const rules = fs.readFileSync(
   path.join(__dirname, "../../firestore.rules.example"),
