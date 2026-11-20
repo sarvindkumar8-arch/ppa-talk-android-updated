@@ -41,3 +41,24 @@ jobs:
 
       - name: Run Firestore and Storage permission tests in Emulators
         run: firebase emulators:exec --only firestore,storage --project demo-ppa-talk "node --test tests/firebase/*.test.cjs"
+
+  verify-google-workload-identity:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/security-hardening/profile-media-app-check'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to Google Cloud using GitHub OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/469604923642/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
+          service_account: ppa-talk-github-security@ppa-talk.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify short-lived service account access token
+        run: gcloud auth print-access-token > /dev/null
