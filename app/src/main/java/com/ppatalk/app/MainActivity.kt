@@ -3254,9 +3254,29 @@ fun PublicProfileScreen(
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { if (friendOptionsPage == "unfriend") { showFriendOptions = false; confirmUnfriend = true } else if (friendOptionsPage == "menu") showFriendOptions = false else if (friendOptionsPage in listOf("see","limit","past")) friendOptionsPage = "break" else showFriendOptions = false }) { Text(if (friendOptionsPage == "unfriend") "Continue" else if (friendOptionsPage in listOf("see","limit","past")) "Save" else "Done") }
+                        TextButton(onClick = {
+                            if (friendOptionsPage == "unfriend") {
+                                showFriendOptions = false
+                                isFriendActionRunning = true
+                                unfriendSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendOptionsPage == "menu") showFriendOptions = false
+                            else if (friendOptionsPage in listOf("see","limit","past")) friendOptionsPage = "break"
+                            else showFriendOptions = false
+                        }) { Text(if (friendOptionsPage == "unfriend") "Yes" else if (friendOptionsPage in listOf("see","limit","past")) "Save" else "Done") }
                     },
-                    dismissButton = { TextButton(onClick = { if (friendOptionsPage == "menu") showFriendOptions = false else friendOptionsPage = if (friendOptionsPage in listOf("see","limit","past")) "break" else "menu" }) { Text(if (friendOptionsPage == "menu") "Cancel" else "Back") } }
+                    dismissButton = {
+                        TextButton(onClick = {
+                            if (friendOptionsPage == "unfriend") {
+                                showFriendOptions = false
+                                friendOptionsPage = "menu"
+                            } else if (friendOptionsPage == "menu") showFriendOptions = false
+                            else friendOptionsPage = if (friendOptionsPage in listOf("see","limit","past")) "break" else "menu"
+                        }) { Text(if (friendOptionsPage == "unfriend") "No" else if (friendOptionsPage == "menu") "Cancel" else "Back") }
+                    }
                 )
             }
             if (confirmUnfriend) AlertDialog(onDismissRequest = { confirmUnfriend = false }, title = { Text("Confirm unfriend") }, text = { Text("Are you sure you want to remove " + displayName + " as your friend?") }, confirmButton = { TextButton(onClick = { confirmUnfriend = false; isFriendActionRunning = true; unfriendSafely(db, currentUid, uid) { success, detail -> isFriendActionRunning = false; actionMessage = detail; if (success) friendStatus = "Add Friend" } }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { confirmUnfriend = false }) { Text("Cancel") } })
