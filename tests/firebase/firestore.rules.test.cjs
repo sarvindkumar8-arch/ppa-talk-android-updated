@@ -158,9 +158,13 @@ test("recipient can reject a pending request; sender cannot accept it", async ()
   });
 
   await assertSucceeds(updateDoc(doc(db("bob"), "friendRequests/alice_bob"), {
+    fromUid: "alice",
+    toUid: "bob",
     status: "rejected",
   }));
   await assertFails(updateDoc(doc(db("alice"), "friendRequests/alice_bob"), {
+    fromUid: "alice",
+    toUid: "bob",
     status: "accepted",
   }));
 });
