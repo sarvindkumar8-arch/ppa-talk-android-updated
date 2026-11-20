@@ -1082,7 +1082,7 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
                             FeedPost(doc.id, doc.getString("uid") ?: "",
                                 doc.getString("authorName") ?: "PPA Talk user",
                                 doc.getString("text") ?: "",
-                                doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
+                                doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaPath") ?: doc.getString("mediaUrl") ?: "",
                                 doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
                         }
                     }
