@@ -35,7 +35,7 @@ fun SecureMediaImage(
                 .getHttpsCallable("getSecureMediaUrl")
                 .call(mapOf("mediaRef" to mediaRef))
                 .addOnSuccessListener { result ->
-                    val data = result.data as? Map<*, *>
+                    val data = result.getData() as? Map<*, *>
                     resolvedUrl = data?.get("url") as? String
                 }
         }
@@ -61,7 +61,7 @@ fun SecureMediaVideo(mediaRef: String, modifier: Modifier = Modifier) {
                 .getHttpsCallable("getSecureMediaUrl")
                 .call(mapOf("mediaRef" to mediaRef))
                 .addOnSuccessListener { result ->
-                    val data = result.data as? Map<*, *>
+                    val data = result.getData() as? Map<*, *>
                     resolvedUrl = data?.get("url") as? String
                 }
         }
