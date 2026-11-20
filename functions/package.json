@@ -2,12 +2,13 @@
   "name": "ppa-talk-functions",
   "private": true,
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "migrateMedia": "node migrate-media.js"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",

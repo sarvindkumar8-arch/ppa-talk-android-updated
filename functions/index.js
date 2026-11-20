@@ -2,139 +2,203 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const { scrypt: scryptCallback, randomBytes, timingSafeEqual, createHash } = require("node:crypto");
+const crypto = require("node:crypto");
 const { promisify } = require("node:util");
 
 initializeApp();
-const db = getFirestore();
-const scrypt = promisify(scryptCallback);
+
 const REGION = "asia-south1";
-const MIN_PASSWORD_LENGTH = 8;
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCK_MINUTES = 15;
+const scrypt = promisify(crypto.scrypt);
+const db = getFirestore();
+const credentials = db.collection("phoneAuthCredentials");
 
 function normalizePhone(value) {
-  if (typeof value !== "string") throw new HttpsError("invalid-argument", "Enter a valid mobile number.");
-  const phone = value.replace(/[^\d+]/g, "");
-  if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-    throw new HttpsError("invalid-argument", "Use a valid international mobile number.");
-  }
-  return phone;
-}
-
-function validatePassword(value) {
-  if (typeof value !== "string" || value.length < MIN_PASSWORD_LENGTH || value.length > 128) {
-    throw new HttpsError("invalid-argument", "Password must be 8 to 128 characters long.");
+  if (typeof value !== "string" || !/^\+[1-9]\d{7,14}$/.test(value)) {
+    throw new HttpsError("invalid-argument", "Enter a valid phone number in international format.");
   }
   return value;
 }
 
-function credentialId(phone) {
-  return createHash("sha256").update(phone).digest("hex");
+function validatePassword(value) {
+  if (typeof value !== "string" || value.length < 8 || value.length > 128 ||
+      !/[A-Z]/.test(value) || !/[a-z]/.test(value) || !/[0-9]/.test(value) ||
+      !/[^A-Za-z0-9]/.test(value)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Password must be 8–128 characters and include uppercase, lowercase, a number and a special character."
+    );
+  }
 }
 
-async function makePasswordHash(password, saltHex) {
-  const salt = saltHex ? Buffer.from(saltHex, "hex") : randomBytes(16);
+function credentialDocId(phone) {
+  return crypto.createHash("sha256").update(phone).digest("hex");
+}
+
+async function makePasswordRecord(password) {
+  const salt = crypto.randomBytes(16);
   const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  return { salt: salt.toString("hex"), passwordHash: Buffer.from(derived).toString("hex") };
-}
-
-async function verifyPassword(password, saltHex, expectedHex) {
-  const { passwordHash } = await makePasswordHash(password, saltHex);
-  const actual = Buffer.from(passwordHash, "hex");
-  const expected = Buffer.from(expectedHex, "hex");
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
-  const phone = normalizePhone(request.data?.phoneNumber);
-  const password = validatePassword(request.data?.password);
-  const displayName = typeof request.data?.displayName === "string" ? request.data.displayName.trim().slice(0, 80) : "";
-  if (!displayName) throw new HttpsError("invalid-argument", "Enter your full name.");
-
-  const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
-  const existing = await docRef.get();
-  if (existing.exists) throw new HttpsError("already-exists", "This mobile number is already registered.");
-
-  let userRecord;
-  try {
-    userRecord = await getAuth().createUser({ phoneNumber: phone, displayName, disabled: false });
-  } catch (error) {
-    if (error.code === "auth/phone-number-already-exists") {
-      throw new HttpsError("already-exists", "This mobile number is already registered.");
-    }
-    throw new HttpsError("internal", "Could not create your account. Please try again.");
-  }
-
-  try {
-    const hash = await makePasswordHash(password);
-    await db.runTransaction(async (tx) => {
-      const current = await tx.get(docRef);
-      if (current.exists) throw new HttpsError("already-exists", "This mobile number is already registered.");
-      tx.create(docRef, {
-        uid: userRecord.uid,
-        phoneNumber: phone,
-        salt: hash.salt,
-        passwordHash: hash.passwordHash,
-        failedAttempts: 0,
-        createdAt: FieldValue.serverTimestamp()
-      });
-      tx.set(db.collection("users").doc(userRecord.uid), {
-        uid: userRecord.uid,
-        phoneNumber: phone,
-        createdAt: FieldValue.serverTimestamp()
-      });
-      tx.set(db.collection("publicProfiles").doc(userRecord.uid), {
-        uid: userRecord.uid,
-        displayName,
-        createdAt: FieldValue.serverTimestamp()
-      });
-    });
-  } catch (error) {
-    await getAuth().deleteUser(userRecord.uid).catch(() => {});
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError("internal", "Could not finish account setup. Please try again.");
-  }
-
-  const token = await getAuth().createCustomToken(userRecord.uid);
-  return { token };
-});
-
-exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
-  const phone = normalizePhone(request.data?.phoneNumber);
-  const password = validatePassword(request.data?.password);
-  const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
-  const snapshot = await docRef.get();
-  if (!snapshot.exists) throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
-
-  const record = snapshot.data();
-  const now = Date.now();
-  const lockUntil = record.lockUntil?.toMillis ? record.lockUntil.toMillis() : 0;
-  if (lockUntil > now) throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
-
-  const matches = await verifyPassword(password, record.salt, record.passwordHash);
-  if (!matches) {
-    await db.runTransaction(async (tx) => {
-      const latest = await tx.get(docRef);
-      if (!latest.exists) return;
-      const attempts = (latest.get("failedAttempts") || 0) + 1;
-      const update = { failedAttempts: attempts };
-      if (attempts >= MAX_FAILED_ATTEMPTS) {
-        update.failedAttempts = 0;
-        update.lockUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
-      }
-      tx.update(docRef, update);
-    });
-    throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
-  }
-
-  await docRef.update({ failedAttempts: 0, lockUntil: FieldValue.delete(), lastLoginAt: FieldValue.serverTimestamp() });
-  const authUser = await getAuth().getUser(record.uid);
-  await db.collection("publicProfiles").doc(record.uid).set({
-    uid: record.uid,
-    displayName: authUser.displayName || "PPA Talk user",
+  return {
+    salt: salt.toString("base64"),
+    passwordHash: derived.toString("base64"),
+    hashVersion: 1,
     updatedAt: FieldValue.serverTimestamp()
-  }, { merge: true });
-  const token = await getAuth().createCustomToken(record.uid);
-  return { token };
-});
+  };
+}
+
+async function verifyPassword(password, record) {
+  if (!record || record.hashVersion !== 1 || !record.salt || !record.passwordHash) return false;
+  const salt = Buffer.from(record.salt, "base64");
+  const expected = Buffer.from(record.passwordHash, "base64");
+  const actual = await scrypt(password, salt, expected.length, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function requireVerifiedPhone(request, expectedPhone) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Verify your phone number first.");
+  const claim = request.auth.token.phone_number;
+  if (!claim || claim !== expectedPhone) {
+    throw new HttpsError("permission-denied", "Verified phone number does not match this request.");
+  }
+}
+
+exports.registerWithPhonePassword = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 5 },
+  async (request) => {
+    const phone = normalizePhone(request.data?.phoneNumber);
+    const password = request.data?.password;
+    validatePassword(password);
+    requireVerifiedPhone(request, phone);
+
+    const uid = request.auth.uid;
+    const user = await getAuth().getUser(uid);
+    if (user.phoneNumber !== phone) {
+      throw new HttpsError("permission-denied", "Phone number verification failed.");
+    }
+
+    const ref = credentials.doc(credentialDocId(phone));
+    const existing = await ref.get();
+    if (existing.exists) {
+      throw new HttpsError("already-exists", "An account already exists for this mobile number.");
+    }
+    await ref.create({ uid, phoneNumber: phone, ...(await makePasswordRecord(password)) });
+    return { success: true };
+  }
+);
+
+exports.loginWithPhonePassword = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 5 },
+  async (request) => {
+    const phone = normalizePhone(request.data?.phoneNumber);
+    const password = request.data?.password;
+    if (typeof password !== "string" || password.length < 1 || password.length > 128) {
+      throw new HttpsError("invalid-argument", "Enter your password.");
+    }
+
+    const snapshot = await credentials.doc(credentialDocId(phone)).get();
+    if (!snapshot.exists || !(await verifyPassword(password, snapshot.data()))) {
+      throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
+    }
+
+    const record = snapshot.data();
+    const user = await getAuth().getUser(record.uid);
+    if (user.disabled || user.phoneNumber !== phone) {
+      throw new HttpsError("permission-denied", "This account is unavailable. Contact support.");
+    }
+    const customToken = await getAuth().createCustomToken(record.uid);
+    return { token: customToken };
+  }
+);
+
+exports.resetPhonePassword = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 5 },
+  async (request) => {
+    const phone = normalizePhone(request.data?.phoneNumber);
+    const password = request.data?.password;
+    validatePassword(password);
+    requireVerifiedPhone(request, phone);
+
+    const uid = request.auth.uid;
+    const user = await getAuth().getUser(uid);
+    if (user.phoneNumber !== phone) {
+      throw new HttpsError("permission-denied", "Verified phone number does not match this account.");
+    }
+
+    const ref = credentials.doc(credentialDocId(phone));
+    const snapshot = await ref.get();
+    if (!snapshot.exists || snapshot.data().uid !== uid) {
+      throw new HttpsError("not-found", "No password account exists for this mobile number.");
+    }
+    await ref.set({ ...(await makePasswordRecord(password)) }, { merge: true });
+    return { success: true };
+  }
+);
+
+
+function storagePathFromInput(value) {
+  if (typeof value !== "string" || value.length > 2048) {
+    throw new HttpsError("invalid-argument", "Invalid media reference.");
+  }
+  const allowedPath = /^(profile_photos|cover_photos|post_photos|reels)[/][A-Za-z0-9_-]+[/][A-Za-z0-9._-]+$/;
+  if (allowedPath.test(value)) return value;
+  try {
+    const url = new URL(value);
+    if (url.hostname !== "firebasestorage.googleapis.com") throw new Error("host");
+    const match = url.pathname.match(new RegExp("^/v0/b/[^/]+/o/(.+)$"));
+    if (!match) throw new Error("path");
+    const path = decodeURIComponent(match[1]);
+    if (!allowedPath.test(path)) throw new Error("path");
+    return path;
+  } catch (_) {
+    throw new HttpsError("invalid-argument", "Unsupported media reference.");
+  }
+}
+
+exports.getSecureMediaUrl = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view media.");
+    const path = storagePathFromInput(request.data?.mediaRef);
+    const [kind, ownerUid] = path.split("/");
+    const viewerUid = request.auth.uid;
+
+    if (kind === "profile_photos" || kind === "cover_photos") {
+      if (ownerUid !== viewerUid) {
+        const profile = await db.collection("publicProfiles").doc(ownerUid).get();
+        if (profile.exists && profile.get("isPrivate") === true) {
+          throw new HttpsError("permission-denied", "This profile is private.");
+        }
+      }
+    } else {
+      let matches = await db.collection("posts")
+        .where("mediaPath", "==", path)
+        .limit(1).get();
+      if (matches.empty && typeof request.data?.mediaRef === "string" && request.data.mediaRef.startsWith("https://")) {
+        matches = await db.collection("posts")
+          .where("mediaUrl", "==", request.data.mediaRef)
+          .limit(1).get();
+      }
+      if (matches.empty) {
+        throw new HttpsError("not-found", "Media is not attached to an available post.");
+      }
+      if (matches.docs[0].get("uid") !== ownerUid) {
+        throw new HttpsError("permission-denied", "Media owner does not match the post author.");
+      }
+      if (ownerUid !== viewerUid) {
+        const profile = await db.collection("publicProfiles").doc(ownerUid).get();
+        const isPrivate = profile.exists && profile.get("isPrivate") === true;
+        if (isPrivate) {
+          const friendship = await db.doc(`friends/${ownerUid}/list/${viewerUid}`).get();
+          if (!friendship.exists) throw new HttpsError("permission-denied", "This post is private.");
+        }
+      }
+    }
+
+    const bucket = require("firebase-admin/storage").getStorage().bucket();
+    const file = bucket.file(path);
+    const [exists] = await file.exists();
+    if (!exists) throw new HttpsError("not-found", "Media file does not exist.");
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    const [url] = await file.getSignedUrl({ action: "read", expires: expiresAt });
+    return { url, expiresAt };
+  }
+);

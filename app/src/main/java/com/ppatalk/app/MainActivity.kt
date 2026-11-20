@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
@@ -45,6 +46,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
@@ -62,6 +64,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PPATalkApp() {
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
@@ -115,9 +118,13 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var countryCode by remember { mutableStateOf("+91") }
     var countryMenuExpanded by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
+    var otpCode by remember { mutableStateOf("") }
+    var verificationId by remember { mutableStateOf<String?>(null) }
+    var otpRequested by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
     val countryCodes = listOf(
         "India (+91)" to "+91", "United States (+1)" to "+1", "United Kingdom (+44)" to "+44",
         "United Arab Emirates (+971)" to "+971", "Canada (+1)" to "+1", "Australia (+61)" to "+61",
@@ -128,6 +135,67 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         "China (+86)" to "+86", "Qatar (+974)" to "+974", "Kuwait (+965)" to "+965",
         "Oman (+968)" to "+968"
     )
+
+    if (usePhone) {
+        PhonePasswordAuthScreen(onAuthenticated = onAuthenticated, onSwitchToEmail = { usePhone = false })
+        return
+    }
+
+    fun finishPhoneSignIn(credential: com.google.firebase.auth.PhoneAuthCredential, fullPhone: String) {
+        busy = true
+        auth.signInWithCredential(credential)
+            .addOnSuccessListener { result ->
+                val firebaseUser = result.user
+                if (firebaseUser == null) {
+                    busy = false
+                    message = "Phone verified, but account details were unavailable."
+                } else if (isSignUp && result.additionalUserInfo?.isNewUser == false) {
+                    auth.signOut()
+                    busy = false
+                    message = "This mobile number is already registered. Please Sign In."
+                } else if (!isSignUp && result.additionalUserInfo?.isNewUser == true) {
+                    firebaseUser.delete().addOnCompleteListener {
+                        auth.signOut()
+                        busy = false
+                        message = "No account found for this number. Please Create account."
+                    }
+                } else {
+                    val profileName = if (isSignUp) name.trim()
+                        else firebaseUser.displayName?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                    firebaseUser.updateProfile(
+                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                            .setDisplayName(profileName).build()
+                    ).addOnCompleteListener {
+                        val db = FirebaseFirestore.getInstance()
+                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        val batch = db.batch()
+                        batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
+                            "uid" to firebaseUser.uid, "phoneNumber" to (firebaseUser.phoneNumber ?: fullPhone),
+                            "updatedAt" to timestamp
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
+                            "uid" to firebaseUser.uid, "displayName" to profileName,
+                            "updatedAt" to timestamp
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        batch.commit().addOnCompleteListener { task ->
+                            busy = false
+                            // Authentication is already successful. A profile write failure must not
+                            // lock the user out; surface it as a non-blocking warning.
+                            if (!task.isSuccessful) {
+                                message = "Phone verified. Profile sync pending: " +
+                                    (task.exception?.localizedMessage ?: "Firestore permission denied.")
+                            }
+                            onAuthenticated()
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener { exception ->
+                busy = false
+                message = exception.localizedMessage ?: "Incorrect or expired OTP."
+            }
+    }
+
     val googleSignInClient = remember(context) {
         val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -169,12 +237,14 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
                                     "updatedAt" to timestamp
                                 ), com.google.firebase.firestore.SetOptions.merge())
-                                batch.commit()
-                                    .addOnSuccessListener { busy = false; onAuthenticated() }
-                                    .addOnFailureListener { exception ->
-                                        busy = false
-                                        message = exception.localizedMessage ?: "Could not save Google profile."
+                                batch.commit().addOnCompleteListener { task ->
+                                    busy = false
+                                    if (!task.isSuccessful) {
+                                        message = "Google login successful. Profile sync pending: " +
+                                            (task.exception?.localizedMessage ?: "Firestore permission denied.")
                                     }
+                                    onAuthenticated()
+                                }
                             }
                         }
                         .addOnFailureListener { exception ->
@@ -188,7 +258,24 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             }
         } else {
             busy = false
-            message = "Google sign-in cancelled."
+            // RESULT_CANCELED can also hide a Google OAuth configuration error.
+            // Read the status returned by Google Play Services before showing a message.
+            val statusCode = try {
+                GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                    .getResult(ApiException::class.java)
+                null
+            } catch (exception: ApiException) {
+                exception.statusCode
+            } catch (_: Exception) {
+                null
+            }
+            message = when (statusCode) {
+                10 -> "Google sign-in configuration error (DEVELOPER_ERROR). Check SHA-1/SHA-256 fingerprints and OAuth client IDs in Firebase."
+                7 -> "Google sign-in network error. Check your internet connection and try again."
+                12500 -> "Google sign-in failed. Check that Google provider is enabled in Firebase Authentication and OAuth setup is complete."
+                12501 -> "Google sign-in was cancelled. Please select your Google account and try again."
+                else -> "Google sign-in did not complete (resultCode=${result.resultCode}, statusCode=${statusCode ?: "unknown"}). Check Firebase Google provider and app SHA fingerprints."
+            }
         }
     }
 
@@ -221,9 +308,9 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
+            FilterChip(selected = !usePhone, onClick = { usePhone = false; otpRequested = false; verificationId = null; message = "" },
                 label = { Text("Email") }, modifier = Modifier.weight(1f))
-            FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
+            FilterChip(selected = usePhone, onClick = { usePhone = true; otpRequested = false; verificationId = null; message = "" },
                 label = { Text("Mobile") }, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
@@ -273,23 +360,30 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 colors = authFieldColors
             )
         }
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password, onValueChange = { password = it },
-            label = { Text("Password") },
-            placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            colors = authFieldColors
-        )
+        if (usePhone && otpRequested) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = otpCode, onValueChange = { otpCode = it.filter(Char::isDigit).take(6) },
+                label = { Text("SMS verification code") }, placeholder = { Text("Enter 6-digit OTP") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors)
+            Text("We sent a verification code to $countryCode$phoneNumber",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else if (!usePhone) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = password, onValueChange = { password = it },
+                label = { Text("Password") },
+                placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors)
+        }
         Spacer(Modifier.height(14.dp))
 
         Button(
             onClick = {
                 message = ""
                 val auth = FirebaseAuth.getInstance()
-                if (password.length < 8) {
+                if (!usePhone && password.length < 8) {
                     message = "Password must be at least 8 characters."
                     return@Button
                 }
@@ -303,33 +397,52 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         message = "Enter a valid mobile number."
                         return@Button
                     }
-                    busy = true
-                    val functionName = if (isSignUp) "registerWithPhonePassword" else "loginWithPhonePassword"
-                    val payload = if (isSignUp) {
-                        hashMapOf("phoneNumber" to fullPhone, "password" to password, "displayName" to name.trim())
-                    } else {
-                        hashMapOf("phoneNumber" to fullPhone, "password" to password)
-                    }
-                    FirebaseFunctions.getInstance("asia-south1").getHttpsCallable(functionName).call(payload)
-                        .addOnSuccessListener { result ->
-                            val data = result.getData() as? Map<*, *>
-                            val token = data?.get("token") as? String
-                            if (token.isNullOrBlank()) {
+                    if (!otpRequested) {
+                        busy = true
+                        val activity = context as? Activity
+                        if (activity == null) {
+                            busy = false
+                            message = "Phone verification is not available on this screen."
+                            return@Button
+                        }
+                        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                            override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                                finishPhoneSignIn(credential, fullPhone)
+                            }
+                            override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
                                 busy = false
-                                message = "Authentication server returned an invalid response."
-                            } else {
-                                auth.signInWithCustomToken(token)
-                                    .addOnSuccessListener { busy = false; onAuthenticated() }
-                                    .addOnFailureListener { exception ->
-                                        busy = false
-                                        message = exception.localizedMessage ?: "Mobile login failed."
-                                    }
+                                message = exception.localizedMessage ?: "Could not send OTP. Check Firebase Phone sign-in settings."
+                            }
+                            override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                                verificationId = id
+                                otpRequested = true
+                                busy = false
+                                message = "OTP sent. Please check your SMS."
+                            }
+                            override fun onCodeAutoRetrievalTimeOut(id: String) {
+                                verificationId = id
+                                otpRequested = true
+                                busy = false
+                                message = "Enter the OTP from your SMS."
                             }
                         }
-                        .addOnFailureListener { exception ->
-                            busy = false
-                            message = exception.localizedMessage ?: "Mobile authentication failed. Check backend setup."
+                        val options = PhoneAuthOptions.newBuilder(auth)
+                            .setPhoneNumber(fullPhone)
+                            .setTimeout(60L, TimeUnit.SECONDS)
+                            .setActivity(activity)
+                            .setCallbacks(callbacks)
+                            .build()
+                        PhoneAuthProvider.verifyPhoneNumber(options)
+                    } else {
+                        val id = verificationId
+                        if (id.isNullOrBlank() || otpCode.length != 6) {
+                            message = "Enter the 6-digit OTP sent to your mobile."
+                            return@Button
                         }
+                        busy = true
+                        val credential = PhoneAuthProvider.getCredential(id, otpCode)
+                        finishPhoneSignIn(credential, fullPhone)
+                    }
                 } else {
                     if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                         message = "Enter a valid email address."
@@ -392,19 +505,35 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                     ), com.google.firebase.firestore.SetOptions.merge())
                                     batch.commit().addOnCompleteListener { task ->
                                         busy = false
-                                        if (task.isSuccessful) onAuthenticated()
-                                        else message = task.exception?.localizedMessage ?: "Profile setup failed."
+                                        if (!task.isSuccessful) {
+                                            message = "Login successful. Profile sync pending: " +
+                                                (task.exception?.localizedMessage ?: "Firestore permission denied.")
+                                        }
+                                        onAuthenticated()
                                     }
                                 }
                             }
-                            .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
+                            .addOnFailureListener { exception ->
+                                busy = false
+                                val authCode = (exception as? FirebaseAuthException)?.errorCode
+                                message = when (authCode) {
+                                    "ERROR_INVALID_CREDENTIAL",
+                                    "ERROR_WRONG_PASSWORD",
+                                    "ERROR_USER_NOT_FOUND" -> "Wrong email or password. Please check your details and try again."
+                                    "ERROR_INVALID_EMAIL" -> "Please enter a valid email address."
+                                    "ERROR_USER_DISABLED" -> "This account has been disabled. Please contact support."
+                                    "ERROR_TOO_MANY_REQUESTS" -> "Too many login attempts. Please try again later."
+                                    "ERROR_NETWORK_REQUEST_FAILED" -> "Network error. Check your internet connection and try again."
+                                    else -> "Wrong email or password. Please check your details and try again."
+                                }
+                            }
                     }
                 }
             },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Sign In")
+            Text(if (busy) "Please wait..." else if (usePhone && !otpRequested) "Send OTP" else if (usePhone) "Verify OTP" else if (isSignUp) "Sign Up" else "Sign In")
         }
 
         OutlinedButton(
@@ -418,6 +547,14 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
 
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
+        }
+        if (usePhone && otpRequested) {
+            TextButton(enabled = !busy, onClick = {
+                otpRequested = false
+                verificationId = null
+                otpCode = ""
+                message = "Enter your number and request a new OTP."
+            }) { Text("Change mobile number") }
         }
         if (!isSignUp && !usePhone) {
             TextButton(
@@ -443,6 +580,325 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PhonePasswordAuthScreen(onAuthenticated: () -> Unit, onSwitchToEmail: () -> Unit) {
+    var mode by remember { mutableStateOf("login") } // login, signup, forgot
+    var countryCode by remember { mutableStateOf("+91") }
+    var phone by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
+    var verificationId by remember { mutableStateOf<String?>(null) }
+    var otpSent by remember { mutableStateOf(false) }
+    var otpVerified by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
+    val fullPhone = countryCode + phone.filter(Char::isDigit)
+    val codes = listOf("India (+91)" to "+91", "United States (+1)" to "+1",
+        "United Kingdom (+44)" to "+44", "United Arab Emirates (+971)" to "+971",
+        "Canada (+1)" to "+1", "Australia (+61)" to "+61")
+
+    fun validPassword(value: String): Boolean =
+        value.length in 8..128 && value.any { it.isUpperCase() } &&
+            value.any { it.isLowerCase() } && value.any { it.isDigit() } &&
+            value.any { !it.isLetterOrDigit() }
+
+    fun functionErrorMessage(exception: Exception, fallback: String): String {
+        val functionsError = exception as? FirebaseFunctionsException
+        return when (functionsError?.code) {
+            FirebaseFunctionsException.Code.NOT_FOUND ->
+                "Phone login service is not deployed in asia-south1. Firebase project/functions setup is required."
+            FirebaseFunctionsException.Code.UNAVAILABLE,
+            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED ->
+                "Phone service is temporarily unavailable. Please try again."
+            FirebaseFunctionsException.Code.UNAUTHENTICATED ->
+                "Mobile number or password is incorrect, or your phone verification has expired."
+            FirebaseFunctionsException.Code.PERMISSION_DENIED ->
+                "Phone verification does not match this account. Please verify your number again."
+            FirebaseFunctionsException.Code.INVALID_ARGUMENT ->
+                functionsError.message ?: "Please check your mobile number and password."
+            FirebaseFunctionsException.Code.ALREADY_EXISTS ->
+                "An account already exists for this mobile number. Please sign in."
+            FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED ->
+                "Too many attempts. Please wait before trying again."
+            else -> functionsError?.message ?: exception.localizedMessage ?: fallback
+        }
+    }
+
+    fun resetOtpState() {
+        otp = ""
+        verificationId = null
+        otpSent = false
+        otpVerified = false
+    }
+
+    fun verifyPhoneCredential(credential: com.google.firebase.auth.PhoneAuthCredential) {
+        busy = true
+        auth.signInWithCredential(credential)
+            .addOnSuccessListener { result ->
+                val signedIn = result.user
+                if (signedIn == null) {
+                    busy = false
+                    message = "Phone verification succeeded, but account details were unavailable."
+                } else if (mode == "forgot" && result.additionalUserInfo?.isNewUser == true) {
+                    signedIn.delete().addOnCompleteListener {
+                        auth.signOut()
+                        busy = false
+                        message = "No account found for this mobile number."
+                        resetOtpState()
+                    }
+                } else {
+                    otpVerified = true
+                    busy = false
+                    message = if (mode == "signup") "Mobile verified. Now create your password."
+                        else "Mobile verified. Set your new password."
+                }
+            }
+            .addOnFailureListener {
+                busy = false
+                message = it.localizedMessage ?: "OTP verification failed."
+            }
+    }
+
+    fun requestOtp() {
+        if (!fullPhone.matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
+            message = "Enter a valid mobile number."
+            return
+        }
+        val activity = context as? Activity
+        if (activity == null) {
+            message = "Phone verification is not available on this screen."
+            return
+        }
+        busy = true
+        message = ""
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                verifyPhoneCredential(credential)
+            }
+            override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
+                busy = false
+                message = exception.localizedMessage ?: "Could not send OTP. Check Firebase Phone Auth settings."
+            }
+            override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                verificationId = id
+                otpSent = true
+                busy = false
+                message = "OTP sent. Please check your SMS."
+            }
+            override fun onCodeAutoRetrievalTimeOut(id: String) {
+                verificationId = id
+                otpSent = true
+                busy = false
+                message = "Enter the OTP received by SMS."
+            }
+        }
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(fullPhone)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .build()
+        PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
+    fun submitPassword() {
+        if (!validPassword(password)) {
+            message = "Use 8–128 characters with uppercase, lowercase, number and special character."
+            return
+        }
+        val currentUser = auth.currentUser
+        if (currentUser == null || currentUser.phoneNumber != fullPhone) {
+            message = "Please verify your mobile number again."
+            resetOtpState()
+            return
+        }
+        busy = true
+        message = ""
+        val callableName = if (mode == "signup") "registerWithPhonePassword" else "resetPhonePassword"
+        FirebaseFunctions.getInstance("asia-south1").getHttpsCallable(callableName)
+            .call(mapOf("phoneNumber" to fullPhone, "password" to password))
+            .addOnSuccessListener {
+                if (mode == "forgot") {
+                    auth.signOut()
+                    mode = "login"
+                    password = ""
+                    resetOtpState()
+                    busy = false
+                    message = "Password reset successful. Sign in with your new password."
+                } else {
+                    val profileName = fullName.trim()
+                    currentUser.updateProfile(
+                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                            .setDisplayName(profileName).build()
+                    ).addOnCompleteListener {
+                        val db = FirebaseFirestore.getInstance()
+                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        val batch = db.batch()
+                        batch.set(db.collection("users").document(currentUser.uid), mapOf(
+                            "uid" to currentUser.uid, "phoneNumber" to fullPhone,
+                            "createdAt" to timestamp, "updatedAt" to timestamp
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        batch.set(db.collection("publicProfiles").document(currentUser.uid), mapOf(
+                            "uid" to currentUser.uid, "displayName" to profileName,
+                            "createdAt" to timestamp, "updatedAt" to timestamp
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        batch.commit().addOnCompleteListener { task ->
+                            busy = false
+                            if (!task.isSuccessful) {
+                                message = "Account created. Profile sync pending: " +
+                                    (task.exception?.localizedMessage ?: "Firestore permission denied.")
+                            }
+                            onAuthenticated()
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener { exception ->
+                busy = false
+                message = functionErrorMessage(exception, "Could not save password.")
+            }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("PPA Talk", style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
+        Text("Create. Connect. Share.", color = Orange)
+        Spacer(Modifier.height(22.dp))
+        Text(when (mode) {
+            "signup" -> "Create your account"
+            "forgot" -> "Reset password"
+            else -> "Welcome back"
+        }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(14.dp))
+
+        if (mode == "signup" && !otpVerified) {
+            OutlinedTextField(value = fullName, onValueChange = { fullName = it },
+                label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        }
+        if (!otpVerified) {
+            ExposedDropdownMenuBox(expanded = false, onExpandedChange = { }) {
+                OutlinedTextField(value = codes.firstOrNull { it.second == countryCode }?.first ?: countryCode,
+                    onValueChange = {}, readOnly = true, label = { Text("Country code") },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(), singleLine = true)
+            }
+            OutlinedTextField(value = phone, onValueChange = { phone = it.filter(Char::isDigit).take(14) },
+                label = { Text("Mobile number") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+        }
+
+        if (mode == "login") {
+            OutlinedTextField(value = password, onValueChange = { password = it },
+                label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+        } else if (!otpVerified) {
+            if (otpSent) {
+                OutlinedTextField(value = otp, onValueChange = { otp = it.filter(Char::isDigit).take(6) },
+                    label = { Text("6-digit OTP") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            }
+        } else {
+            OutlinedTextField(value = password, onValueChange = { password = it },
+                label = { Text(if (mode == "signup") "Create password" else "New password") },
+                placeholder = { Text("8+ chars, upper/lower/number/symbol") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+            Text("Password: 8+ characters, uppercase, lowercase, number and special character.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Spacer(Modifier.height(14.dp))
+        Button(
+            onClick = {
+                when {
+                    mode == "login" -> {
+                        if (!fullPhone.matches(Regex("^\\+[1-9]\\d{7,14}$")) || password.isBlank()) {
+                            message = "Enter your mobile number and password."
+                        } else {
+                            busy = true
+                            message = ""
+                            FirebaseFunctions.getInstance("asia-south1")
+                                .getHttpsCallable("loginWithPhonePassword")
+                                .call(mapOf("phoneNumber" to fullPhone, "password" to password))
+                                .addOnSuccessListener { result ->
+                                    val data = result.getData() as? Map<*, *>
+                                    val token = data?.get("token") as? String
+                                    if (token.isNullOrBlank()) {
+                                        busy = false
+                                        message = "Authentication server returned an invalid response."
+                                    } else {
+                                        auth.signInWithCustomToken(token)
+                                            .addOnSuccessListener { busy = false; onAuthenticated() }
+                                            .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
+                                    }
+                                }
+                                .addOnFailureListener { exception ->
+                                    busy = false
+                                    message = functionErrorMessage(exception, "Login failed. Please try again.")
+                                }
+                        }
+                    }
+                    !otpVerified && !otpSent -> {
+                        if (mode == "signup" && fullName.isBlank()) message = "Enter your full name."
+                        else requestOtp()
+                    }
+                    !otpVerified -> {
+                        val id = verificationId
+                        if (id.isNullOrBlank() || otp.length != 6) message = "Enter the 6-digit OTP."
+                        else verifyPhoneCredential(PhoneAuthProvider.getCredential(id, otp))
+                    }
+                    else -> submitPassword()
+                }
+            },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (busy) "Please wait..." else when {
+                mode == "login" -> "Sign In"
+                !otpVerified && !otpSent -> "Send OTP"
+                !otpVerified -> "Verify OTP"
+                mode == "signup" -> "Create Account"
+                else -> "Reset Password"
+            })
+        }
+
+        if (mode == "login") {
+            TextButton(enabled = !busy, onClick = {
+                mode = "forgot"; password = ""; message = ""; resetOtpState()
+            }) { Text("Forgot password?") }
+            TextButton(enabled = !busy, onClick = {
+                mode = "signup"; password = ""; message = ""; resetOtpState()
+            }) { Text("Create account") }
+        } else {
+            TextButton(enabled = !busy, onClick = {
+                mode = "login"; password = ""; message = ""; resetOtpState()
+            }) { Text("Back to Sign In") }
+            if (otpSent && !otpVerified) {
+                TextButton(enabled = !busy, onClick = { resetOtpState(); requestOtp() }) {
+                    Text("Resend OTP")
+                }
+            }
+        }
+        if (message.isNotBlank()) {
+            Text(message, color = if (message.contains("successful") || message.contains("sent") ||
+                message.contains("verified") || message.contains("created")) RoyalBlue
+                else MaterialTheme.colorScheme.error)
+        }
+        Spacer(Modifier.height(10.dp))
+        TextButton(enabled = !busy, onClick = onSwitchToEmail) { Text("Use Email / Google instead") }
+    }
+}
+
 private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> Unit) {
     FirebaseAuth.getInstance().sendPasswordResetEmail(email)
         .addOnSuccessListener { onResult(true, "Password reset link sent to your email. Check your inbox and spam folder.") }
@@ -456,6 +912,20 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
+    var isPrivateAccount by remember { mutableStateOf(false) }
+    DisposableEffect(uid) {
+        val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                isPrivateAccount = snapshot?.getBoolean("isPrivate") ?: false
+            }
+        onDispose { registration.remove() }
+    }
+    // Private accounts enter a profile-only experience: no feed, discovery, friends,
+    // reels, marketplace, notifications, or app navigation is rendered.
+    if (isPrivateAccount) {
+        ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.fillMaxSize())
+        return
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -559,34 +1029,77 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
-    DisposableEffect(Unit) {
-        val registration = FirebaseFirestore.getInstance().collection("posts")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+    var publicAuthorIds by remember(currentUid) { mutableStateOf<Set<String>>(emptySet()) }
+    var friendAuthorIds by remember(currentUid) { mutableStateOf<Set<String>>(emptySet()) }
+    val permittedAuthors = publicAuthorIds + friendAuthorIds + currentUid
+    val db = remember { FirebaseFirestore.getInstance() }
+
+    // Build the feed allow-list from public accounts plus accepted friends.
+    DisposableEffect(currentUid) {
+        val profilesListener = db.collection("publicProfiles").addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                error = exception.localizedMessage ?: "Could not load public profiles."
+            } else if (snapshot != null) {
+                publicAuthorIds = snapshot.documents
+                    .filter { it.getBoolean("isPrivate") != true }
+                    .map { it.id }.toSet()
+            }
+        }
+        val friendsListener = db.collection("friends").document(currentUid).collection("list")
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
-                    error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
-                    loading = false
+                    error = exception.localizedMessage ?: "Could not load your friends."
                 } else if (snapshot != null) {
-                    posts = snapshot.documents.map { doc ->
-                        FeedPost(doc.id, doc.getString("uid") ?: "",
-                            doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("text") ?: "",
-                            doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
-                            doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
-                    }
-                    loading = false
-                    error = ""
+                    friendAuthorIds = snapshot.documents.map { it.id }.toSet()
                 }
             }
-        onDispose { registration.remove() }
+        onDispose { profilesListener.remove(); friendsListener.remove() }
+    }
+
+    // Firestore rules authorize each exact author query; never request the entire posts collection.
+    DisposableEffect(permittedAuthors) {
+        loading = true
+        error = ""
+        val authorPosts = mutableMapOf<String, List<FeedPost>>()
+        val receivedAuthors = mutableSetOf<String>()
+        val registrations = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
+        fun publishPosts() {
+            posts = authorPosts.values.flatten()
+                .distinctBy { it.id }
+                .sortedByDescending { it.createdAt?.time ?: 0L }
+        }
+        permittedAuthors.forEach { authorUid ->
+            val registration = db.collection("posts")
+                .whereEqualTo("uid", authorUid)
+                .addSnapshotListener { snapshot, exception ->
+                    receivedAuthors.add(authorUid)
+                    if (exception != null) {
+                        error = exception.localizedMessage ?: "Could not load posts for an allowed account."
+                        authorPosts.remove(authorUid)
+                    } else if (snapshot != null) {
+                        authorPosts[authorUid] = snapshot.documents.map { doc ->
+                            FeedPost(doc.id, doc.getString("uid") ?: "",
+                                doc.getString("authorName") ?: "PPA Talk user",
+                                doc.getString("text") ?: "",
+                                doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaPath") ?: doc.getString("mediaUrl") ?: "",
+                                doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
+                        }
+                    }
+                    publishPosts()
+                    loading = receivedAuthors.size < permittedAuthors.size
+                    if (exception == null) error = ""
+                }
+            registrations.add(registration)
+        }
+        if (permittedAuthors.isEmpty()) {
+            loading = false
+            posts = emptyList()
+        }
+        onDispose { registrations.forEach { it.remove() } }
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        item {
-            HomeComposerCard(onCreatePost = onCreatePost)
-        }
-        item {
-            StoriesStrip()
-        }
+        item { HomeComposerCard(onCreatePost = onCreatePost) }
+        item { StoriesStrip() }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue)
@@ -596,14 +1109,13 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
         }
         if (loading) item { CircularProgressIndicator() }
         if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
-        if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
+        if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Add friends or follow public accounts to see posts.") }
         items(posts, key = { it.id }) { post ->
             FeedPostCard(post, currentUid) { selectedPost = post }
         }
     }
     selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
 }
-
 
 @Composable
 fun HomeComposerCard(onCreatePost: () -> Unit) {
@@ -721,19 +1233,15 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
             if (post.text.isNotBlank()) Text(post.text)
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
-                AsyncImage(
-                    model = post.mediaUrl,
+                SecureMediaImage(
+                    mediaRef = post.mediaUrl,
                     contentDescription = "Post photo",
                     modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     contentScale = ContentScale.Crop
                 )
             } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
                 Spacer(Modifier.height(10.dp))
-                AndroidView(
-                    factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); setVideoURI(Uri.parse(post.mediaUrl)) } },
-                    update = { view -> if (!view.isPlaying) view.setVideoURI(Uri.parse(post.mediaUrl)) },
-                    modifier = Modifier.fillMaxWidth().height(230.dp)
-                )
+                SecureMediaVideo(mediaRef = post.mediaUrl, modifier = Modifier.fillMaxWidth().height(230.dp))
             }
             Spacer(Modifier.height(8.dp))
             if (showReactionPicker) {
@@ -783,7 +1291,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
                 }
                 val context = LocalContext.current
                 TextButton(onClick = {
-                    val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\\n" + post.mediaUrl
+                    val shareText = post.text.ifBlank { "Check out this post on PPA Talk." }
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_TEXT, shareText)
@@ -957,13 +1465,13 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 message = ""
                 success = false
                 val db = FirebaseFirestore.getInstance()
-                fun savePost(mediaUrl: String) {
+                fun savePost(mediaPath: String) {
                     val post = hashMapOf(
                         "uid" to uid,
                         "authorName" to displayName,
 
                         "text" to postText.trim(),
-                        "mediaUrl" to mediaUrl,
+                        "mediaPath" to mediaPath,
                         "mediaType" to mediaType,
                         "postType" to if (mediaType == "video") "reel" else "post",
                         "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
@@ -990,10 +1498,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     val folder = if (mediaType == "video") "reels" else "post_photos"
                     val mediaRef = FirebaseStorage.getInstance().reference.child("$folder/$uid/${System.currentTimeMillis()}.$extension")
                     mediaRef.putFile(uri)
-                        .addOnSuccessListener {
-                            mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString()) }
-                                .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media URL could not be loaded." }
-                        }
+                        .addOnSuccessListener { savePost(mediaRef.path) }
                         .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media upload failed. Check Firebase Storage rules." }
                 }
             },
@@ -1019,6 +1524,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var hometown by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
     var coverPhotoUrl by remember { mutableStateOf("") }
+    var isPrivateProfile by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -1049,8 +1555,9 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             } else if (snapshot != null) {
                 displayName = snapshot.getString("displayName") ?: initialName
                 bio = snapshot.getString("bio") ?: ""
-                photoUrl = snapshot.getString("photoUrl") ?: ""
-                coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+                photoUrl = snapshot.getString("photoPath") ?: snapshot.getString("photoUrl") ?: ""
+                coverPhotoUrl = snapshot.getString("coverPhotoPath") ?: snapshot.getString("coverPhotoUrl") ?: ""
+                isPrivateProfile = snapshot.getBoolean("isPrivate") ?: false
             }
         }
         onDispose { privateRegistration.remove(); publicRegistration.remove() }
@@ -1064,24 +1571,19 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             val imageRef = FirebaseStorage.getInstance().reference.child("profile_photos/$uid/profile.jpg")
             imageRef.putFile(uri)
                 .addOnSuccessListener {
-                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                            .set(mapOf("photoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
-                            .addOnSuccessListener {
-                                saving = false
-                                photoUrl = downloadUri.toString()
-                                message = "Profile photo update ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Photo URL save nahi hua."
-                            }
-                    }.addOnFailureListener { exception ->
-                        saving = false
-                        isError = true
-                        message = exception.localizedMessage ?: "Photo URL nahi mil paya."
-                    }
+                    FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                        .set(mapOf("photoPath" to imageRef.path, "photoUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                        .addOnSuccessListener {
+                            saving = false
+                            photoUrl = imageRef.path
+                            message = "Profile photo update ho gayi."
+                        }
+                        .addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = exception.localizedMessage ?: "Photo path save nahi hua."
+                        }
                 }
                 .addOnFailureListener { exception ->
                     saving = false
@@ -1099,24 +1601,19 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             val imageRef = FirebaseStorage.getInstance().reference.child("cover_photos/$uid/cover.jpg")
             imageRef.putFile(uri)
                 .addOnSuccessListener {
-                    imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-                            .set(mapOf("coverPhotoUrl" to downloadUri.toString(), "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
-                            .addOnSuccessListener {
-                                saving = false
-                                coverPhotoUrl = downloadUri.toString()
-                                message = "Cover photo update ho gayi."
-                            }
-                            .addOnFailureListener { exception ->
-                                saving = false
-                                isError = true
-                                message = exception.localizedMessage ?: "Cover photo URL save nahi hua."
-                            }
-                    }.addOnFailureListener { exception ->
-                        saving = false
-                        isError = true
-                        message = exception.localizedMessage ?: "Cover photo URL nahi mil paya."
-                    }
+                    FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                        .set(mapOf("coverPhotoPath" to imageRef.path, "coverPhotoUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                        .addOnSuccessListener {
+                            saving = false
+                            coverPhotoUrl = imageRef.path
+                            message = "Cover photo update ho gayi."
+                        }
+                        .addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = exception.localizedMessage ?: "Cover photo path save nahi hua."
+                        }
                 }
                 .addOnFailureListener { exception ->
                     saving = false
@@ -1145,8 +1642,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (coverPhotoUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = coverPhotoUrl,
+                        SecureMediaImage(
+                            mediaRef = coverPhotoUrl,
                             contentDescription = "Profile cover photo",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -1182,7 +1679,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 contentAlignment = Alignment.Center
             ) {
                 if (photoUrl.isNotBlank()) {
-                    AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                    SecureMediaImage(mediaRef = photoUrl, contentDescription = "Profile photo",
                         modifier = Modifier.size(104.dp).clip(CircleShape),
                         contentScale = ContentScale.Crop)
                 } else {
@@ -1215,6 +1712,32 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
                 placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
                 minLines = 3, maxLines = 4)
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Private profile", fontWeight = FontWeight.Bold)
+                        Text("Private mode shows only this profile screen in the app.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = isPrivateProfile, onCheckedChange = { enabled ->
+                        isPrivateProfile = enabled
+                        saving = true
+                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                            .update(mapOf("isPrivate" to enabled, "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                            .addOnCompleteListener { task ->
+                                saving = false
+                                if (task.isSuccessful) {
+                                    message = if (enabled) "Private profile enabled." else "Private profile disabled."
+                                    isError = false
+                                } else {
+                                    isPrivateProfile = !enabled
+                                    message = task.exception?.localizedMessage ?: "Privacy setting save nahi hui."
+                                    isError = true
+                                }
+                            }
+                    }, enabled = !saving && !loading)
+                }
+            }
             Text("Personal details", style = MaterialTheme.typography.titleMedium,
                 color = Orange, fontWeight = FontWeight.Bold)
             OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
@@ -1280,8 +1803,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         )
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "bio" to bio.trim(),
-                            "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
-                            "updatedAt" to timestamp
+                            "photoPath" to photoUrl, "coverPhotoPath" to coverPhotoUrl,
+                            "isPrivate" to isPrivateProfile, "updatedAt" to timestamp
                         )
                         val batch = db.batch()
                         batch.set(db.collection("users").document(uid), privateUpdates, com.google.firebase.firestore.SetOptions.merge())

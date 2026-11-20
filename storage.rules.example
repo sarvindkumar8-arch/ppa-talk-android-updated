@@ -7,27 +7,34 @@ service firebase.storage {
     function owns(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    // All user-owned media follows the profile's public/private and accepted-friend setting.
+    function canReadUserMedia(uid) {
+      return owns(uid) || (signedIn() && (
+        firestore.get(/databases/(default)/documents/publicProfiles/$(uid)).data.isPrivate != true
+        || firestore.get(/databases/(default)/documents/friends/$(uid)/list/$(request.auth.uid)).data.uid == request.auth.uid
+      ));
+    }
 
     match /profile_photos/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadUserMedia(uid);
       allow write: if owns(uid)
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
     }
     match /cover_photos/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadUserMedia(uid);
       allow write: if owns(uid)
                     && request.resource.size < 15 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
     }
     match /post_photos/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadUserMedia(uid);
       allow write: if owns(uid)
                     && request.resource.size < 25 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
     }
     match /reels/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadUserMedia(uid);
       allow write: if owns(uid)
                     && request.resource.size < 100 * 1024 * 1024
                     && request.resource.contentType.matches('video/.*');
