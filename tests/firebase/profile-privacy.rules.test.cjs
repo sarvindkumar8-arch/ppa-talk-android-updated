@@ -14,7 +14,7 @@ const {
   updateDoc,
 } = require("firebase/firestore");
 
-const projectId = "demo-ppa-talk";
+const projectId = "demo-ppa-talk-profile-rules";
 let testEnv;
 const rules = fs.readFileSync(
   path.join(__dirname, "../../firestore.rules.example"),
