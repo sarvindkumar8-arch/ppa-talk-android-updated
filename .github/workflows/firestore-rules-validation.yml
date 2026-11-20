@@ -137,6 +137,7 @@ jobs:
               echo "${label} LIVE RULES DIFFER FROM REPOSITORY: REVIEW REQUIRED"
               printf '%s' "${live_content}" > /tmp/live-rules.txt
               diff -u "${local_file}" /tmp/live-rules.txt || true
+              return 1
             fi
           }
           audit_release "cloud.firestore" "firestore.rules.example" "Firestore"
