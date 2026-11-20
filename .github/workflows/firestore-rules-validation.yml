@@ -7,6 +7,7 @@ on:
     paths:
       - 'firestore.rules.example'
       - 'firebase.json'
+      - 'tests/firebase/**'
       - '.github/workflows/firestore-rules-validation.yml'
   workflow_dispatch:
 
@@ -28,8 +29,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install Firebase CLI
-        run: npm install --global firebase-tools
+      - name: Install Firebase CLI and test libraries
+        run: |
+          npm install --global firebase-tools
+          npm install --no-save --no-package-lock firebase @firebase/rules-unit-testing
 
-      - name: Compile rules in Firestore Emulator
-        run: firebase emulators:exec --only firestore --project demo-ppa-talk "true"
+      - name: Run Firestore friend permission tests in Emulator
+        run: firebase emulators:exec --only firestore --project demo-ppa-talk "node --test tests/firebase/firestore.rules.test.cjs"
