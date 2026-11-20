@@ -7,9 +7,14 @@ service firebase.storage {
     function owns(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    // Profile media is readable only while the profile is public, or by its owner.
+    function canReadProfileMedia(uid) {
+      return owns(uid) || (signedIn()
+        && firestore.get(/databases/(default)/documents/publicProfiles/$(uid)).data.isPrivate != true);
+    }
 
     match /profile_photos/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadProfileMedia(uid);
       allow write: if owns(uid)
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
