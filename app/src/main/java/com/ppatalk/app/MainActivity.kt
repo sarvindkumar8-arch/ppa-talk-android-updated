@@ -2751,6 +2751,7 @@ fun PublicProfileScreen(
     var isFriendActionRunning by remember(uid) { mutableStateOf(false) }
     var actionMessage by remember(uid) { mutableStateOf("") }
     var selectedTab by remember(uid) { mutableStateOf("All") }
+    var selectedProfileImage by remember(uid) { mutableStateOf<String?>(null) }
 
     DisposableEffect(uid, currentUid) {
         val directoryRegistration = db.collection("profileDirectory").document(uid)
@@ -2814,13 +2815,13 @@ fun PublicProfileScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().height(205.dp)) {
                 if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
                     if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
                     else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
                 }
             }
@@ -2878,13 +2879,13 @@ fun PublicProfileScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().height(205.dp)) {
                 if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
                     if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
                     else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
                 }
             }
@@ -3013,6 +3014,31 @@ fun PublicProfileScreen(
                     modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    selectedProfileImage?.let { imageUrl ->
+        Dialog(
+            onDismissRequest = { selectedProfileImage = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Full-screen profile or cover photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                    IconButton(
+                        onClick = { selectedProfileImage = null },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close photo",
+                            tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
         }
     }
 }
