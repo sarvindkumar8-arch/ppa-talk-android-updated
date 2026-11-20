@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/chat-voice-video-calling
+      - security-hardening/profile-media-app-check
     paths:
       - 'app/**'
       - '*.gradle.kts'
