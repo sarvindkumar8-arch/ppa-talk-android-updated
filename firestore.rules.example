@@ -156,16 +156,27 @@ service cloud.firestore {
         && request.resource.data.toUid != request.auth.uid
         && request.resource.data.status == 'pending';
       allow update: if signedIn() && (
+        // Recipient can accept or reject a pending request.
         (resource.data.toUid == request.auth.uid
+          && resource.data.status == 'pending'
           && request.resource.data.fromUid == resource.data.fromUid
           && request.resource.data.toUid == resource.data.toUid
           && request.resource.data.status in ['accepted', 'rejected']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+        // Either participant can revoke an accepted friendship.
+        || ((resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid)
+          && resource.data.status == 'accepted'
+          && request.resource.data.fromUid == resource.data.fromUid
+          && request.resource.data.toUid == resource.data.toUid
+          && request.resource.data.status == 'rejected'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+        // Original sender can resend a rejected request.
         || (resource.data.fromUid == request.auth.uid
           && resource.data.status == 'rejected'
           && request.resource.data.fromUid == resource.data.fromUid
           && request.resource.data.toUid == resource.data.toUid
-          && request.resource.data.status == 'pending')
+          && request.resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
       );
       allow delete: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
