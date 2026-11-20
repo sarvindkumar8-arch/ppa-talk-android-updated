@@ -179,6 +179,9 @@ exports.getSecureMediaUrl = onCall(
       if (matches.empty) {
         throw new HttpsError("not-found", "Media is not attached to an available post.");
       }
+      if (matches.docs[0].get("uid") !== ownerUid) {
+        throw new HttpsError("permission-denied", "Media owner does not match the post author.");
+      }
       if (ownerUid !== viewerUid) {
         const profile = await db.collection("publicProfiles").doc(ownerUid).get();
         const isPrivate = profile.exists && profile.get("isPrivate") === true;
