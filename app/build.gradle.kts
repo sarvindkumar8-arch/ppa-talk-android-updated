@@ -5,6 +5,15 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val customKeystoreFile = file("ppa-talk-debug-new.jks")
+val customStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val customKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val customKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val hasCustomSigning = customKeystoreFile.exists() &&
+    !customStorePassword.isNullOrBlank() &&
+    !customKeyAlias.isNullOrBlank() &&
+    !customKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.ppatalk.app"
     compileSdk = 35
@@ -17,6 +26,26 @@ android {
         versionName = "1.1.0"
     }
 
+    signingConfigs {
+        if (hasCustomSigning) {
+            create("custom") {
+                storeFile = customKeystoreFile
+                storePassword = customStorePassword
+                keyAlias = customKeyAlias
+                keyPassword = customKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (hasCustomSigning) {
+                signingConfig = signingConfigs.getByName("custom")
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -24,15 +53,6 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
-    }
-
-    signingConfigs {
-        getByName("debug") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
-            keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
-        }
     }
 
     buildFeatures {
