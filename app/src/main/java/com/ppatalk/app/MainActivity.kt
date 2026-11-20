@@ -3735,8 +3735,11 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                     chats = snapshot.documents.mapNotNull { doc ->
                         val participants = doc.get("participantIds") as? List<*> ?: return@mapNotNull null
                         val otherUid = participants.filterIsInstance<String>().firstOrNull { it != uid } ?: return@mapNotNull null
-                        mapOf("uid" to otherUid, "lastMessage" to (doc.getString("lastMessage") ?: "Start a conversation"))
-                    }
+                        val lastMessage = doc.getString("lastMessage")?.takeIf { it.isNotBlank() }
+                            ?: return@mapNotNull null
+                        val lastMessageAt = doc.getTimestamp("lastMessageAt")?.toDate()?.time ?: 0L
+                        mapOf("uid" to otherUid, "lastMessage" to lastMessage, "lastMessageAt" to lastMessageAt.toString())
+                    }.sortedByDescending { it["lastMessageAt"]?.toLongOrNull() ?: 0L }
                     loading = false
                 }
             }
@@ -3776,10 +3779,11 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
             }
         onDispose { registration.remove() }
     }
-    val visible = (chats.mapNotNull { chat -> people.firstOrNull { it.uid == chat["uid"] }?.let { person ->
-        person.copy(name = person.name)
-    } } + people.filter { friend -> chats.none { it["uid"] == friend.uid } })
-        .distinctBy { it.uid }.filter { it.name.contains(search, true) }
+    // Messenger shows only people with at least one sent/received message.
+    // Opening an empty chat does not add a friend to the inbox.
+    val visible = chats.mapNotNull { chat ->
+        people.firstOrNull { it.uid == chat["uid"] }?.let { person -> person.copy(name = person.name) }
+    }.distinctBy { it.uid }.filter { it.name.contains(search, true) }
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { }) { Icon(Icons.Default.ArrowBack, contentDescription = "Chats", tint = MaterialTheme.colorScheme.onSurface) }
@@ -3789,21 +3793,6 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
         }
         OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             singleLine = true, shape = CircleShape, placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 14.dp, horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            people.forEach { person ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
-                    Box(Modifier.size(66.dp)) {
-                        Surface(onClick = { onOpenChat(person.uid, person.name) }, modifier = Modifier.size(62.dp).align(Alignment.TopStart), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                            if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                            else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
-                        }
-                        if (person.uid in onlinePeople) Surface(Modifier.size(14.dp).align(Alignment.BottomEnd), shape = CircleShape,
-                            color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
-                    }
-                    Text(person.name, maxLines = 2, style = MaterialTheme.typography.labelMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                }
-            }
-        }
         if (friendsLoadError.isNotBlank()) Text(friendsLoadError, color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
         if (people.isEmpty() && !loading && friendsLoadError.isBlank()) Text("Abhi koi accepted friend sync nahi hua. Friends tab mein friend list check karein.",
