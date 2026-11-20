@@ -3170,7 +3170,7 @@ fun PublicProfileScreen(
                             contentDescription = null
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(if (isFriendActionRunning && friendStatus == "Requested") "Sending..." else friendStatus)
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Friends") "Removing..." else if (friendStatus == "Requested") "Cancelling..." else "Please wait..." } else if (friendStatus == "Friends") "Unfriend" else friendStatus)
                     }
                     OutlinedButton(
                         onClick = { onOpenChat(uid, displayName) },
