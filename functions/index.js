@@ -168,10 +168,14 @@ exports.getSecureMediaUrl = onCall(
         }
       }
     } else {
-      const matches = await db.collection("posts")
-        .where("uid", "==", ownerUid)
+      let matches = await db.collection("posts")
         .where("mediaPath", "==", path)
         .limit(1).get();
+      if (matches.empty && typeof request.data?.mediaRef === "string" && request.data.mediaRef.startsWith("https://")) {
+        matches = await db.collection("posts")
+          .where("mediaUrl", "==", request.data.mediaRef)
+          .limit(1).get();
+      }
       if (matches.empty) {
         throw new HttpsError("not-found", "Media is not attached to an available post.");
       }
