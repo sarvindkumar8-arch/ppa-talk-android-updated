@@ -119,7 +119,7 @@ jobs:
               cat /tmp/ruleset.json
               return 1
             fi
-            live_content="$(jq -r '.files[0].content // empty' /tmp/ruleset.json)"
+            live_content="$(jq -r '.source.files[0].content // empty' /tmp/ruleset.json)"
             if [ -z "${live_content}" ]; then
               echo "${label}: deployed ruleset source is empty or unavailable"
               return 1
