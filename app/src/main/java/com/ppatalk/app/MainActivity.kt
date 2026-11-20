@@ -930,18 +930,27 @@ private fun unfriendSafely(
     db: FirebaseFirestore, currentUid: String, friendUid: String,
     onResult: (Boolean, String) -> Unit
 ) {
-    val batch = db.batch()
-    batch.delete(db.collection("friends").document(currentUid).collection("list").document(friendUid))
-    batch.delete(db.collection("friends").document(friendUid).collection("list").document(currentUid))
-    // The accepted request was originally sent by friendUid and accepted by
-    // currentUid. Mark it rejected instead of deleting potentially missing
-    // reverse-direction documents; rules allow the recipient to do this.
-    batch.update(
-        db.collection("friendRequests").document(friendUid + "_" + currentUid),
-        "status", "rejected"
-    )
-    batch.commit().addOnSuccessListener { onResult(true, "Friend removed. You can send a new friend request.") }
-        .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not remove friend. Check Firestore rules.") }
+    val forwardRequest = db.collection("friendRequests").document(currentUid + "_" + friendUid)
+    val reverseRequest = db.collection("friendRequests").document(friendUid + "_" + currentUid)
+
+    // The original request can have been sent by either friend. Read both
+    // directions first, then revoke whichever accepted request actually exists.
+    forwardRequest.get().addOnSuccessListener { forward ->
+        reverseRequest.get().addOnSuccessListener { reverse ->
+            val batch = db.batch()
+            batch.delete(db.collection("friends").document(currentUid).collection("list").document(friendUid))
+            batch.delete(db.collection("friends").document(friendUid).collection("list").document(currentUid))
+            if (forward.exists() && forward.getString("status") == "accepted") {
+                batch.update(forwardRequest, "status", "rejected")
+            }
+            if (reverse.exists() && reverse.getString("status") == "accepted") {
+                batch.update(reverseRequest, "status", "rejected")
+            }
+            batch.commit()
+                .addOnSuccessListener { onResult(true, "Friend removed. You can send a new friend request.") }
+                .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not remove friend. Check Firestore rules.") }
+        }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not check friend request.") }
+    }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not check friend request.") }
 }
 
 private fun acceptFriendRequestSafely(
