@@ -1071,7 +1071,6 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
         permittedAuthors.forEach { authorUid ->
             val registration = db.collection("posts")
                 .whereEqualTo("uid", authorUid)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, exception ->
                     receivedAuthors.add(authorUid)
                     if (exception != null) {
@@ -1292,7 +1291,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onCommentsClick: () -> Unit
                 }
                 val context = LocalContext.current
                 TextButton(onClick = {
-                    val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\\n" + post.mediaUrl
+                    val shareText = post.text.ifBlank { "Check out this post on PPA Talk." }
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_TEXT, shareText)
