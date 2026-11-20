@@ -926,6 +926,18 @@ private fun cancelFriendRequestSafely(
         .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not cancel friend request.") }
 }
 
+private fun unfriendSafely(
+    db: FirebaseFirestore, currentUid: String, friendUid: String,
+    onResult: (Boolean, String) -> Unit
+) {
+    val batch = db.batch()
+    batch.delete(db.collection("friends").document(currentUid).collection("list").document(friendUid))
+    batch.delete(db.collection("friends").document(friendUid).collection("list").document(currentUid))
+    batch.delete(db.collection("friendRequests").document(friendUid + "_" + currentUid))
+    batch.commit().addOnSuccessListener { onResult(true, "Friend removed successfully.") }
+        .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not remove friend. Check Firestore rules.") }
+}
+
 private fun acceptFriendRequestSafely(
     db: FirebaseFirestore, currentUid: String, friendUid: String, currentName: String, friendName: String,
     onResult: (Boolean, String) -> Unit
@@ -3031,10 +3043,16 @@ fun PublicProfileScreen(
                 if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
-                        enabled = !isFriendActionRunning && friendStatus != "Friends",
+                        enabled = !isFriendActionRunning,
                         onClick = {
                             isFriendActionRunning = true
-                            if (friendStatus == "Requested") {
+                            if (friendStatus == "Friends") {
+                                unfriendSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendStatus == "Requested") {
                                 cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
                                     isFriendActionRunning = false
                                     actionMessage = detail
@@ -3058,9 +3076,9 @@ fun PublicProfileScreen(
                         }, modifier = Modifier.weight(1f)
                     ) {
                         if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Icon(if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd, null)
+                        else Icon(if (friendStatus == "Friends") Icons.Default.PersonRemove else Icons.Default.PersonAdd, null)
                         Spacer(Modifier.width(6.dp))
-                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else friendStatus)
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Friends") "Unfriend" else friendStatus)
                     }
                     OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
@@ -3107,11 +3125,17 @@ fun PublicProfileScreen(
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
-                        enabled = !isFriendActionRunning && friendStatus != "Friends" && friendStatus != "Requested",
+                        enabled = !isFriendActionRunning && friendStatus != "Requested",
                         onClick = {
                             isFriendActionRunning = true
                             actionMessage = if (friendStatus == "Confirm Request") "Accepting friend request..." else "Sending friend request..."
-                            if (friendStatus == "Requested") {
+                            if (friendStatus == "Friends") {
+                                unfriendSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendStatus == "Requested") {
                                 cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
                                     isFriendActionRunning = false
                                     actionMessage = detail
@@ -3142,7 +3166,7 @@ fun PublicProfileScreen(
                         if (isFriendActionRunning) CircularProgressIndicator(
                             modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary
                         ) else Icon(
-                            if (friendStatus == "Friends") Icons.Default.People else Icons.Default.PersonAdd,
+                            if (friendStatus == "Friends") Icons.Default.PersonRemove else Icons.Default.PersonAdd,
                             contentDescription = null
                         )
                         Spacer(Modifier.width(6.dp))
