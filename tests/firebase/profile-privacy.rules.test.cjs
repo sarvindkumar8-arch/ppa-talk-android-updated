@@ -178,3 +178,31 @@ test("profile directory can be written only by its owner", async () => {
     displayName: "Changed by stranger",
   }));
 });
+
+test("accepted friend can read private profile without reciprocal friend-list mirror", async () => {
+  await seedProfile("alice", "private");
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "friendRequests/alice_bob"), {
+      fromUid: "alice",
+      toUid: "bob",
+      status: "accepted",
+    });
+  });
+
+  await assertSucceeds(getDoc(doc(db("bob"), "publicProfiles/alice")));
+  await assertFails(getDoc(doc(db("mallory"), "publicProfiles/alice")));
+});
+
+test("accepted friend can read private profile when accepted request is in reverse direction", async () => {
+  await seedProfile("alice", "private");
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "friendRequests/bob_alice"), {
+      fromUid: "bob",
+      toUid: "alice",
+      status: "accepted",
+    });
+  });
+
+  await assertSucceeds(getDoc(doc(db("bob"), "publicProfiles/alice")));
+  await assertFails(getDoc(doc(db("mallory"), "publicProfiles/alice")));
+});
