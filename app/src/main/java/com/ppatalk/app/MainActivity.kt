@@ -1029,34 +1029,78 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
-    DisposableEffect(Unit) {
-        val registration = FirebaseFirestore.getInstance().collection("posts")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+    var permittedAuthors by remember(currentUid) { mutableStateOf(setOf(currentUid)) }
+    val db = remember { FirebaseFirestore.getInstance() }
+
+    // Build the feed allow-list from public accounts plus accepted friends.
+    DisposableEffect(currentUid) {
+        val profilesListener = db.collection("publicProfiles").addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                error = exception.localizedMessage ?: "Could not load public profiles."
+            } else if (snapshot != null) {
+                val publicIds = snapshot.documents
+                    .filter { it.getBoolean("isPrivate") != true }
+                    .map { it.id }.toSet()
+                val friendIds = permittedAuthors - currentUid
+                permittedAuthors = publicIds + friendIds + currentUid
+            }
+        }
+        val friendsListener = db.collection("friends").document(currentUid).collection("list")
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
-                    error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
-                    loading = false
+                    error = exception.localizedMessage ?: "Could not load your friends."
                 } else if (snapshot != null) {
-                    posts = snapshot.documents.map { doc ->
-                        FeedPost(doc.id, doc.getString("uid") ?: "",
-                            doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("text") ?: "",
-                            doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
-                            doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
-                    }
-                    loading = false
-                    error = ""
+                    val friendIds = snapshot.documents.map { it.id }.toSet()
+                    val publicIds = permittedAuthors - currentUid - friendIds
+                    permittedAuthors = publicIds + friendIds + currentUid
                 }
             }
-        onDispose { registration.remove() }
+        onDispose { profilesListener.remove(); friendsListener.remove() }
+    }
+
+    // Firestore rules authorize each exact author query; never request the entire posts collection.
+    DisposableEffect(permittedAuthors) {
+        loading = true
+        error = ""
+        val authorPosts = mutableMapOf<String, List<FeedPost>>()
+        val registrations = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
+        fun publishPosts() {
+            posts = authorPosts.values.flatten()
+                .distinctBy { it.id }
+                .sortedByDescending { it.createdAt?.time ?: 0L }
+        }
+        permittedAuthors.forEach { authorUid ->
+            val registration = db.collection("posts")
+                .whereEqualTo("uid", authorUid)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, exception ->
+                    if (exception != null) {
+                        error = exception.localizedMessage ?: "Could not load posts for an allowed account."
+                        authorPosts.remove(authorUid)
+                    } else if (snapshot != null) {
+                        authorPosts[authorUid] = snapshot.documents.map { doc ->
+                            FeedPost(doc.id, doc.getString("uid") ?: "",
+                                doc.getString("authorName") ?: "PPA Talk user",
+                                doc.getString("text") ?: "",
+                                doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
+                                doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
+                        }
+                    }
+                    publishPosts()
+                    loading = registrations.size < permittedAuthors.size
+                    if (exception == null) error = ""
+                }
+            registrations.add(registration)
+        }
+        if (permittedAuthors.isEmpty()) {
+            loading = false
+            posts = emptyList()
+        }
+        onDispose { registrations.forEach { it.remove() } }
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        item {
-            HomeComposerCard(onCreatePost = onCreatePost)
-        }
-        item {
-            StoriesStrip()
-        }
+        item { HomeComposerCard(onCreatePost = onCreatePost) }
+        item { StoriesStrip() }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue)
@@ -1066,14 +1110,13 @@ fun HomeFeed(currentUid: String, modifier: Modifier = Modifier, onCreatePost: ()
         }
         if (loading) item { CircularProgressIndicator() }
         if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
-        if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
+        if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Add friends or follow public accounts to see posts.") }
         items(posts, key = { it.id }) { post ->
             FeedPostCard(post, currentUid) { selectedPost = post }
         }
     }
     selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
 }
-
 
 @Composable
 fun HomeComposerCard(onCreatePost: () -> Unit) {
