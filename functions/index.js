@@ -138,14 +138,15 @@ function storagePathFromInput(value) {
   if (typeof value !== "string" || value.length > 2048) {
     throw new HttpsError("invalid-argument", "Invalid media reference.");
   }
-  if (/^(profile_photos|cover_photos|post_photos|reels)\\/[A-Za-z0-9_-]+\\/[A-Za-z0-9._-]+$/.test(value)) return value;
+  const allowedPath = /^(profile_photos|cover_photos|post_photos|reels)[/][A-Za-z0-9_-]+[/][A-Za-z0-9._-]+$/;
+  if (allowedPath.test(value)) return value;
   try {
     const url = new URL(value);
     if (url.hostname !== "firebasestorage.googleapis.com") throw new Error("host");
-    const match = url.pathname.match(/^\\/v0\\/b\\/[^/]+\\/o\\/(.+)$/);
+    const match = url.pathname.match(new RegExp("^/v0/b/[^/]+/o/(.+)$"));
     if (!match) throw new Error("path");
     const path = decodeURIComponent(match[1]);
-    if (!/^(profile_photos|cover_photos|post_photos|reels)\\/[A-Za-z0-9_-]+\\/[A-Za-z0-9._-]+$/.test(path)) throw new Error("path");
+    if (!allowedPath.test(path)) throw new Error("path");
     return path;
   } catch (_) {
     throw new HttpsError("invalid-argument", "Unsupported media reference.");
