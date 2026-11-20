@@ -44,10 +44,14 @@ service cloud.firestore {
               && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == 'accepted')
           );
       }
-      allow read: if owns(userId)
+      // All profile reads require authentication. Public visibility means
+      // any signed-in user; private visibility is limited to owner and accepted friends.
+      allow read: if signedIn() && (
+        owns(userId)
         || isAcceptedFriend()
         || !("profileVisibility" in resource.data)
-        || resource.data.profileVisibility == "public";
+        || resource.data.profileVisibility == "public"
+      );
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt', 'createdAt'
