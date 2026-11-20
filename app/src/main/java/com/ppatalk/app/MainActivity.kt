@@ -3192,7 +3192,42 @@ fun PublicProfileScreen(
                 }
                 if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
             }
-            if (showFriendOptions && friendStatus == "Friends") {
+            if (showFriendOptions && friendStatus == "Friends" && friendOptionsPage == "menu") {
+                ModalBottomSheet(
+                    onDismissRequest = { showFriendOptions = false },
+                    dragHandle = { BottomSheetDefaults.DragHandle() }
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+                        listOf(
+                            "Take a break" to Icons.Default.PersonOff,
+                            "Edit friend list" to Icons.Default.Edit,
+                            "Favorites" to Icons.Default.Star,
+                            "Unfriend" to Icons.Default.PersonRemove
+                        ).forEach { (option, optionIcon) ->
+                            Row(
+                                Modifier.fillMaxWidth().height(76.dp).clickable {
+                                    friendOptionsPage = when(option) {
+                                        "Take a break" -> "break"
+                                        "Edit friend list" -> "lists"
+                                        "Favorites" -> "favorites"
+                                        else -> "unfriend"
+                                    }
+                                }.padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(54.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(optionIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(28.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(16.dp))
+                                Text(option, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+            }
+            if (showFriendOptions && friendStatus == "Friends" && friendOptionsPage != "menu") {
                 AlertDialog(onDismissRequest = { showFriendOptions = false },
                     title = { Text(when(friendOptionsPage) { "menu" -> displayName; "break" -> "Take a break"; "see" -> "See less of profile"; "limit" -> "Limit profile visibility"; "past" -> "Edit who can see past posts"; "lists" -> "Edit friend list"; "favorites" -> "Favorites"; else -> "Friend options" }) },
                     text = {
