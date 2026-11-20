@@ -2842,8 +2842,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         }
                     } else {
                         if (visiblePhotoItems.isEmpty()) {
-                            Text(if (photoLibraryTab == "Uploads") "Aapki uploaded photos yahan dikhenge." else "Abhi koi photo available nahi hai.",
-                                modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // Keep the photo library empty without showing placeholder text.
                         } else {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                                 visiblePhotoItems.chunked(3).forEach { photoRow ->
