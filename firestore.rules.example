@@ -18,13 +18,13 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'photoUrl', 'coverPhotoUrl', 'bio', 'updatedAt', 'createdAt'
+          'uid', 'displayName', 'photoUrl', 'coverPhotoUrl', 'bio', 'isPrivate', 'updatedAt', 'createdAt'
         ])
         && request.resource.data.uid == userId;
       allow update: if owns(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'photoUrl', 'coverPhotoUrl', 'bio', 'updatedAt'
+          'displayName', 'photoUrl', 'coverPhotoUrl', 'bio', 'isPrivate', 'updatedAt'
         ]);
       allow delete: if owns(userId);
     }
