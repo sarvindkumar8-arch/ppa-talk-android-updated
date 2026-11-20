@@ -193,3 +193,32 @@ test("non-participant cannot delete a request or either friend-list entry", asyn
   await assertFails(deleteDoc(doc(db("mallory"), "friends/alice/list/bob")));
   await assertFails(deleteDoc(doc(db("mallory"), "friends/bob/list/alice")));
 });
+
+
+test("request ID pattern alone does not grant a non-participant read access", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "friendRequests/alice_bob"), {
+      fromUid: "alice",
+      toUid: "charlie",
+      status: "pending",
+    });
+  });
+  await assertSucceeds(getDoc(doc(db("alice"), "friendRequests/alice_bob")));
+  await assertSucceeds(getDoc(doc(db("charlie"), "friendRequests/alice_bob")));
+  await assertFails(getDoc(doc(db("bob"), "friendRequests/alice_bob")));
+});
+
+test("recipient cannot accept a request after it has already been rejected", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "friendRequests/alice_bob"), {
+      fromUid: "alice",
+      toUid: "bob",
+      status: "rejected",
+    });
+  });
+  await assertFails(updateDoc(doc(db("bob"), "friendRequests/alice_bob"), {
+    fromUid: "alice",
+    toUid: "bob",
+    status: "accepted",
+  }));
+});
