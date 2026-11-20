@@ -62,14 +62,14 @@ service cloud.firestore {
 
       match /likes/{likerId} {
         allow read: if canViewParentPost(postId);
-        allow create: if owns(likerId)
+        allow create: if canViewParentPost(postId) && owns(likerId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡'];
-        allow update: if owns(likerId)
+        allow update: if canViewParentPost(postId) && owns(likerId)
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reaction', 'createdAt']);
-        allow delete: if owns(likerId);
+        allow delete: if canViewParentPost(postId) && owns(likerId);
       }
       match /comments/{commentId} {
         allow read: if canViewParentPost(postId);
@@ -78,7 +78,7 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
           && request.resource.data.parentId is string;
-        allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+        allow update, delete: if canViewParentPost(postId) && signedIn() && resource.data.uid == request.auth.uid;
       }
     }
 
