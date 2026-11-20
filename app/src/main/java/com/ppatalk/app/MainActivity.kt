@@ -3140,11 +3140,9 @@ fun PublicProfileScreen(
                             isFriendActionRunning = true
                             actionMessage = if (friendStatus == "Confirm Request") "Accepting friend request..." else "Sending friend request..."
                             if (friendStatus == "Friends") {
-                                unfriendSafely(db, currentUid, uid) { success, detail ->
-                                    isFriendActionRunning = false
-                                    actionMessage = detail
-                                    if (success) friendStatus = "Add Friend"
-                                }
+                                isFriendActionRunning = false
+                                showFriendOptions = true
+                                friendOptionsPage = "menu"
                             } else if (friendStatus == "Requested") {
                                 cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
                                     isFriendActionRunning = false
