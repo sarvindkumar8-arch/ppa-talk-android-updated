@@ -41,7 +41,7 @@ jobs:
 
       - name: Install Cloud Functions dependencies
         working-directory: functions
-        run: npm ci
+        run: npm install
 
       - name: Deploy Firestore rules, Storage rules and Cloud Functions
         run: firebase deploy --only firestore:rules,storage,functions --project ppa-talk --non-interactive
