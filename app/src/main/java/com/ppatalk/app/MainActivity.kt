@@ -1240,7 +1240,7 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.width(92.dp).fillMaxHeight()) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story",
-                modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(34.dp),
                 shape = CircleShape, color = RoyalBlue, border = BorderStroke(2.dp, Color.White)
@@ -2720,23 +2720,6 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     if (showStoryComposer) CreateStoryDialog(uid, displayName, onDismiss = { showStoryComposer = false })
 }
 
-    if (selectedProfileImage != null) {
-        Dialog(onDismissRequest = { selectedProfileImage = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Surface(Modifier.fillMaxSize(), color = Color.Black) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    AsyncImage(model = selectedProfileImage, contentDescription = "Full-screen profile or cover photo",
-                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                    IconButton(onClick = { selectedProfileImage = null },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Close photo", tint = Color.White,
-                            modifier = Modifier.size(30.dp))
-                    }
-                }
-            }
-        }
-    }
-
 
 @Composable
 fun PublicProfileScreen(
@@ -2768,7 +2751,6 @@ fun PublicProfileScreen(
     var isFriendActionRunning by remember(uid) { mutableStateOf(false) }
     var actionMessage by remember(uid) { mutableStateOf("") }
     var selectedTab by remember(uid) { mutableStateOf("All") }
-    var selectedProfileImage by remember(uid) { mutableStateOf<String?>(null) }
 
     DisposableEffect(uid, currentUid) {
         val directoryRegistration = db.collection("profileDirectory").document(uid)
@@ -2838,7 +2820,7 @@ fun PublicProfileScreen(
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
                     if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                     else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
                 }
             }
