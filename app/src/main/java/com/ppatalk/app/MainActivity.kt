@@ -2937,6 +2937,9 @@ fun PublicProfileScreen(
     var loading by remember(uid) { mutableStateOf(true) }
     var error by remember(uid) { mutableStateOf("") }
     var friendStatus by remember(uid) { mutableStateOf("Add Friend") }
+    var hasIncomingPendingRequest by remember(uid) { mutableStateOf(false) }
+    var hasOutgoingPendingRequest by remember(uid) { mutableStateOf(false) }
+    var hasAcceptedFriendRequest by remember(uid) { mutableStateOf(false) }
     var isFriendActionRunning by remember(uid) { mutableStateOf(false) }
     var actionMessage by remember(uid) { mutableStateOf("") }
     var selectedTab by remember(uid) { mutableStateOf("All") }
@@ -2985,16 +2988,25 @@ fun PublicProfileScreen(
             }
         val outgoingRegistration = db.collection("friendRequests").document("${currentUid}_${uid}")
             .addSnapshotListener { request, _ ->
-                friendStatus = when (request?.getString("status")) {
-                    "accepted" -> "Friends"
-                    "pending" -> "Requested"
+                hasOutgoingPendingRequest = request?.getString("status") == "pending"
+                hasAcceptedFriendRequest = hasAcceptedFriendRequest || request?.getString("status") == "accepted"
+                friendStatus = when {
+                    hasAcceptedFriendRequest -> "Friends"
+                    hasIncomingPendingRequest -> "Confirm Request"
+                    hasOutgoingPendingRequest -> "Requested"
                     else -> "Add Friend"
                 }
             }
         val incomingRegistration = db.collection("friendRequests").document("${uid}_${currentUid}")
             .addSnapshotListener { request, _ ->
-                if (request?.getString("status") == "accepted") friendStatus = "Friends"
-                else if (request?.getString("status") == "pending" && friendStatus != "Friends") friendStatus = "Respond to Request"
+                hasIncomingPendingRequest = request?.getString("status") == "pending"
+                hasAcceptedFriendRequest = hasAcceptedFriendRequest || request?.getString("status") == "accepted"
+                friendStatus = when {
+                    hasAcceptedFriendRequest -> "Friends"
+                    hasIncomingPendingRequest -> "Confirm Request"
+                    hasOutgoingPendingRequest -> "Requested"
+                    else -> "Add Friend"
+                }
             }
         onDispose { directoryRegistration.remove(); profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
     }
@@ -3029,7 +3041,7 @@ fun PublicProfileScreen(
                                     actionMessage = detail
                                     if (success) friendStatus = "Add Friend"
                                 }
-                            } else if (friendStatus == "Respond to Request") {
+                            } else if (friendStatus == "Confirm Request") {
                                 acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
                                     isFriendActionRunning = false
                                     actionMessage = detail
@@ -3099,7 +3111,7 @@ fun PublicProfileScreen(
                         enabled = !isFriendActionRunning && friendStatus != "Friends" && friendStatus != "Requested",
                         onClick = {
                             isFriendActionRunning = true
-                            actionMessage = if (friendStatus == "Respond to Request") "Accepting friend request..." else "Sending friend request..."
+                            actionMessage = if (friendStatus == "Confirm Request") "Accepting friend request..." else "Sending friend request..."
                             if (friendStatus == "Requested") {
                                 cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
                                     isFriendActionRunning = false
