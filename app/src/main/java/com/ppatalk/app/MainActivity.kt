@@ -1,6 +1,7 @@
 package com.ppatalk.app
 
 import android.os.Bundle
+import com.google.firebase.appcheck.FirebaseAppCheck
 import android.app.Activity
 import android.net.Uri
 import android.content.Intent
@@ -33,7 +34,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
@@ -55,19 +59,66 @@ private val RoyalBlue = Color(0xFF2457D6)
 private val Orange = Color(0xFFF27A21)
 
 class MainActivity : ComponentActivity() {
+    private var incomingCallIntent by mutableStateOf<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { PPATalkApp() }
+        installPpaAppCheck()
+        incomingCallIntent = intent?.takeIf {
+            it.hasExtra("ppa_call_id")
+        }
+        setContent {
+            PPATalkApp(
+                incomingCallIntent = incomingCallIntent,
+                onIncomingCallConsumed = { incomingCallIntent = null }
+            )
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.hasExtra("ppa_call_id")) {
+            incomingCallIntent = intent
+        }
     }
 }
 
 @Composable
-fun PPATalkApp() {
+fun PPATalkApp(
+    incomingCallIntent: Intent? = null,
+    onIncomingCallConsumed: () -> Unit = {}
+) {
     val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
+
+    DisposableEffect(user?.uid) {
+        val signedInUid = user?.uid
+        if (!signedInUid.isNullOrBlank()) {
+            FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { token ->
+                    if (FirebaseAuth.getInstance().currentUser?.uid == signedInUid && token.isNotBlank()) {
+                        FirebaseFirestore.getInstance().collection("users").document(signedInUid)
+                            .collection("fcmTokens").document(token)
+                            .set(mapOf(
+                                "token" to token,
+                                "platform" to "android",
+                                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            ))
+                            .addOnFailureListener { error ->
+                                android.util.Log.w("PpaFCM", "Could not save FCM token", error)
+                            }
+                    }
+                }
+                .addOnFailureListener { error ->
+                    android.util.Log.w("PpaFCM", "Could not retrieve FCM token", error)
+                }
+        }
+        onDispose { }
+    }
     val lightColors = lightColorScheme(
         primary = RoyalBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
@@ -96,6 +147,8 @@ fun PPATalkApp() {
                     email = user?.email.orEmpty(),
                     displayName = user?.displayName?.takeIf { it.isNotBlank() } ?: user?.email?.substringBefore("@").orEmpty(),
                     isDarkMode = isDarkMode,
+                      incomingCallIntent = incomingCallIntent,
+                      onIncomingCallConsumed = onIncomingCallConsumed,
                     onThemeModeChange = { enabled -> isDarkMode = enabled; preferences.edit().putBoolean("dark_mode", enabled).apply() },
                     onSignOut = {
                         FirebaseAuth.getInstance().signOut()
@@ -907,21 +960,129 @@ private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, onSignOut: () -> Unit) {
+fun MainSocialApp(
+    uid: String,
+    email: String,
+    displayName: String,
+    isDarkMode: Boolean,
+    incomingCallIntent: Intent? = null,
+    onIncomingCallConsumed: () -> Unit = {},
+    onThemeModeChange: (Boolean) -> Unit,
+    onSignOut: () -> Unit
+) {
+    val context = LocalContext.current
     var selected by remember { mutableStateOf("Home") }
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
-    var isPrivateAccount by remember { mutableStateOf(false) }
+    var isPrivateAccount by remember { mutableStateOf(true) }
+    var profileLoaded by remember(uid) { mutableStateOf(false) }
     DisposableEffect(uid) {
         val registration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
-            .addSnapshotListener { snapshot, _ ->
-                isPrivateAccount = snapshot?.getBoolean("isPrivate") ?: false
+            .addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null) {
+                    isPrivateAccount = !snapshot.exists() ||
+                        (snapshot.getBoolean("isPrivate") == true)
+                    profileLoaded = true
+                } else {
+                    isPrivateAccount = true
+                    profileLoaded = false
+                }
             }
         onDispose { registration.remove() }
     }
+
+    // Verify notification call before opening the caller's chat.
+    DisposableEffect(incomingCallIntent, uid, profileLoaded, isPrivateAccount) {
+        var active = true
+        val callId = incomingCallIntent?.getStringExtra("ppa_call_id")
+        val expectedCallerUid = incomingCallIntent?.getStringExtra("ppa_caller_uid")
+
+        if (!profileLoaded) {
+            // Wait for the signed-in user's privacy settings before routing.
+        } else if (isPrivateAccount) {
+            if (incomingCallIntent != null) {
+                val manager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                val callRef = if (!callId.isNullOrBlank()) FirebaseFirestore.getInstance().collection("callSessions").document(callId) else null
+                if (callRef != null && !expectedCallerUid.isNullOrBlank()) {
+                    callRef.get().addOnSuccessListener { callDoc ->
+                        val validPrivateCall = callDoc.exists() &&
+                            callDoc.getString("callerUid") == expectedCallerUid &&
+                            callDoc.getString("calleeUid") == uid &&
+                            callDoc.getString("status") == "ringing"
+                        if (validPrivateCall) {
+                            callRef.update(mapOf(
+                                "status" to "rejected",
+                                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            )).addOnCompleteListener {
+                                manager.cancel(callId.hashCode())
+                                onIncomingCallConsumed()
+                            }
+                        } else {
+                            manager.cancel(callId.hashCode())
+                            onIncomingCallConsumed()
+                        }
+                    }.addOnFailureListener {
+                        manager.cancel(callId.hashCode())
+                        onIncomingCallConsumed()
+                    }
+                } else {
+                    if (!callId.isNullOrBlank()) manager.cancel(callId.hashCode())
+                    onIncomingCallConsumed()
+                }
+            }
+        } else if (!callId.isNullOrBlank() && !expectedCallerUid.isNullOrBlank()) {
+            val db = FirebaseFirestore.getInstance()
+            db.collection("callSessions").document(callId).get()
+                .addOnSuccessListener { callDoc ->
+                    if (!active) return@addOnSuccessListener
+
+                    val validCall = callDoc.exists() &&
+                        callDoc.getString("callerUid") == expectedCallerUid &&
+                        callDoc.getString("calleeUid") == uid &&
+                        callDoc.getString("status") == "ringing" &&
+                        callDoc.getString("callType")?.let { it == "audio" || it == "video" } == true
+
+                    if (!validCall) {
+                        onIncomingCallConsumed()
+                    } else {
+                        db.collection("publicProfiles").document(expectedCallerUid).get()
+                            .addOnSuccessListener { profile ->
+                                if (!active) return@addOnSuccessListener
+                                activeChatUid = expectedCallerUid
+                                activeChatName = profile.getString("displayName")
+                                    ?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                                selected = "Friends"
+                                onIncomingCallConsumed()
+                            }
+                            .addOnFailureListener {
+                                if (active) {
+                                    activeChatUid = expectedCallerUid
+                                    activeChatName = "PPA Talk user"
+                                    selected = "Friends"
+                                    onIncomingCallConsumed()
+                                }
+                            }
+                    }
+                }
+                .addOnFailureListener {
+                    if (active) onIncomingCallConsumed()
+                }
+        } else if (incomingCallIntent != null) {
+            onIncomingCallConsumed()
+        }
+
+        onDispose { active = false }
+    }
+
     // Private accounts enter a profile-only experience: no feed, discovery, friends,
     // reels, marketplace, notifications, or app navigation is rendered.
+    if (!profileLoaded) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
     if (isPrivateAccount) {
         ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.fillMaxSize())
         return
@@ -1955,6 +2116,128 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     var error by remember(chatId) { mutableStateOf("") }
     var chatReady by remember(chatId) { mutableStateOf(false) }
 
+    // Calling state — kept separate from the existing message state.
+    val context = LocalContext.current
+    val activity = context as? Activity
+    var callController by remember { mutableStateOf<PpaCallController?>(null) }
+    var callStatus by remember { mutableStateOf("") }
+    var callError by remember { mutableStateOf("") }
+    var incomingCallId by remember { mutableStateOf<String?>(null) }
+    var incomingCallType by remember { mutableStateOf("audio") }
+    var friendPhotoUrl by remember(friendUid) { mutableStateOf("") }
+    var pendingCallId by remember { mutableStateOf<String?>(null) }
+    var requestedCallType by remember { mutableStateOf("audio") }
+
+    // CALL_PERMISSION_AND_LISTENER_BLOCK
+    DisposableEffect(friendUid) {
+        val profileListener = db.collection("publicProfiles").document(friendUid)
+            .addSnapshotListener { snapshot, _ ->
+                friendPhotoUrl = snapshot?.getString("photoUrl").orEmpty()
+            }
+        onDispose { profileListener.remove() }
+    }
+
+    DisposableEffect(callController) {
+        val window = activity?.window
+        val flag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        val wasAlreadyEnabled = (window?.attributes?.flags ?: 0) and flag != 0
+        if (callController != null) window?.addFlags(flag)
+        onDispose {
+            if (!wasAlreadyEnabled) window?.clearFlags(flag)
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val denied = permissions.filterValues { !it }.keys
+        val incomingId = pendingCallId
+        pendingCallId = null
+
+        if (denied.isNotEmpty()) {
+            val names = denied.mapNotNull { permission ->
+                when (permission) {
+                    android.Manifest.permission.RECORD_AUDIO -> "Microphone"
+                    android.Manifest.permission.CAMERA -> "Camera"
+                    else -> null
+                }
+            }.joinToString(" and ")
+            callError = "$names permission denied. Allow it in Android Settings > Apps > PPA Talk > Permissions."
+
+            if (incomingId != null) {
+                db.collection("callSessions").document(incomingId).update(
+                    mapOf(
+                        "status" to "rejected",
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                ).addOnFailureListener { exception ->
+                    callError = "Permission denied. Could not notify the caller that the call was rejected: " +
+                        (exception.localizedMessage ?: "Firestore update failed.")
+                }
+            }
+        } else {
+            val controller = PpaCallController(
+                context, currentUid, friendUid,
+                onStatus = { callStatus = it },
+                onError = { callError = it; callStatus = it },
+                onRemoteCallEnded = {
+                    callStatus = "Call ended"
+                    callController = null
+                }
+            )
+            callController = controller
+            if (incomingId != null) controller.acceptIncoming(incomingId)
+            else controller.startOutgoing(requestedCallType)
+        }
+    }
+
+    fun requestCall(type: String, incomingId: String? = null) {
+        requestedCallType = type
+        pendingCallId = incomingId
+        callError = ""
+        if (incomingId != null) {
+            incomingCallId = null
+            val manager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            manager.cancel(incomingId.hashCode())
+        }
+        val permissions = if (type == "video") {
+            arrayOf(
+                android.Manifest.permission.RECORD_AUDIO,
+                android.Manifest.permission.CAMERA
+            )
+        } else {
+            arrayOf(android.Manifest.permission.RECORD_AUDIO)
+        }
+        permissionLauncher.launch(permissions)
+    }
+
+    DisposableEffect(currentUid, friendUid) {
+        val registration = db.collection("callSessions")
+            .whereEqualTo("calleeUid", currentUid)
+            .whereEqualTo("status", "ringing")
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    callError = exception.localizedMessage ?: "Incoming call check failed."
+                } else {
+                    val incoming = snapshot?.documents?.firstOrNull {
+                        it.getString("callerUid") == friendUid
+                    }
+                    incomingCallId = incoming?.id
+                    incomingCallType = incoming?.getString("callType") ?: "audio"
+                }
+            }
+        onDispose { registration.remove() }
+    }
+
+    LaunchedEffect(callStatus) {
+        if (callStatus == "Call ended" || callStatus == "Call declined") {
+            callController = null
+        }
+    }
+
+
+
     // Create the parent chat document before attaching the messages listener.
     // Firestore rules authorize message reads through this parent document.
     LaunchedEffect(chatId) {
@@ -1989,10 +2272,22 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text(friendName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(friendName, style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(enabled = callController == null, onClick = { requestCall("audio") }) {
+                Icon(Icons.Default.Call, contentDescription = "Voice call", tint = RoyalBlue)
+            }
+            IconButton(enabled = callController == null, onClick = { requestCall("video") }) {
+                Icon(Icons.Default.VideoCall, contentDescription = "Video call", tint = Orange)
+            }
         }
         HorizontalDivider()
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
+        if (callError.isNotBlank()) Text(
+            callError,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        )
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
             contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (messages.isEmpty()) item { Text("Say hello to ${friendName} 👋", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -2024,6 +2319,170 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                         .addOnFailureListener { sending = false; error = it.localizedMessage ?: "Message send failed. Check Firestore rules." }
                 }
             }) { Icon(Icons.Default.Send, contentDescription = "Send message", tint = RoyalBlue) }
+        }
+    }
+
+    // CALLING_OVERLAYS_BLOCK
+    if (incomingCallId != null && callController == null) {
+        IncomingCallScreen(
+            callerName = friendName,
+            callerPhotoUrl = friendPhotoUrl,
+            callType = incomingCallType,
+            onAccept = { requestCall(incomingCallType, incomingCallId) },
+            onReject = {
+                val id = incomingCallId
+                incomingCallId = null
+                if (id != null) {
+                    val manager = context.getSystemService(
+                        android.content.Context.NOTIFICATION_SERVICE
+                    ) as android.app.NotificationManager
+                    manager.cancel(id.hashCode())
+                    db.collection("callSessions").document(id).update(
+                        mapOf(
+                            "status" to "rejected",
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                    ).addOnFailureListener {
+                        callError = it.localizedMessage ?: "Could not reject the call."
+                    }
+                }
+            }
+        )
+    }
+
+    callController?.let { controller ->
+        PpaCallDialog(
+            controller = controller,
+            callerName = friendName,
+            callType = requestedCallType,
+            status = callStatus.ifBlank { "Connecting…" },
+            onEnd = {
+                controller.endCall()
+                callController = null
+                callStatus = "Call ended"
+            }
+        )
+    }
+
+}
+
+@Composable
+fun IncomingCallScreen(
+    callerName: String,
+    callerPhotoUrl: String,
+    callType: String,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color(0xFF101827)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 42.dp)
+            ) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        "PPA TALK",
+                        color = Color(0xFF79A6FF),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        if (callType == "video") "Incoming video call" else "Incoming voice call",
+                        color = Color(0xFFCBD5E1),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Surface(
+                        modifier = Modifier.size(150.dp),
+                        shape = CircleShape,
+                        color = Color(0xFF26364F)
+                    ) {
+                        if (callerPhotoUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = callerPhotoUrl,
+                                contentDescription = "$callerName profile photo",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = "Caller profile",
+                                    tint = Color(0xFF9FB7E8),
+                                    modifier = Modifier.size(112.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        callerName.ifBlank { "PPA Talk user" },
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("is calling you…", color = Color(0xFFB8C4D8))
+                }
+
+                Row(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            onClick = onReject,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            color = Color(0xFFE53945),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.CallEnd,
+                                    contentDescription = "Reject call",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                        Text("Reject", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            onClick = onAccept,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            color = Color(0xFF19A65A),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    if (callType == "video") Icons.Default.Videocam else Icons.Default.Call,
+                                    contentDescription = "Accept call",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                        Text("Accept", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
     }
 }
