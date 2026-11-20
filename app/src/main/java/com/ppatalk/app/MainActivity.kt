@@ -57,6 +57,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.AppCheckProviderFactory
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
@@ -115,6 +118,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // App Check: Play Integrity in release; Debug provider only in debug builds.
+        // Debug provider is loaded reflectively so its debug-only dependency is not required by release.
+        val appCheck = FirebaseAppCheck.getInstance()
+        if (BuildConfig.DEBUG) {
+            try {
+                val debugFactoryClass = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
+                val debugFactory = debugFactoryClass.getMethod("getInstance").invoke(null) as AppCheckProviderFactory
+                appCheck.installAppCheckProviderFactory(debugFactory)
+            } catch (error: Exception) {
+                android.util.Log.e("PPA-AppCheck", "Debug App Check provider unavailable", error)
+            }
+        } else {
+            appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+        }
         createIncomingCallNotificationChannel()
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
