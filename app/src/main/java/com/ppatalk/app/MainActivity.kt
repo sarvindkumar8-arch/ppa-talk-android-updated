@@ -2955,6 +2955,14 @@ fun PublicProfileScreen(
     var actionMessage by remember(uid) { mutableStateOf("") }
     var selectedTab by remember(uid) { mutableStateOf("All") }
     var selectedProfileImage by remember(uid) { mutableStateOf<String?>(null) }
+    var showFriendOptions by remember(uid) { mutableStateOf(false) }
+    var friendOptionsPage by remember(uid) { mutableStateOf("menu") }
+    var confirmUnfriend by remember(uid) { mutableStateOf(false) }
+    var breakSeeLess by remember(uid) { mutableStateOf("See profile anywhere") }
+    var breakLimit by remember(uid) { mutableStateOf("Keep current privacy settings") }
+    var breakPastPosts by remember(uid) { mutableStateOf("Keep all posts as they are") }
+    var friendLists by remember(uid) { mutableStateOf(setOf<String>()) }
+    var isFavoriteFriend by remember(uid) { mutableStateOf(false) }
 
     DisposableEffect(uid, currentUid) {
         val directoryRegistration = db.collection("profileDirectory").document(uid)
@@ -3047,11 +3055,9 @@ fun PublicProfileScreen(
                         onClick = {
                             isFriendActionRunning = true
                             if (friendStatus == "Friends") {
-                                unfriendSafely(db, currentUid, uid) { success, detail ->
-                                    isFriendActionRunning = false
-                                    actionMessage = detail
-                                    if (success) friendStatus = "Add Friend"
-                                }
+                                isFriendActionRunning = false
+                                showFriendOptions = true
+                                friendOptionsPage = "menu"
                             } else if (friendStatus == "Requested") {
                                 cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
                                     isFriendActionRunning = false
@@ -3183,6 +3189,40 @@ fun PublicProfileScreen(
                 }
                 if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
             }
+            if (showFriendOptions && friendStatus == "Friends") {
+                AlertDialog(onDismissRequest = { showFriendOptions = false },
+                    title = { Text(when(friendOptionsPage) { "menu" -> displayName; "break" -> "Take a break"; "see" -> "See less of profile"; "limit" -> "Limit profile visibility"; "past" -> "Edit who can see past posts"; "lists" -> "Edit friend list"; "favorites" -> "Favorites"; else -> "Friend options" }) },
+                    text = {
+                        Column(Modifier.fillMaxWidth().heightIn(max = 430.dp).verticalScroll(rememberScrollState())) {
+                            when(friendOptionsPage) {
+                                "menu" -> listOf("Take a break", "Edit friend list", "Favorites", "Unfriend").forEach { option ->
+                                    TextButton(onClick = { friendOptionsPage = when(option) { "Take a break" -> "break"; "Edit friend list" -> "lists"; "Favorites" -> "favorites"; else -> "unfriend" } }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(when(option) { "Take a break" -> Icons.Default.PersonOff; "Edit friend list" -> Icons.Default.Edit; "Favorites" -> Icons.Default.Star; else -> Icons.Default.PersonRemove }, null)
+                                        Spacer(Modifier.width(12.dp)); Text(option)
+                                    }
+                                }
+                                "break" -> {
+                                    Text("Stay friends while controlling what you see and what they can see.")
+                                    TextButton(onClick = { friendOptionsPage = "see" }) { Text("See less of " + displayName + "'s profile") }
+                                    TextButton(onClick = { friendOptionsPage = "limit" }) { Text("Limit what " + displayName + "'s profile will see") }
+                                    TextButton(onClick = { friendOptionsPage = "past" }) { Text("Edit who can see past posts") }
+                                }
+                                "see" -> listOf("See profile anywhere", "Limit where you see this profile").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(breakSeeLess == v, onClick = { breakSeeLess = v }); Text(v) } }
+                                "limit" -> listOf("Keep current privacy settings", "Hide your posts from this profile").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(breakLimit == v, onClick = { breakLimit = v }); Text(v) } }
+                                "past" -> listOf("Keep all posts as they are", "Remove yourself from all their posts").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(breakPastPosts == v, onClick = { breakPastPosts = v }); Text(v) } }
+                                "lists" -> listOf("Close Friends", "Acquaintances", "Unnamed List", "Restricted").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(friendLists.contains(v), onCheckedChange = { checked -> friendLists = if (checked) friendLists + v else friendLists - v }); Text(v) } }
+                                "favorites" -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(isFavoriteFriend, onCheckedChange = { isFavoriteFriend = it }); Text("Add to Favorites") }
+                                "unfriend" -> Text("Are you sure you want to remove " + displayName + " as your friend?")
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { if (friendOptionsPage == "unfriend") { showFriendOptions = false; confirmUnfriend = true } else if (friendOptionsPage == "menu") showFriendOptions = false else if (friendOptionsPage in listOf("see","limit","past")) friendOptionsPage = "break" else showFriendOptions = false }) { Text(if (friendOptionsPage == "unfriend") "Continue" else if (friendOptionsPage in listOf("see","limit","past")) "Save" else "Done") }
+                    },
+                    dismissButton = { TextButton(onClick = { if (friendOptionsPage == "menu") showFriendOptions = false else friendOptionsPage = if (friendOptionsPage in listOf("see","limit","past")) "break" else "menu" }) { Text(if (friendOptionsPage == "menu") "Cancel" else "Back") } }
+                )
+            }
+            if (confirmUnfriend) AlertDialog(onDismissRequest = { confirmUnfriend = false }, title = { Text("Confirm unfriend") }, text = { Text("Are you sure you want to remove " + displayName + " as your friend?") }, confirmButton = { TextButton(onClick = { confirmUnfriend = false; isFriendActionRunning = true; unfriendSafely(db, currentUid, uid) { success, detail -> isFriendActionRunning = false; actionMessage = detail; if (success) friendStatus = "Add Friend" } }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { confirmUnfriend = false }) { Text("Cancel") } })
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("All", "Reels", "Photos").forEach { tab ->
