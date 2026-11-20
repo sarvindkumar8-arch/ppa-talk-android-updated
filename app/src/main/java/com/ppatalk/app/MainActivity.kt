@@ -943,8 +943,10 @@ private fun acceptFriendRequestSafely(
     onResult: (Boolean, String) -> Unit
 ) {
     val requestRef = db.collection("friendRequests").document(friendUid + "_" + currentUid)
-    db.collection("publicProfiles").document(currentUid).get().addOnSuccessListener { mine ->
-        db.collection("publicProfiles").document(friendUid).get().addOnSuccessListener { theirs ->
+    // Use profileDirectory (signed-in readable) instead of publicProfiles:
+    // the sender's profile may be private until this request is accepted.
+    db.collection("profileDirectory").document(currentUid).get().addOnSuccessListener { mine ->
+        db.collection("profileDirectory").document(friendUid).get().addOnSuccessListener { theirs ->
             val batch = db.batch()
             batch.update(requestRef, "status", "accepted")
             batch.set(db.collection("friends").document(currentUid).collection("list").document(friendUid),
@@ -955,8 +957,8 @@ private fun acceptFriendRequestSafely(
                     "photoUrl" to (mine.getString("photoUrl") ?: "")))
             batch.commit().addOnSuccessListener { onResult(true, "Friend request accepted. You are now friends.") }
                 .addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not accept request or update friend lists.") }
-        }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load friend's profile.") }
-    }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load your profile.") }
+        }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load friend's directory entry.") }
+    }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load your directory entry.") }
 }
 
 data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
