@@ -2087,6 +2087,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var showProfileSetup by remember { mutableStateOf(false) }
     var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
     var photoEditorIsCover by remember { mutableStateOf(false) }
+    var showProfilePhotoOptions by remember { mutableStateOf(false) }
+    var showCoverPhotoOptions by remember { mutableStateOf(false) }
 
     LaunchedEffect(username, uid) {
         val cleanUsername = username.trim().lowercase()
@@ -2344,9 +2346,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (coverPhotoUrl.isNotBlank()) {
                         AsyncImage(model = coverPhotoUrl, contentDescription = "Profile cover photo",
-                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            modifier = Modifier.fillMaxSize().clickable { showCoverPhotoOptions = true }, contentScale = ContentScale.Crop)
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.fillMaxSize().clickable { showCoverPhotoOptions = true },
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(38.dp))
                             Text("Your cover photo", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -2362,7 +2365,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp).size(116.dp)
             ) {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().clickable { showProfilePhotoOptions = true },
                     shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface)
                 ) {
@@ -2712,6 +2715,60 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                     IconButton(onClick = { selectedGalleryItem = null }, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Close media", tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
+        }
+    }
+    if (showProfilePhotoOptions || showCoverPhotoOptions) {
+        val isCoverOptions = showCoverPhotoOptions
+        val dismissPhotoOptions = {
+            showProfilePhotoOptions = false
+            showCoverPhotoOptions = false
+        }
+        Dialog(onDismissRequest = dismissPhotoOptions, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp)) {
+                        Box(Modifier.align(Alignment.CenterHorizontally).width(42.dp).height(5.dp)
+                            .clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)))
+                        Spacer(Modifier.height(18.dp))
+                        val profilePhotoAction: (String) -> Unit = { action ->
+                            dismissPhotoOptions()
+                            when (action) {
+                                "see-profile" -> if (photoUrl.isNotBlank()) selectedGalleryItem = ProfileGalleryItem("current-profile-preview", photoOriginalUrl.ifBlank { photoUrl }, photoUrl, "image", "Profile pictures", "Profile photo")
+                                "choose-profile" -> imagePicker.launch("image/*")
+                                "see-cover" -> if (coverPhotoUrl.isNotBlank()) selectedGalleryItem = ProfileGalleryItem("current-cover-preview", coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }, coverPhotoUrl, "image", "Cover photos", "Cover photo")
+                                "upload-cover", "choose-cover" -> coverPicker.launch("image/*")
+                            }
+                        }
+                        @Composable
+                        fun PhotoOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, action: String) {
+                            Row(
+                                Modifier.fillMaxWidth().clickable { profilePhotoAction(action) }.padding(vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Surface(Modifier.size(48.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(icon, contentDescription = null, modifier = Modifier.size(25.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                                Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        if (isCoverOptions) {
+                            PhotoOption(Icons.Default.Image, "See cover photo", "see-cover")
+                            PhotoOption(Icons.Default.Upload, "Upload photo", "upload-cover")
+                            PhotoOption(Icons.Default.FolderOpen, "Choose cover photo", "choose-cover")
+                        } else {
+                            PhotoOption(Icons.Default.AccountCircle, "See profile picture", "see-profile")
+                            PhotoOption(Icons.Default.Image, "Choose profile picture", "choose-profile")
+                        }
                     }
                 }
             }
