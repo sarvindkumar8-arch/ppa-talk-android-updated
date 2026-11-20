@@ -47,7 +47,7 @@ async function verifyPassword(password, saltHex, expectedHex) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
+exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   // Registration is allowed only after Firebase Phone Auth has verified the SMS code.
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Verify your mobile number with SMS OTP before creating an account.");
@@ -91,7 +91,7 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: fa
   return { token };
 });
 
-exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
+exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   const phone = normalizePhone(request.data?.phoneNumber);
   const password = validatePassword(request.data?.password);
   const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
@@ -340,7 +340,7 @@ const LIVEKIT_URL = defineSecret("LIVEKIT_URL");
 
 exports.createLiveKitToken = onCall({
   region: REGION,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   maxInstances: 20,
   secrets: [LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL]
 }, async (request) => {
