@@ -2089,6 +2089,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var photoEditorIsCover by remember { mutableStateOf(false) }
     var showProfilePhotoOptions by remember { mutableStateOf(false) }
     var showCoverPhotoOptions by remember { mutableStateOf(false) }
+    var showPhotoLibraryPicker by remember { mutableStateOf(false) }
+    var photoLibraryTarget by remember { mutableStateOf("cover") }
+    var photoLibraryTab by remember { mutableStateOf("Photos of you") }
+    var photoLibraryAlbum by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(username, uid) {
         val cleanUsername = username.trim().lowercase()
@@ -2741,9 +2745,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             dismissPhotoOptions()
                             when (action) {
                                 "see-profile" -> if (photoUrl.isNotBlank()) selectedGalleryItem = ProfileGalleryItem("current-profile-preview", photoOriginalUrl.ifBlank { photoUrl }, photoUrl, "image", "Profile pictures", "Profile photo")
-                                "choose-profile" -> imagePicker.launch("image/*")
+                                "choose-profile" -> { photoLibraryTarget = "profile"; photoLibraryTab = "Photos of you"; photoLibraryAlbum = null; showPhotoLibraryPicker = true }
                                 "see-cover" -> if (coverPhotoUrl.isNotBlank()) selectedGalleryItem = ProfileGalleryItem("current-cover-preview", coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }, coverPhotoUrl, "image", "Cover photos", "Cover photo")
-                                "upload-cover", "choose-cover" -> coverPicker.launch("image/*")
+                                "upload-cover" -> coverPicker.launch("image/*")
+                                "choose-cover" -> { photoLibraryTarget = "cover"; photoLibraryTab = "Photos of you"; photoLibraryAlbum = null; showPhotoLibraryPicker = true }
                             }
                         }
                         @Composable
@@ -2768,6 +2773,119 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         } else {
                             PhotoOption(Icons.Default.AccountCircle, "See profile picture", "see-profile")
                             PhotoOption(Icons.Default.Image, "Choose profile picture", "choose-profile")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showPhotoLibraryPicker) {
+        val ownPhotoItems = (galleryItems + listOfNotNull(
+            (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let {
+                ProfileGalleryItem("current-profile", it, photoUrl.ifBlank { it }, "image", "Profile pictures", "Profile photo")
+            },
+            (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let {
+                ProfileGalleryItem("current-cover", it, coverPhotoUrl.ifBlank { it }, "image", "Cover photos", "Cover photo")
+            }
+        )).filter { it.type == "image" }.distinctBy { it.url }
+        val albumNames = listOf("Uploads", "Profile pictures", "Cover photos")
+        val visiblePhotoItems = when (photoLibraryTab) {
+            "Uploads" -> ownPhotoItems.filter { it.category == "Uploads" }
+            "Albums" -> if (photoLibraryAlbum == null) emptyList() else ownPhotoItems.filter { it.category == photoLibraryAlbum }
+            else -> ownPhotoItems
+        }
+        Dialog(onDismissRequest = { showPhotoLibraryPicker = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = {
+                            if (photoLibraryAlbum != null) photoLibraryAlbum = null else showPhotoLibraryPicker = false
+                        }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+                        Text(if (photoLibraryAlbum != null) photoLibraryAlbum!! else "Photos of you",
+                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(Modifier.width(48.dp))
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf("Photos of you", "Uploads", "Albums").forEach { tab ->
+                            FilterChip(selected = photoLibraryTab == tab, onClick = {
+                                photoLibraryTab = tab
+                                photoLibraryAlbum = null
+                            }, label = { Text(tab) })
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    if (photoLibraryTab == "Albums" && photoLibraryAlbum == null) {
+                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            albumNames.forEach { album ->
+                                val albumItems = ownPhotoItems.filter { it.category == album }
+                                if (albumItems.isNotEmpty()) {
+                                    Row(Modifier.fillMaxWidth().clickable { photoLibraryAlbum = album }.padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        AsyncImage(model = albumItems.first().thumbnailUrl, contentDescription = album,
+                                            modifier = Modifier.size(76.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
+                                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                            Text(album, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                            Text("${albumItems.size} photos", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, contentDescription = "Open album")
+                                    }
+                                }
+                            }
+                            if (albumNames.none { name -> ownPhotoItems.any { it.category == name } }) {
+                                Text("Abhi koi album photo available nahi hai.", modifier = Modifier.padding(16.dp))
+                            }
+                        }
+                    } else {
+                        if (visiblePhotoItems.isEmpty()) {
+                            Text(if (photoLibraryTab == "Uploads") "Aapki uploaded photos yahan dikhenge." else "Abhi koi photo available nahi hai.",
+                                modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                                visiblePhotoItems.chunked(3).forEach { photoRow ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        photoRow.forEach { item ->
+                                            Box(Modifier.weight(1f).aspectRatio(1f).clickable {
+                                                val updates = if (photoLibraryTarget == "cover") mapOf(
+                                                    "coverPhotoUrl" to item.url, "coverPhotoOriginalUrl" to item.url, "updatedAt" to System.currentTimeMillis()
+                                                ) else mapOf(
+                                                    "photoUrl" to item.url, "photoOriginalUrl" to item.url, "updatedAt" to System.currentTimeMillis()
+                                                )
+                                                FirebaseFirestore.getInstance().collection("users").document(uid)
+                                                    .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                    .addOnSuccessListener {
+                                                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                        FirebaseFirestore.getInstance().collection("publicProfileDirectory").document(uid)
+                                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                        if (photoLibraryTarget == "cover") {
+                                                            coverPhotoUrl = item.url
+                                                            coverPhotoOriginalUrl = item.url
+                                                        } else {
+                                                            photoUrl = item.url
+                                                            photoOriginalUrl = item.url
+                                                        }
+                                                        showPhotoLibraryPicker = false
+                                                        message = if (photoLibraryTarget == "cover") "Cover photo update ho gayi." else "Profile photo update ho gayi."
+                                                        isError = false
+                                                    }
+                                                    .addOnFailureListener { exception ->
+                                                        message = exception.localizedMessage ?: "Photo update nahi ho payi."
+                                                        isError = true
+                                                    }
+                                            }) {
+                                                AsyncImage(model = item.thumbnailUrl, contentDescription = item.caption.ifBlank { "Choose photo" },
+                                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                            }
+                                        }
+                                        repeat(3 - photoRow.size) { Spacer(Modifier.weight(1f)) }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
