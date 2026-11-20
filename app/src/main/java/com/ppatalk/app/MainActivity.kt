@@ -2084,6 +2084,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var galleryFilter by remember { mutableStateOf("All photos") }
     var selectedGalleryItem by remember { mutableStateOf<ProfileGalleryItem?>(null) }
     var showStoryComposer by remember { mutableStateOf(false) }
+    var showProfileSetup by remember { mutableStateOf(false) }
     var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
     var photoEditorIsCover by remember { mutableStateOf(false) }
 
@@ -2394,7 +2395,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("—", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Followers", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { message = "Profile dashboard: $postCount posts and $friendCount friends." }, modifier = Modifier.weight(1f)) {
+                Button(onClick = { showProfileSetup = true; message = ""; isError = false }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Edit, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Edit Profile")
                 }
                 OutlinedButton(onClick = { showStoryComposer = true }, modifier = Modifier.weight(1f)) {
@@ -2456,11 +2457,15 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         }
 
 
-        if (profileTab == "All" || profileTab == "More") {
+        if (showProfileSetup) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Profile Setup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.weight(1f))
+                TextButton(onClick = { showProfileSetup = false }) { Text("Close") }
+            }
             if (loading) CircularProgressIndicator()
             OutlinedTextField(value = displayName, onValueChange = { displayName = it },
                 label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -2619,6 +2624,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                         ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
                                             .setDisplayName(cleanName).build())
                                     saving = false
+                                    showProfileSetup = false
                                     message = "Profile save ho gayi."
                                 }
                                 .addOnFailureListener { exception ->
