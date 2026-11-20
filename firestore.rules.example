@@ -49,7 +49,6 @@ service cloud.firestore {
       allow read: if signedIn() && (
         owns(userId)
         || isAcceptedFriend()
-        || !("profileVisibility" in resource.data)
         || resource.data.profileVisibility == "public"
       );
       allow create: if owns(userId)
@@ -153,15 +152,9 @@ service cloud.firestore {
 
 
     match /friendRequests/{requestId} {
-      // Allow the two deterministic request-ID lookups used by the profile screen,
-      // plus reads by either participant when the document exists.
+      // Request IDs are not authorization. Only the recorded participants may read.
       allow read: if signedIn()
-        && (
-          requestId.matches('^' + request.auth.uid + '_[^_]+$')
-          || requestId.matches('^[^_]+_' + request.auth.uid + '$')
-          || resource.data.fromUid == request.auth.uid
-          || resource.data.toUid == request.auth.uid
-        );
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
       allow create: if signedIn()
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
