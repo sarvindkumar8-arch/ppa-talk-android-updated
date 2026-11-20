@@ -1074,26 +1074,83 @@ fun HomeFeed(
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
     var hiddenPostIds by remember { mutableStateOf(setOf<String>()) }
-    DisposableEffect(Unit) {
-        val registration = FirebaseFirestore.getInstance().collection("posts")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+    DisposableEffect(currentUid) {
+        val db = FirebaseFirestore.getInstance()
+        val postRegistrations = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
+        val postsById = linkedMapOf<String, FeedPost>()
+        var publicUids = emptySet<String>()
+        var friendUids = emptySet<String>()
+        var publicLoaded = false
+        var friendsLoaded = false
+
+        fun refreshPostListeners() {
+            postRegistrations.forEach { it.remove() }
+            postRegistrations.clear()
+            postsById.clear()
+            val allowedUids = (publicUids + friendUids + currentUid).distinct()
+            if (allowedUids.isEmpty()) {
+                posts = emptyList()
+                loading = false
+                return
+            }
+            allowedUids.chunked(30).forEach { uidChunk ->
+                val registration = db.collection("posts")
+                    .whereIn("uid", uidChunk)
+                    .addSnapshotListener { snapshot, exception ->
+                        if (exception != null) {
+                            error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
+                            loading = false
+                        } else if (snapshot != null) {
+                            val currentChunk = uidChunk.toSet()
+                            postsById.entries.removeAll { it.value.uid in currentChunk }
+                            snapshot.documents.forEach { doc ->
+                                postsById[doc.id] = FeedPost(
+                                    doc.id, doc.getString("uid") ?: "",
+                                    doc.getString("authorName") ?: "PPA Talk user",
+                                    doc.getString("text") ?: "",
+                                    doc.getTimestamp("createdAt")?.toDate(),
+                                    doc.getString("mediaUrl") ?: "",
+                                    doc.getString("mediaType") ?: "",
+                                    doc.getString("postType") ?: "post"
+                                )
+                            }
+                            posts = postsById.values.sortedByDescending { it.createdAt?.time ?: 0L }
+                            loading = false
+                            error = ""
+                        }
+                    }
+                postRegistrations.add(registration)
+            }
+        }
+
+        val publicRegistration = db.collection("profileDirectory")
+            .whereEqualTo("profileVisibility", "public")
             .addSnapshotListener { snapshot, exception ->
                 if (exception != null) {
-                    error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
+                    error = exception.localizedMessage ?: "Could not load public profiles."
                     loading = false
                 } else if (snapshot != null) {
-                    posts = snapshot.documents.map { doc ->
-                        FeedPost(doc.id, doc.getString("uid") ?: "",
-                            doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("text") ?: "",
-                            doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
-                            doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
-                    }
-                    loading = false
-                    error = ""
+                    publicUids = snapshot.documents.mapNotNull { it.getString("uid") ?: it.id }.toSet()
+                    publicLoaded = true
+                    if (friendsLoaded) refreshPostListeners()
                 }
             }
-        onDispose { registration.remove() }
+        val friendsRegistration = db.collection("friends").document(currentUid).collection("list")
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Could not load your friends."
+                    loading = false
+                } else if (snapshot != null) {
+                    friendUids = snapshot.documents.map { it.id }.toSet()
+                    friendsLoaded = true
+                    if (publicLoaded) refreshPostListeners()
+                }
+            }
+        onDispose {
+            publicRegistration.remove()
+            friendsRegistration.remove()
+            postRegistrations.forEach { it.remove() }
+        }
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         item {
