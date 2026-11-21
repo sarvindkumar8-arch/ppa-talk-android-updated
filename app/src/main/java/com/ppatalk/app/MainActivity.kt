@@ -686,21 +686,44 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
                         com.google.firebase.firestore.SetOptions.merge())
                 }
-                directoryRef.set(mapOf(
+                val profileVisibility = profile.getString("profileVisibility") ?: "public"
+                val directoryUpdates = mutableMapOf<String, Any>(
                     "uid" to uid,
                     "displayName" to (profile.getString("displayName") ?: displayName.ifBlank { "PPA Talk user" }),
                     "username" to profile.getString("username").orEmpty(),
-                    "photoUrl" to profile.getString("photoUrl").orEmpty(),
-                    "coverPhotoUrl" to profile.getString("coverPhotoUrl").orEmpty(),
-                    "profileVisibility" to (profile.getString("profileVisibility") ?: "public"),
+                    "profileVisibility" to profileVisibility,
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                ), com.google.firebase.firestore.SetOptions.merge())
+                )
+                if (profileVisibility == "private") {
+                    directoryUpdates["photoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                    directoryUpdates["coverPhotoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                    directoryUpdates["isOnline"] = com.google.firebase.firestore.FieldValue.delete()
+                    directoryUpdates["lastSeen"] = com.google.firebase.firestore.FieldValue.delete()
+                } else {
+                    directoryUpdates["photoUrl"] = profile.getString("photoUrl").orEmpty()
+                    directoryUpdates["coverPhotoUrl"] = profile.getString("coverPhotoUrl").orEmpty()
+                }
+                directoryRef.set(directoryUpdates, com.google.firebase.firestore.SetOptions.merge())
             }
         }
         fun setPresence(online: Boolean) {
             val presence = mapOf("isOnline" to online, "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp())
             publicProfileRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
-            directoryRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
+                .addOnSuccessListener {
+                    publicProfileRef.get().addOnSuccessListener { profile ->
+                        if (profile.getString("profileVisibility") == "private") {
+                            directoryRef.set(
+                                mapOf(
+                                    "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
+                                    "lastSeen" to com.google.firebase.firestore.FieldValue.delete()
+                                ),
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
+                        } else {
+                            directoryRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
+                        }
+                    }
+                }
         }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -2372,14 +2395,22 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                         val directoryRef = firestore.collection("profileDirectory").document(uid)
                                         val batch = firestore.batch()
                                         batch.set(profileRef, updates, com.google.firebase.firestore.SetOptions.merge())
-                                        batch.set(directoryRef, mapOf(
-                                            "uid" to uid,
-                                            "displayName" to displayName.ifBlank { "PPA Talk user" },
-                                            "username" to username,
-                                            displayField to displayDownload.toString(),
-                                            "profileVisibility" to profileVisibility,
-                                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        ), com.google.firebase.firestore.SetOptions.merge())
+                                        val directoryUpdates = mutableMapOf<String, Any>(
+    "uid" to uid,
+    "displayName" to displayName.ifBlank { "PPA Talk user" },
+    "username" to username,
+    "profileVisibility" to profileVisibility,
+    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+)
+if (profileVisibility == "private") {
+    directoryUpdates["photoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+    directoryUpdates["coverPhotoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+    directoryUpdates["isOnline"] = com.google.firebase.firestore.FieldValue.delete()
+    directoryUpdates["lastSeen"] = com.google.firebase.firestore.FieldValue.delete()
+} else {
+    directoryUpdates[displayField] = displayDownload.toString()
+}
+batch.set(directoryRef, directoryUpdates, com.google.firebase.firestore.SetOptions.merge())
                                         batch.commit()
                                             .addOnSuccessListener {
                                                 if (isCover) {
@@ -2748,10 +2779,6 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         val publicUpdates = mapOf(
                             "uid" to uid, "displayName" to cleanName, "username" to cleanUsername, "bio" to bio.trim(),
                             "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
-                            "hobby" to hobby.trim(), "school" to school.trim(),
-                            "favoritePlace" to favoritePlace.trim(), "hometown" to hometown.trim(),
-                            "currentCity" to currentCity.trim(), "work" to work.trim(), "education" to education.trim(),
-                            "relationshipStatus" to relationshipStatus.trim(), "interests" to interests.trim(),
                             "profileVisibility" to profileVisibility,
                             "updatedAt" to timestamp
                         )
@@ -2780,11 +2807,27 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             }
                             transaction.set(usernameRef, mapOf("uid" to uid, "username" to cleanUsername, "createdAt" to timestamp))
                             transaction.set(profileRef, publicUpdates, com.google.firebase.firestore.SetOptions.merge())
-                            transaction.set(directoryRef, mapOf(
-                                "uid" to uid, "displayName" to cleanName, "username" to cleanUsername,
-                                "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
-                                "profileVisibility" to profileVisibility, "updatedAt" to timestamp
-                            ), com.google.firebase.firestore.SetOptions.merge())
+                            val directoryUpdates = mutableMapOf<String, Any>(
+                                "uid" to uid,
+                                "displayName" to cleanName,
+                                "username" to cleanUsername,
+                                "profileVisibility" to profileVisibility,
+                                "updatedAt" to timestamp
+                            )
+                            if (profileVisibility == "private") {
+                                directoryUpdates["photoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                                directoryUpdates["coverPhotoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                                directoryUpdates["isOnline"] = com.google.firebase.firestore.FieldValue.delete()
+                                directoryUpdates["lastSeen"] = com.google.firebase.firestore.FieldValue.delete()
+                            } else {
+                                directoryUpdates["photoUrl"] = photoUrl
+                                directoryUpdates["coverPhotoUrl"] = coverPhotoUrl
+                            }
+                            transaction.set(
+                                directoryRef,
+                                directoryUpdates,
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
                             null
                         }.addOnSuccessListener {
                             // Keep private fields in users/{uid}; never copy them to publicProfiles.
@@ -2977,8 +3020,25 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                     .addOnSuccessListener {
                                                         FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
                                                             .set(updates, com.google.firebase.firestore.SetOptions.merge())
-                                                        FirebaseFirestore.getInstance().collection("publicProfileDirectory").document(uid)
-                                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                        val directoryRef = FirebaseFirestore.getInstance()
+                                                            .collection("profileDirectory").document(uid)
+                                                        val selectedField = if (photoLibraryTarget == "cover") "coverPhotoUrl" else "photoUrl"
+                                                        val directoryUpdates = mutableMapOf<String, Any>(
+                                                            "uid" to uid,
+                                                            "displayName" to displayName.ifBlank { "PPA Talk user" },
+                                                            "username" to username,
+                                                            "profileVisibility" to profileVisibility,
+                                                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                        )
+                                                        if (profileVisibility == "private") {
+                                                            directoryUpdates["photoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                                                            directoryUpdates["coverPhotoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                                                            directoryUpdates["isOnline"] = com.google.firebase.firestore.FieldValue.delete()
+                                                            directoryUpdates["lastSeen"] = com.google.firebase.firestore.FieldValue.delete()
+                                                        } else {
+                                                            directoryUpdates[selectedField] = item.url
+                                                        }
+                                                        directoryRef.set(directoryUpdates, com.google.firebase.firestore.SetOptions.merge())
                                                         if (photoLibraryTarget == "cover") {
                                                             coverPhotoUrl = item.url
                                                             coverPhotoOriginalUrl = item.url
@@ -3129,13 +3189,13 @@ fun PublicProfileScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().height(205.dp)) {
                 if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
-                    modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
+                    modifier = Modifier.fillMaxSize() , contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
                     if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape) , contentScale = ContentScale.Crop)
                     else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
                 }
             }
@@ -3440,7 +3500,7 @@ fun PublicProfileScreen(
         }
     }
 
-    selectedProfileImage?.let { imageUrl ->
+    if (!isPrivate || friendStatus == "Friends") selectedProfileImage?.let { imageUrl ->
         Dialog(
             onDismissRequest = { selectedProfileImage = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
