@@ -755,7 +755,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     }
 
     fun handleBack() {
-        if (activeChatUid != null) {
+        if (activeChatUid != null && selected == "Profile" && backStack.isNotEmpty()) {
+            selected = backStack.removeAt(backStack.lastIndex)
+        } else if (activeChatUid != null) {
             activeChatUid = null
         } else if (backStack.isNotEmpty()) {
             selected = backStack.removeAt(backStack.lastIndex)
@@ -872,8 +874,19 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             }
         },
     ) { padding ->
-        if (activeChatUid != null) {
-            ChatScreen(uid, activeChatUid!!, activeChatName, Modifier.padding(padding)) { activeChatUid = null }
+        if (activeChatUid != null && selected != "Profile") {
+            ChatScreen(
+                currentUid = uid,
+                friendUid = activeChatUid!!,
+                friendName = activeChatName,
+                modifier = Modifier.padding(padding),
+                onBack = { activeChatUid = null },
+                onOpenProfile = {
+                    viewedProfileUid = activeChatUid!!
+                    backStack.add(selected)
+                    selected = "Profile"
+                }
+            )
         } else when (selected) {
             "Home" -> HomeFeed(
                 uid,
@@ -3966,7 +3979,7 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
 }
 
 @Composable
-fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit) {
+fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit, onOpenProfile: () -> Unit) {
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
     val activity = context as? Activity
@@ -4123,7 +4136,33 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text(friendName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Box(
+                Modifier.size(42.dp).clip(CircleShape).clickable { onOpenProfile() },
+                contentAlignment = Alignment.Center
+            ) {
+                if (friendPhotoUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = friendPhotoUrl,
+                        contentDescription = "$friendName profile photo",
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = "Friend profile",
+                        modifier = Modifier.fillMaxSize(),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                friendName,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f).clickable { onOpenProfile() }
+            )
             Box {
                 IconButton(onClick = { showChatSettings = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Chat settings")
