@@ -3776,7 +3776,8 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                             "uid" to otherUid,
                             "lastMessage" to lastMessage,
                             "lastMessageAt" to lastMessageAt.toString(),
-                            "lastReadAt" to (doc.getTimestamp("lastReadAt_$uid")?.toDate()?.time ?: 0L).toString()
+                            "lastReadAt" to (doc.getTimestamp("lastReadAt_$uid")?.toDate()?.time ?: 0L).toString(),
+                            "lastSenderUid" to (doc.getString("lastSenderUid") ?: "")
                         )
                     }.sortedByDescending { it["lastMessageAt"]?.toLongOrNull() ?: 0L }
                     loading = false
@@ -3857,13 +3858,14 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                         }
                         val chat = chats.firstOrNull { it["uid"] == person.uid }
                         val unread = chat != null &&
+                            chat["lastSenderUid"] == person.uid &&
                             (chat["lastMessageAt"]?.toLongOrNull() ?: 0L) >
                             (chat["lastReadAt"]?.toLongOrNull() ?: 0L)
                         Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(person.name, style = MaterialTheme.typography.titleMedium,
-                                fontWeight = if (unread) FontWeight.ExtraBold else FontWeight.Normal)
+                                fontWeight = if (unread) FontWeight.ExtraBold else FontWeight.SemiBold)
                             Text(chat?.get("lastMessage") ?: "Tap to message",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (unread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
                                 maxLines = 1)
                         }
@@ -3886,13 +3888,6 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     val context = LocalContext.current
     val activity = context as? Activity
     val chatId = remember(currentUid, friendUid) { listOf(currentUid, friendUid).sorted().joinToString("_") }
-    DisposableEffect(chatId, currentUid) {
-        db.collection("chats").document(chatId).set(
-            mapOf("lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
-            com.google.firebase.firestore.SetOptions.merge()
-        )
-        onDispose { }
-    }
     var messages by remember(chatId) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var draft by remember(chatId) { mutableStateOf("") }
     var sending by remember(chatId) { mutableStateOf(false) }
@@ -4023,17 +4018,26 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         }
         chatRef.set(mapOf(
             "participantIds" to listOf(currentUid, friendUid).sorted(),
-            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+            "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         ), com.google.firebase.firestore.SetOptions.merge())
             .addOnSuccessListener {
                 registration = chatRef.collection("messages")
                     .orderBy("createdAt", Query.Direction.ASCENDING)
                     .addSnapshotListener { snap, exception ->
                         if (exception != null) error = exception.localizedMessage ?: "Messages could not load. Check Firestore chat permissions."
-                        else if (snap != null) messages = snap.documents.map { doc ->
-                            mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""),
-                                "text" to (doc.getString("text") ?: ""),
-                                "expireAt" to doc.getTimestamp("expireAt"))
+                        else if (snap != null) {
+                            messages = snap.documents.map { doc ->
+                                mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""),
+                                    "text" to (doc.getString("text") ?: ""),
+                                    "expireAt" to doc.getTimestamp("expireAt"))
+                            }
+                            // Keep the conversation marked read while it is open,
+                            // including messages received after the initial load.
+                            chatRef.set(
+                                mapOf("lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
                         }
                     }
             }
