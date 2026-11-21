@@ -341,7 +341,8 @@ exports.notifyNewChatMessage = onDocumentCreated({
   if (!message || typeof message.uid !== "string" ||
       typeof message.text !== "string" || !message.text.trim()) return;
 
-  const chatSnapshot = await db.collection("chats").doc(event.params.chatId).get();
+  const chatRef = db.collection("chats").doc(event.params.chatId);
+  const chatSnapshot = await chatRef.get();
   if (!chatSnapshot.exists) return;
   const participants = chatSnapshot.get("participantIds");
   if (!Array.isArray(participants) || participants.length !== 2 ||
@@ -349,6 +350,27 @@ exports.notifyNewChatMessage = onDocumentCreated({
 
   const recipientUid = participants.find((uid) => uid !== message.uid);
   if (typeof recipientUid !== "string") return;
+
+  // Count only messages that were not already read in an open conversation.
+  const messageCreatedAt = message.createdAt?.toDate ? message.createdAt.toDate() : null;
+  let shouldNotify = true;
+  await db.runTransaction(async (transaction) => {
+    const latestChat = await transaction.get(chatRef);
+    if (!latestChat.exists) {
+      shouldNotify = false;
+      return;
+    }
+    const lastReadAt = latestChat.get("lastReadAt_" + recipientUid);
+    if (messageCreatedAt && lastReadAt?.toDate &&
+        lastReadAt.toDate().getTime() >= messageCreatedAt.getTime()) {
+      shouldNotify = false;
+      return;
+    }
+    transaction.set(chatRef, {
+      ["unreadCount_" + recipientUid]: FieldValue.increment(1)
+    }, { merge: true });
+  });
+  if (!shouldNotify) return;
 
   const tokensSnapshot = await db.collection("users").doc(recipientUid)
     .collection("fcmTokens").get();
