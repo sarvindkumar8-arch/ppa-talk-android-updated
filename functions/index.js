@@ -360,7 +360,7 @@ exports.notifyNewChatMessage = onDocumentCreated({
 
   const senderProfile = await db.collection("publicProfiles").doc(message.uid).get();
   const senderName = senderProfile.get("displayName") || "PPA Talk user";
-  const preview = message.text.trim().replace(/\\s+/g, " ").slice(0, 140);
+  const preview = message.text.trim().replace(/\s+/g, " ").slice(0, 140);
   const result = await getMessaging().sendEachForMulticast({
     tokens,
     // Data-only: PpaMessagingService renders a consistent Android notification
