@@ -111,6 +111,15 @@ class MainActivity : ComponentActivity() {
                 description = "Friend requests and social activity"
                 enableVibration(true)
             })
+            manager.createNotificationChannel(NotificationChannel(
+                "ppa_chat_messages",
+                "Chat messages",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "New messages from your PPA Talk friends"
+                enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+            })
         }
     }
 
