@@ -766,7 +766,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+            if (activeChatUid == null) {
+                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
@@ -831,6 +832,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                }
             }
         },
     ) { padding ->
