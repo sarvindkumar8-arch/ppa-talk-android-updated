@@ -3786,7 +3786,8 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                             "lastMessage" to lastMessage,
                             "lastMessageAt" to lastMessageAt.toString(),
                             "lastReadAt" to (doc.getTimestamp("lastReadAt_$uid")?.toDate()?.time ?: 0L).toString(),
-                            "lastSenderUid" to (doc.getString("lastSenderUid") ?: "")
+                            "lastSenderUid" to (doc.getString("lastSenderUid") ?: ""),
+                            "unreadCount" to (doc.getLong("unreadCount_$uid") ?: 0L).toString()
                         )
                     }.sortedByDescending { it["lastMessageAt"]?.toLongOrNull() ?: 0L }
                     loading = false
@@ -3866,14 +3867,19 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                                 shape = CircleShape, color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
                         }
                         val chat = chats.firstOrNull { it["uid"] == person.uid }
-                        val unread = chat != null &&
-                            chat["lastSenderUid"] == person.uid &&
-                            (chat["lastMessageAt"]?.toLongOrNull() ?: 0L) >
-                            (chat["lastReadAt"]?.toLongOrNull() ?: 0L)
+                        val unreadCount = chat?.get("unreadCount")?.toLongOrNull() ?: 0L
+                        val unread = chat != null && (
+                            unreadCount > 0L ||
+                            (chat["lastSenderUid"] == person.uid &&
+                                (chat["lastMessageAt"]?.toLongOrNull() ?: 0L) >
+                                (chat["lastReadAt"]?.toLongOrNull() ?: 0L))
+                        )
+                        val preview = if (unread) "${maxOf(1L, unreadCount)} new messages"
+                            else chat?.get("lastMessage") ?: "Tap to message"
                         Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(person.name, style = MaterialTheme.typography.titleMedium,
                                 fontWeight = if (unread) FontWeight.ExtraBold else FontWeight.SemiBold)
-                            Text(chat?.get("lastMessage") ?: "Tap to message",
+                            Text(preview,
                                 color = if (unread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
                                 maxLines = 1)
@@ -4028,7 +4034,8 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         chatRef.set(mapOf(
             "participantIds" to listOf(currentUid, friendUid).sorted(),
             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-            "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+            "unreadCount_$currentUid" to 0L
         ), com.google.firebase.firestore.SetOptions.merge())
             .addOnSuccessListener {
                 registration = chatRef.collection("messages")
@@ -4044,7 +4051,10 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                             // Keep the conversation marked read while it is open,
                             // including messages received after the initial load.
                             chatRef.set(
-                                mapOf("lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                                mapOf(
+                                    "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                    "unreadCount_$currentUid" to 0L
+                                ),
                                 com.google.firebase.firestore.SetOptions.merge()
                             )
                         }
