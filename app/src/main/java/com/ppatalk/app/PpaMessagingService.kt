@@ -29,6 +29,15 @@ class PpaMessagingService : FirebaseMessagingService() {
             showFriendRequestNotification(title, body, message.data["requestId"].orEmpty())
             return
         }
+        if (type == "chat_message") {
+            showChatMessageNotification(
+                title,
+                body,
+                message.data["chatId"].orEmpty(),
+                message.data["senderUid"].orEmpty()
+            )
+            return
+        }
         val callId = message.data["callId"].orEmpty()
         if (type == "call_cancel") {
             cancelCallNotification(callId)
@@ -71,6 +80,40 @@ class PpaMessagingService : FirebaseMessagingService() {
             .collection("fcmTokens").document(token)
             .set(mapOf("token" to token, "platform" to "android",
                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+    }
+
+    private fun showChatMessageNotification(title: String, body: String, chatId: String, senderUid: String) {
+        val channelId = "ppa_chat_messages"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(
+                channelId, "Chat messages", NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "New messages from your PPA Talk friends"
+                enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+            })
+        }
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("ppa_chat_id", chatId)
+            putExtra("ppa_chat_sender_uid", senderUid)
+        }
+        val notificationId = if (chatId.isBlank()) System.currentTimeMillis().toInt() else chatId.hashCode()
+        val pending = PendingIntent.getActivity(this, notificationId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setContentTitle(title.ifBlank { "PPA Talk" })
+            .setContentText(body.ifBlank { "You received a new message" })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .build()
+        manager.notify(notificationId, notification)
     }
 
     private fun showFriendRequestNotification(title: String, body: String, requestId: String) {
