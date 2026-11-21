@@ -214,7 +214,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt', 'lastMessage', 'lastMessageAt', 'lastSenderUid',
           'autoDeleteSeconds', 'autoDeleteLabel',
-          'lastReadAt_' + request.auth.uid'
+          'lastReadAt_' + request.auth.uid
         ])
         && (!('autoDeleteSeconds' in request.resource.data)
           || request.resource.data.autoDeleteSeconds in [0, 86400, 604800, 1296000, 2592000]);
