@@ -331,6 +331,69 @@ exports.notifyFriendRequest = onDocumentWritten({
 });
 
 
+// Notify the other participant whenever a new chat message is created.
+exports.notifyNewChatMessage = onDocumentCreated({
+  document: "chats/{chatId}/messages/{messageId}",
+  region: REGION,
+  maxInstances: 30
+}, async (event) => {
+  const message = event.data?.data();
+  if (!message || typeof message.uid !== "string" ||
+      typeof message.text !== "string" || !message.text.trim()) return;
+
+  const chatSnapshot = await db.collection("chats").doc(event.params.chatId).get();
+  if (!chatSnapshot.exists) return;
+  const participants = chatSnapshot.get("participantIds");
+  if (!Array.isArray(participants) || participants.length !== 2 ||
+      !participants.includes(message.uid)) return;
+
+  const recipientUid = participants.find((uid) => uid !== message.uid);
+  if (typeof recipientUid !== "string") return;
+
+  const tokensSnapshot = await db.collection("users").doc(recipientUid)
+    .collection("fcmTokens").get();
+  const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
+  if (!tokens.length) {
+    console.info("No registered FCM tokens for chat recipient", recipientUid);
+    return;
+  }
+
+  const senderProfile = await db.collection("publicProfiles").doc(message.uid).get();
+  const senderName = senderProfile.get("displayName") || "PPA Talk user";
+  const preview = message.text.trim().replace(/\\s+/g, " ").slice(0, 140);
+  const result = await getMessaging().sendEachForMulticast({
+    tokens,
+    // Data-only: PpaMessagingService renders a consistent Android notification
+    // in foreground and background, using the app's chat notification channel.
+    data: {
+      type: "chat_message",
+      title: senderName,
+      body: preview,
+      chatId: event.params.chatId,
+      senderUid: message.uid
+    },
+    android: {
+      priority: "high",
+      ttl: 24 * 60 * 60 * 1000
+    }
+  });
+
+  const stale = [];
+  result.responses.forEach((response, index) => {
+    if (!response.success &&
+        ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"]
+          .includes(response.error?.code)) {
+      stale.push(tokensSnapshot.docs.find((doc) => doc.id === tokens[index]).ref.delete());
+    }
+  });
+  await Promise.all(stale);
+  console.info("Chat message push result", {
+    chatId: event.params.chatId,
+    successCount: result.successCount,
+    failureCount: result.failureCount
+  });
+});
+
 // Mint short-lived LiveKit room tokens only for authenticated participants in an active PPA Talk call.
 const { defineSecret } = require("firebase-functions/params");
 const { AccessToken } = require("livekit-server-sdk");
