@@ -3606,14 +3606,20 @@ fun FriendsScreen(
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = selectedFriendsTab == "Online", onClick = { selectedFriendsTab = "Online" },
-                label = { Text("🟢 ${onlineFriends.intersect(friends.map { it.uid }.toSet()).size} online") })
-            FilterChip(selected = selectedFriendsTab == "Suggestions", onClick = { selectedFriendsTab = "Suggestions" },
-                label = { Text("Suggestions") })
-            FilterChip(selected = selectedFriendsTab == "Friends", onClick = { selectedFriendsTab = "Friends" },
-                label = { Text("Your friends") })
-            FilterChip(selected = selectedFriendsTab == "Requests", onClick = { selectedFriendsTab = "Requests" },
-                label = { Text("Requests ${requests.size}") })
+            listOf(
+                "Online" to "🟢 ${onlineFriends.intersect(friends.map { it.uid }.toSet()).size} online",
+                "Suggestions" to "Suggestions",
+                "Friends" to "Your friends"
+            ).forEach { (tab, label) ->
+                Surface(
+                    modifier = Modifier.clip(CircleShape).clickable { selectedFriendsTab = tab },
+                    shape = CircleShape,
+                    color = Color(0xFFE4E7EB)
+                ) {
+                    Text(label, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                        color = Color(0xFF17191C), fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error,
@@ -3633,12 +3639,19 @@ fun FriendsScreen(
                 LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     items(requests, key = { it["id"].orEmpty() }) { request ->
                         val fromUid = request["fromUid"].orEmpty()
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp),
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Surface(modifier = Modifier.size(88.dp).clickable { onOpenProfile(fromUid) },
-                                shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                                Icon(Icons.Default.AccountCircle, contentDescription = "Friend profile",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                            val requestPerson = users.firstOrNull { it.uid == fromUid }
+                            Surface(modifier = Modifier.size(164.dp, 164.dp).clip(CircleShape)
+                                .clickable { onOpenProfile(fromUid) },
+                                shape = CircleShape, color = Color(0xFFE4E6EB)) {
+                                if (requestPerson?.photoUrl?.isNotBlank() == true) {
+                                    AsyncImage(model = requestPerson.photoUrl, contentDescription = "Friend profile",
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                                } else {
+                                    Icon(Icons.Default.AccountCircle, contentDescription = "Friend profile",
+                                        tint = Color(0xFF7B8087), modifier = Modifier.padding(8.dp))
+                                }
                             }
                             Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(request["fromName"] ?: "PPA Talk user", style = MaterialTheme.typography.titleMedium,
@@ -3647,15 +3660,20 @@ fun FriendsScreen(
                                     Button(onClick = {
                                         acceptFriendRequestSafely(db, uid, fromUid, currentName,
                                             request["fromName"].orEmpty()) { success, detail -> status = detail }
-                                    }, modifier = Modifier.weight(1f)) { Text("Confirm") }
-                                    OutlinedButton(onClick = {
+                                    }, modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0866FF))) {
+                                        Text("Confirm", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Button(onClick = {
                                         db.collection("friendRequests").document(request["id"].orEmpty())
                                             .update("status", "rejected")
                                             .addOnSuccessListener { status = "Request deleted." }
                                             .addOnFailureListener { status = it.localizedMessage ?: "Could not delete request." }
-                                    }, modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
-                                        Text("Delete")
+                                    }, modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4E6EB))) {
+                                        Text("Delete", color = Color(0xFF17191C), fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
