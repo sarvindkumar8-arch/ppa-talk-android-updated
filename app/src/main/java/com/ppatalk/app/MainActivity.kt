@@ -3751,7 +3751,12 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                         val lastMessage = doc.getString("lastMessage")?.takeIf { it.isNotBlank() }
                             ?: return@mapNotNull null
                         val lastMessageAt = doc.getTimestamp("lastMessageAt")?.toDate()?.time ?: 0L
-                        mapOf("uid" to otherUid, "lastMessage" to lastMessage, "lastMessageAt" to lastMessageAt.toString())
+                        mapOf(
+                            "uid" to otherUid,
+                            "lastMessage" to lastMessage,
+                            "lastMessageAt" to lastMessageAt.toString(),
+                            "lastReadAt" to (doc.getTimestamp("lastReadAt_$uid")?.toDate()?.time ?: 0L).toString()
+                        )
                     }.sortedByDescending { it["lastMessageAt"]?.toLongOrNull() ?: 0L }
                     loading = false
                 }
@@ -3811,11 +3816,11 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
         if (people.isEmpty() && !loading && friendsLoadError.isBlank()) Text("Abhi koi accepted friend sync nahi hua. Friends tab mein friend list check karein.",
             modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Inbox", "Unread", "Marketplace", "Communities").forEach { tab ->
+            listOf("Inbox", "Marketplace", "Communities").forEach { tab ->
                 FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) })
             }
         }
-        if (selectedTab == "Inbox" || selectedTab == "Unread") {
+        if (selectedTab == "Inbox") {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
                 if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                 if (visible.isEmpty() && !loading) item { Text("Your conversations will appear here. Add friends to start chatting.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -3829,11 +3834,22 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                             if (person.uid in onlinePeople) Surface(Modifier.size(14.dp).align(Alignment.BottomEnd),
                                 shape = CircleShape, color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
                         }
+                        val chat = chats.firstOrNull { it["uid"] == person.uid }
+                        val unread = chat != null &&
+                            (chat["lastMessageAt"]?.toLongOrNull() ?: 0L) >
+                            (chat["lastReadAt"]?.toLongOrNull() ?: 0L)
                         Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(chats.firstOrNull { it["uid"] == person.uid }?.get("lastMessage") ?: "Tap to message", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            Text(person.name, style = MaterialTheme.typography.titleMedium,
+                                fontWeight = if (unread) FontWeight.ExtraBold else FontWeight.Normal)
+                            Text(chat?.get("lastMessage") ?: "Tap to message",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1)
                         }
-                        Icon(Icons.Default.Circle, contentDescription = "Open chat", tint = RoyalBlue, modifier = Modifier.size(8.dp))
+                        if (unread) {
+                            Icon(Icons.Default.Circle, contentDescription = "Unread message",
+                                tint = RoyalBlue, modifier = Modifier.size(8.dp))
+                        }
                     }
                 }
             }
@@ -3849,6 +3865,13 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
     val context = LocalContext.current
     val activity = context as? Activity
     val chatId = remember(currentUid, friendUid) { listOf(currentUid, friendUid).sorted().joinToString("_") }
+    DisposableEffect(chatId, currentUid) {
+        db.collection("chats").document(chatId).set(
+            mapOf("lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+        onDispose { }
+    }
     var messages by remember(chatId) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var draft by remember(chatId) { mutableStateOf("") }
     var sending by remember(chatId) { mutableStateOf(false) }
