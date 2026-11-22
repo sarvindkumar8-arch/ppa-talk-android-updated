@@ -2493,21 +2493,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             fontWeight = FontWeight.Bold, color = RoyalBlue,
             modifier = Modifier.padding(start = 20.dp, top = 16.dp))
 
-        // Keep upload progress and failures visible even when the crop editor is closed.
-        if (saving || message.isNotBlank()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Text(
-                    message.ifBlank { "Photo save ho rahi hai..." },
-                    color = if (isError) MaterialTheme.colorScheme.error else RoyalBlue,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
+        // Photo upload progress/status is intentionally not shown on the public profile screen.
 
         // Facebook-style cover with overlapping circular profile photo.
         Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(224.dp)) {
