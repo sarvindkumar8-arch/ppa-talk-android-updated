@@ -75,10 +75,12 @@ service cloud.firestore {
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
           'profileVisibility', 'updatedAt'
         ]);
-      // Existing presence fields are removed during app migration and cannot be re-added.
+      // Update only the approved directory fields. Use affectedKeys so legacy
+      // fields already present in older documents do not block safe photo updates.
       allow update: if owns(userId)
+        && resource.data.uid == userId
         && request.resource.data.uid == userId
-        && request.resource.data.keys().hasOnly([
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
           'profileVisibility', 'updatedAt'
         ]);
