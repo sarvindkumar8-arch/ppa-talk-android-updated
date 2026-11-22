@@ -144,10 +144,10 @@ async function run() {
         bio: "This must not be in the directory"
       }));
     }],
-    ["Non-owner cannot create profile presence", async () => {
+    ["Non-owner cannot create another user's profile presence", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
-      await assertFails(setDoc(doc(db, "profilePresence/stranger-user"), {
-        uid: "stranger-user",
+      await assertFails(setDoc(doc(db, "profilePresence/other-user"), {
+        uid: "other-user",
         isOnline: true,
         lastSeen: new Date(),
         updatedAt: new Date()
