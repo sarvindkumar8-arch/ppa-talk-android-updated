@@ -2027,11 +2027,11 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                     else -> {
                                         selectedPhotoTool = "AI Studio"
                                         message = when (tool) {
-                                            "AI Portrait" -> "AI Portrait requires a connected AI image service."
-                                            "BG Replace" -> "Background replacement requires a connected AI image service."
-                                            "BG Blur" -> "Background blur requires portrait segmentation from an AI image service."
-                                            "Erase" -> "Object erasing requires a connected AI image service."
-                                            "Crop" -> "Crop editor is not yet connected to this post composer."
+                                            "AI Portrait" -> "AI Portrait — Coming soon!"
+                                            "BG Replace" -> "AI Background Replace — Coming soon!"
+                                            "BG Blur" -> "AI Background Blur — Coming soon!"
+                                            "Erase" -> "AI Object Eraser — Coming soon!"
+                                            "Crop" -> "Crop editor — Coming soon!"
                                             else -> ""
                                         }
                                     }
@@ -2057,11 +2057,32 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 } else if (selectedPhotoTool == "Filters") {
                     Text("Choose a filter", modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         listOf("Original", "Natural", "Cinematic", "Portrait", "Vivid", "Warm", "Cool", "B&W", "Soft", "Drama").forEach { filter ->
-                            FilterChip(selected = selectedPhotoFilter == filter, onClick = { selectedPhotoFilter = filter },
-                                label = { Text(filter) })
+                            Column(
+                                modifier = Modifier.width(78.dp).clickable { selectedPhotoFilter = filter },
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = "$filter filter preview",
+                                    modifier = Modifier.fillMaxWidth().height(68.dp),
+                                    contentScale = ContentScale.Crop,
+                                    colorFilter = if (filter == "Original") null else
+                                        androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                            androidx.compose.ui.graphics.ColorMatrix(photoFilterMatrix(filter, photoBrightness, photoContrast, photoSaturation))
+                                        )
+                                )
+                                Text(
+                                    filter,
+                                    modifier = Modifier.padding(top = 5.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (selectedPhotoFilter == filter) RoyalBlue else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (selectedPhotoFilter == filter) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
                         }
                     }
                 } else {
