@@ -1938,7 +1938,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var selectedMedia by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf("") }
     var selectedPhotoFilter by remember { mutableStateOf("Original") }
-    var selectedPhotoTool by remember { mutableStateOf("Edit") }
+    var selectedPhotoTool by remember { mutableStateOf("AI Studio") }
     var photoBrightness by remember { mutableFloatStateOf(0f) }
     var photoContrast by remember { mutableFloatStateOf(1f) }
     var photoSaturation by remember { mutableFloatStateOf(1f) }
@@ -1950,7 +1950,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         selectedMedia = uri
         mediaType = if (uri == null) "" else "image"
         selectedPhotoFilter = "Original"
-        selectedPhotoTool = "Edit"
+        selectedPhotoTool = "AI Studio"
         photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f
         message = ""
     }
@@ -1987,11 +1987,10 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         }
         OutlinedTextField(
             value = postText, onValueChange = { postText = it; success = false; message = "" },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 280.dp).padding(horizontal = 18.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(horizontal = 18.dp),
             placeholder = { Text("What's on your mind?", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             maxLines = 12, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color.Transparent, focusedBorderColor = Color.Transparent)
         )
-        Spacer(Modifier.weight(1f, fill = false))
         selectedMedia?.let { uri ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
@@ -2011,14 +2010,27 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 )
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Edit", "Filters").forEach { tool ->
+                    listOf("AI Studio", "Filters", "Adjust").forEach { tool ->
                         FilterChip(selected = selectedPhotoTool == tool, onClick = { selectedPhotoTool = tool },
                             label = { Text(tool) }, leadingIcon = {
-                                Icon(if (tool == "Edit") Icons.Default.Tune else Icons.Default.AutoAwesome, null)
+                                Icon(if (tool == "AI Studio") Icons.Default.AutoAwesome else Icons.Default.Tune, null)
                             })
                     }
                 }
-                if (selectedPhotoTool == "Filters") {
+                if (selectedPhotoTool == "AI Studio") {
+                    Text("Smart photo tools", modifier = Modifier.padding(16.dp))
+                    Button(onClick = {
+                        selectedPhotoFilter = "Vivid"
+                        photoBrightness = 0.08f
+                        photoContrast = 1.15f
+                        photoSaturation = 1.18f
+                    }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                        Icon(Icons.Default.AutoAwesome, null)
+                        Text("Smart Enhance")
+                    }
+                    Text("AI Portrait, Background Replace and Object Eraser require a secure AI image service connection.",
+                        modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
+                } else if (selectedPhotoTool == "Filters") {
                     Text("Choose a filter", modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
