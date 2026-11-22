@@ -1633,23 +1633,37 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(enabled = !actionBusy, onClick = { showReactionPicker = !showReactionPicker }) {
                         if (liked) {
                             Text(selectedReaction.ifBlank { "👍" }, style = MaterialTheme.typography.titleLarge)
                         } else {
-                            Icon(Icons.Default.FavoriteBorder, contentDescription = "Like", tint = RoyalBlue)
+                            Icon(Icons.Default.ThumbUp, contentDescription = "Like", tint = RoyalBlue)
                         }
                     }
-                    Text(likeCount.toString(), modifier = Modifier.clickable { showLikesDialog = true }, style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        likeCount.toString(),
+                        modifier = Modifier.clickable { showLikesDialog = true },
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
+                Spacer(Modifier.width(22.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCommentsClick) {
-                        Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = RoyalBlue)
+                        Icon(Icons.Default.ChatBubbleOutline, contentDescription = "Comments", tint = RoyalBlue)
                     }
-                    Text(commentCount.toString(), modifier = Modifier.clickable(onClick = onCommentsClick), style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        commentCount.toString(),
+                        modifier = Modifier.clickable(onClick = onCommentsClick),
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
+                Spacer(Modifier.width(22.dp))
                 val context = LocalContext.current
                 IconButton(onClick = {
                     val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\\n" + post.mediaUrl
