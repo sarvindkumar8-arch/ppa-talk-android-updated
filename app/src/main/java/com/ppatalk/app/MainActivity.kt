@@ -3091,13 +3091,13 @@ fun PublicProfileScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().height(205.dp)) {
                 if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
-                    modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
+                    modifier = Modifier.fillMaxSize().clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
                     if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
                     else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
                 }
             }
@@ -3142,7 +3142,7 @@ fun PublicProfileScreen(
                         Spacer(Modifier.width(6.dp))
                         Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Friends") "Friends" else friendStatus)
                     }
-                    OutlinedButton(onClick = { onOpenChat(uid, displayName) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { if (!isPrivate || friendStatus == "Friends") onOpenChat(uid, displayName) else actionMessage = "Message karne ke liye pehle friend request accept honi chahiye." }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
                     }
                 }
@@ -3165,13 +3165,13 @@ fun PublicProfileScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().height(205.dp)) {
                 if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
-                    modifier = Modifier.fillMaxSize().clickable { selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
+                    modifier = Modifier.fillMaxSize().clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
                     if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
-                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
                     else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
                 }
             }
@@ -3233,7 +3233,7 @@ fun PublicProfileScreen(
                         Text(if (isFriendActionRunning) { if (friendStatus == "Friends") "Removing..." else if (friendStatus == "Requested") "Cancelling..." else "Please wait..." } else if (friendStatus == "Friends") "Friends" else friendStatus)
                     }
                     OutlinedButton(
-                        onClick = { onOpenChat(uid, displayName) },
+                        onClick = { if (!isPrivate || friendStatus == "Friends") onOpenChat(uid, displayName) else actionMessage = "Message karne ke liye pehle friend request accept honi chahiye." },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Chat, null)
