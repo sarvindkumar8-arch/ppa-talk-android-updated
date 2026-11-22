@@ -2184,6 +2184,44 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var photoLibraryTab by remember { mutableStateOf("Photos of you") }
     var photoLibraryAlbum by remember { mutableStateOf<String?>(null) }
 
+    fun openGalleryItem(item: ProfileGalleryItem) {
+        val path = item.securePath ?: firebaseStorageObjectPath(item.url)
+        val isProtectedProfileImage = path != null &&
+            (path.startsWith("profile_photos/$uid/original_") || path.startsWith("cover_photos/$uid/original_"))
+        if (!isProtectedProfileImage) {
+            selectedGalleryItem = item
+            return
+        }
+        FirebaseFunctions.getInstance("asia-south1")
+            .getHttpsCallable("getSecureProfileMediaUrl")
+            .call(mapOf("profileUid" to uid, "objectPath" to path))
+            .addOnSuccessListener { result ->
+                val secureUrl = (result.data as? Map<*, *>)?.get("url") as? String
+                if (secureUrl.isNullOrBlank()) {
+                    message = "Secure photo URL nahi mil paya."
+                    isError = true
+                } else {
+                    selectedGalleryItem = item.copy(url = secureUrl, securePath = null)
+                }
+            }
+            .addOnFailureListener { error ->
+                message = error.localizedMessage ?: "Photo access verify nahi ho paya."
+                isError = true
+            }
+    }
+
+    LaunchedEffect(uid) {
+        if (FirebaseAuth.getInstance().currentUser?.uid == uid) {
+            FirebaseFunctions.getInstance("asia-south1")
+                .getHttpsCallable("revokeLegacyProfileMediaTokens")
+                .call(mapOf("profileUid" to uid))
+                .addOnFailureListener { error ->
+                    android.util.Log.w("PpaProfileMedia", "Legacy profile media token migration did not finish", error)
+                }
+        }
+    }
+
+
     LaunchedEffect(username, uid) {
         val cleanUsername = username.trim().lowercase()
         usernameCheckMessage = ""
@@ -2799,31 +2837,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         }
     }
 
-    fun openGalleryItem(item: ProfileGalleryItem) {
-        val path = item.securePath ?: firebaseStorageObjectPath(item.url)
-        val isProtectedProfileImage = path != null &&
-            (path.startsWith("profile_photos/$uid/original_") || path.startsWith("cover_photos/$uid/original_"))
-        if (!isProtectedProfileImage) {
-            selectedGalleryItem = item
-            return
-        }
-        FirebaseFunctions.getInstance("asia-south1")
-            .getHttpsCallable("getSecureProfileMediaUrl")
-            .call(mapOf("profileUid" to uid, "objectPath" to path))
-            .addOnSuccessListener { result ->
-                val secureUrl = (result.data as? Map<*, *>)?.get("url") as? String
-                if (secureUrl.isNullOrBlank()) {
-                    message = "Secure photo URL nahi mil paya."
-                    isError = true
-                } else {
-                    selectedGalleryItem = item.copy(url = secureUrl, securePath = null)
-                }
-            }
-            .addOnFailureListener { error ->
-                message = error.localizedMessage ?: "Photo access verify nahi ho paya."
-                isError = true
-            }
-    }
+
 
     if (selectedGalleryItem != null) {
         val item = selectedGalleryItem!!
