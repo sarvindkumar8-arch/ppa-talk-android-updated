@@ -1332,6 +1332,17 @@ fun StoriesStrip(uid: String, displayName: String) {
         var actionMessage by remember(story["id"]) { mutableStateOf("") }
         val storyOwnerUid = story["uid"] as? String ?: ""
         val storyId = story["id"] as? String ?: ""
+        val storyProgress = remember(storyId) { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(storyId) {
+            storyProgress.snapTo(0f)
+            storyProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 10_000, easing = androidx.compose.animation.core.LinearEasing)
+            )
+            val currentIndex = stories.indexOfFirst { (it["id"] as? String) == storyId }
+            val nextStory = stories.getOrNull(currentIndex + 1)
+            viewingStory = nextStory
+        }
         val storyPhotoUrl = remember(storyOwnerUid) { mutableStateOf("") }
         DisposableEffect(storyOwnerUid) {
             val reg = db.collection("profileDirectory").document(storyOwnerUid)
@@ -1363,8 +1374,16 @@ fun StoriesStrip(uid: String, displayName: String) {
                 }
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.20f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(4.dp)).background(Color.White))
+                    Box(
+                        Modifier.fillMaxWidth().height(4.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.48f))
+                    ) {
+                        Box(
+                            Modifier.fillMaxWidth(storyProgress.value).fillMaxHeight()
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF168CFF))
+                        )
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
