@@ -593,6 +593,30 @@ exports.revokeLegacyProfileMediaTokens = onCall({
       }
     }
   }
+  // Keep existing profile-photo feed posts rendering with their safe thumbnail URLs.
+  const profilePosts = await db.collection("posts").where("uid", "==", uid).get();
+  let migratedPostCount = 0;
+  for (const postDoc of profilePosts.docs) {
+    const post = postDoc.data();
+    if (!["profile", "cover"].includes(post.photoKind) || typeof post.thumbnailUrl !== "string" || !post.thumbnailUrl) continue;
+    let originalPath = post.originalPath;
+    if (!originalPath && typeof post.mediaUrl === "string") {
+      try {
+        const parsed = new URL(post.mediaUrl);
+        const objectSegment = parsed.pathname.split("/o/")[1];
+        if (objectSegment) originalPath = decodeURIComponent(objectSegment);
+      } catch (_) {}
+    }
+    const update = { mediaUrl: post.thumbnailUrl };
+    if (typeof originalPath === "string" &&
+        (originalPath.startsWith("profile_photos/" + uid + "/original_") ||
+         originalPath.startsWith("cover_photos/" + uid + "/original_"))) {
+      update.originalPath = originalPath;
+    }
+    await postDoc.ref.update(update);
+    migratedPostCount += 1;
+  }
+
   await markerRef.set({ profileMediaTokensRevokedAt: FieldValue.serverTimestamp() }, { merge: true });
-  return { alreadySecured: false, revokedCount };
+  return { alreadySecured: false, revokedCount, migratedPostCount };
 });
