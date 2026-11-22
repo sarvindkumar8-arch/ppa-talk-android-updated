@@ -44,9 +44,9 @@ service cloud.firestore {
               && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == 'accepted')
           );
       }
+      // Missing visibility is denied by default; legacy profiles must be explicitly marked public.
       allow read: if owns(userId)
         || isAcceptedFriend()
-        || !("profileVisibility" in resource.data)
         || resource.data.profileVisibility == "public";
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
