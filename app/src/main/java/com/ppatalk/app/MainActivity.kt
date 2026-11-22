@@ -1918,7 +1918,6 @@ Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spaced
                 }
             }
         }
-                }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2058,7 +2057,6 @@ Button(
                 }
             }
         }
-    }
     if (showTextStoryDialog) {
         AlertDialog(
             onDismissRequest = { showTextStoryDialog = false },
