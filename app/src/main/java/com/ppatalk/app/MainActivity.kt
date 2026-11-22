@@ -1434,7 +1434,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
                             }
-                            storyContextStartShare(send)
+                            shareContext.startActivity(Intent.createChooser(send, "Share story"))
                         }, modifier = Modifier.size(44.dp).background(Color.White.copy(alpha = 0.22f), CircleShape)) {
                             Icon(Icons.Default.Share, contentDescription = "Share story", tint = Color.White)
                         }
