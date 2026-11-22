@@ -1945,6 +1945,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var photoBrightness by remember { mutableFloatStateOf(0f) }
     var photoContrast by remember { mutableFloatStateOf(1f) }
     var photoSaturation by remember { mutableFloatStateOf(1f) }
+    var showPostCropDialog by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var success by remember { mutableStateOf(false) }
@@ -2024,6 +2025,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                     }
                                     "Filters" -> selectedPhotoTool = "Filters"
                                     "Adjust" -> selectedPhotoTool = "Adjust"
+                                    "Crop" -> { showPostCropDialog = true; message = "" }
                                     else -> {
                                         selectedPhotoTool = "AI Studio"
                                         message = when (tool) {
@@ -2031,7 +2033,6 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                             "BG Replace" -> "AI Background Replace — Coming soon!"
                                             "BG Blur" -> "AI Background Blur — Coming soon!"
                                             "Erase" -> "AI Object Eraser — Coming soon!"
-                                            "Crop" -> "Crop editor — Coming soon!"
                                             else -> ""
                                         }
                                     }
@@ -2178,9 +2179,25 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
     }
+    if (showPostCropDialog && selectedMedia != null && mediaType == "image") {
+        PhotoCropDialog(
+            uri = selectedMedia!!,
+            isCover = true,
+            onCancel = { showPostCropDialog = false },
+            onSave = { _, croppedBytes ->
+                val croppedFile = java.io.File(context.cacheDir, "ppa_post_crop_" + System.currentTimeMillis() + ".jpg")
+                croppedFile.writeBytes(croppedBytes)
+                selectedMedia = Uri.fromFile(croppedFile)
+                selectedPhotoFilter = "Original"
+                photoBrightness = 0f
+                photoContrast = 1f
+                photoSaturation = 1f
+                showPostCropDialog = false
+                message = "Photo cropped. You can now share it."
+            }
+        )
+    }
 }
-
-
 
 @Composable
 private fun PhotoCropDialog(
