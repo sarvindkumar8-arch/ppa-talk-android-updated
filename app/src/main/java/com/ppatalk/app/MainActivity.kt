@@ -2389,9 +2389,12 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     .setContentType("image/jpeg").build()
                 originalRef.putBytes(originalBytes, originalMetadata)
                     .addOnSuccessListener {
+                        message = "Original photo upload ho gayi. Display photo upload ho rahi hai..."
                         displayRef.putBytes(croppedBytes, croppedMetadata)
                             .addOnSuccessListener {
+                                message = "Display photo upload ho gayi. Profile details save ho rahi hain..."
                                 displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
+                                    message = "Photo URL mil gaya. Profile details save ho rahi hain..."
                                     val updates = mapOf(
                                         originalPathField to originalRef.path,
                                         legacyOriginalField to com.google.firebase.firestore.FieldValue.delete(),
@@ -2413,6 +2416,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                         ), com.google.firebase.firestore.SetOptions.merge())
                                         batch.commit()
                                             .addOnSuccessListener {
+                                                message = "Profile photo details save ho gayi. Finalizing..."
                                                 if (isCover) {
                                                     coverPhotoUrl = displayDownload.toString()
                                                     coverPhotoOriginalUrl = originalRef.path
@@ -2488,6 +2492,22 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         Text("My Profile", style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, color = RoyalBlue,
             modifier = Modifier.padding(start = 20.dp, top = 16.dp))
+
+        // Keep upload progress and failures visible even when the crop editor is closed.
+        if (saving || message.isNotBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(
+                    message.ifBlank { "Photo save ho rahi hai..." },
+                    color = if (isError) MaterialTheme.colorScheme.error else RoyalBlue,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
 
         // Facebook-style cover with overlapping circular profile photo.
         Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(224.dp)) {
