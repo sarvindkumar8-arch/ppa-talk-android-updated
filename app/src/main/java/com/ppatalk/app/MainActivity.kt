@@ -2054,7 +2054,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 if (selectedPhotoTool == "AI Studio") {
                     Text("AI Enhance applies smart on-device adjustments. Portrait, background and object tools need a connected AI service.",
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-                }                } else if (selectedPhotoTool == "Filters") {
+                } else if (selectedPhotoTool == "Filters") {
                     Text("Choose a filter", modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
