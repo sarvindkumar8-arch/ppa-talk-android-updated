@@ -1896,6 +1896,9 @@ private fun photoFilterMatrix(
 ): FloatArray {
     val matrix = ColorMatrix()
     when (filter) {
+        "Natural" -> matrix.setSaturation(1.08f)
+        "Cinematic" -> matrix.set(floatArrayOf(1.12f,0f,0f,0f,3f, 0f,1.04f,0f,0f,0f, 0f,0f,0.92f,0f,5f, 0f,0f,0f,1f,0f))
+        "Portrait" -> matrix.setSaturation(0.92f)
         "Vivid" -> matrix.setSaturation(1.35f)
         "Warm" -> matrix.set(floatArrayOf(1f,0f,0f,0f,18f, 0f,1f,0f,0f,5f, 0f,0f,1f,0f,-12f, 0f,0f,0f,1f,0f))
         "Cool" -> matrix.set(floatArrayOf(1f,0f,0f,0f,-10f, 0f,1f,0f,0f,3f, 0f,0f,1f,0f,16f, 0f,0f,0f,1f,0f))
@@ -2008,34 +2011,55 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             androidx.compose.ui.graphics.ColorMatrix(photoFilterMatrix(selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation))
                         )
                 )
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("AI Studio", "Filters", "Adjust").forEach { tool ->
-                        FilterChip(selected = selectedPhotoTool == tool, onClick = { selectedPhotoTool = tool },
-                            label = { Text(tool) }, leadingIcon = {
-                                Icon(if (tool == "AI Studio") Icons.Default.AutoAwesome else Icons.Default.Tune, null)
-                            })
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("AI Enhance", "AI Portrait", "BG Replace", "BG Blur", "Erase", "Filters", "Adjust", "Crop").forEach { tool ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(82.dp).clickable {
+                                when (tool) {
+                                    "AI Enhance" -> {
+                                        selectedPhotoTool = "AI Studio"
+                                        selectedPhotoFilter = "Vivid"
+                                        photoBrightness = 0.08f; photoContrast = 1.15f; photoSaturation = 1.18f
+                                    }
+                                    "Filters" -> selectedPhotoTool = "Filters"
+                                    "Adjust" -> selectedPhotoTool = "Adjust"
+                                    else -> {
+                                        selectedPhotoTool = "AI Studio"
+                                        message = when (tool) {
+                                            "AI Portrait" -> "AI Portrait requires a connected AI image service."
+                                            "BG Replace" -> "Background replacement requires a connected AI image service."
+                                            "BG Blur" -> "Background blur requires portrait segmentation from an AI image service."
+                                            "Erase" -> "Object erasing requires a connected AI image service."
+                                            "Crop" -> "Crop editor is not yet connected to this post composer."
+                                            else -> ""
+                                        }
+                                    }
+                                }
+                            }.padding(vertical = 6.dp)) {
+                            Icon(when (tool) {
+                                "AI Enhance" -> Icons.Default.AutoAwesome
+                                "AI Portrait" -> Icons.Default.Face
+                                "BG Replace" -> Icons.Default.Image
+                                "BG Blur" -> Icons.Default.BlurOn
+                                "Erase" -> Icons.Default.AutoFixOff
+                                "Filters" -> Icons.Default.FilterVintage
+                                "Adjust" -> Icons.Default.Tune
+                                else -> Icons.Default.Crop
+                            }, contentDescription = tool, tint = if (tool == "AI Enhance") RoyalBlue else MaterialTheme.colorScheme.onSurface)
+                            Text(tool, style = MaterialTheme.typography.labelSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
                     }
                 }
                 if (selectedPhotoTool == "AI Studio") {
-                    Text("Smart photo tools", modifier = Modifier.padding(16.dp))
-                    Button(onClick = {
-                        selectedPhotoFilter = "Vivid"
-                        photoBrightness = 0.08f
-                        photoContrast = 1.15f
-                        photoSaturation = 1.18f
-                    }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Icon(Icons.Default.AutoAwesome, null)
-                        Text("Smart Enhance")
-                    }
-                    Text("AI Portrait, Background Replace and Object Eraser require a secure AI image service connection.",
-                        modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
-                } else if (selectedPhotoTool == "Filters") {
+                    Text("AI Enhance applies smart on-device adjustments. Portrait, background and object tools need a connected AI service.",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
+                }                } else if (selectedPhotoTool == "Filters") {
                     Text("Choose a filter", modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Original", "Vivid", "Warm", "Cool", "B&W", "Soft", "Drama").forEach { filter ->
+                        listOf("Original", "Natural", "Cinematic", "Portrait", "Vivid", "Warm", "Cool", "B&W", "Soft", "Drama").forEach { filter ->
                             FilterChip(selected = selectedPhotoFilter == filter, onClick = { selectedPhotoFilter = filter },
                                 label = { Text(filter) })
                         }
