@@ -2211,7 +2211,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             .getHttpsCallable("getSecureProfileMediaUrl")
             .call(mapOf("profileUid" to uid, "objectPath" to path))
             .addOnSuccessListener { result ->
-                val secureUrl = (result.data as? Map<*, *>)?.get("url") as? String
+                val secureUrl = (result.getData() as? Map<*, *>)?.get("url") as? String
                 if (secureUrl.isNullOrBlank()) {
                     message = "Secure photo URL nahi mil paya."
                     isError = true
@@ -2393,7 +2393,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             .addOnSuccessListener {
                                 displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
                                     val updates = mapOf(
-                                        originalPathField to originalRef.fullPath,
+                                        originalPathField to originalRef.path,
                                         legacyOriginalField to com.google.firebase.firestore.FieldValue.delete(),
                                         displayField to displayDownload.toString(),
                                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
@@ -2415,10 +2415,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                             .addOnSuccessListener {
                                                 if (isCover) {
                                                     coverPhotoUrl = displayDownload.toString()
-                                                    coverPhotoOriginalUrl = originalRef.fullPath
+                                                    coverPhotoOriginalUrl = originalRef.path
                                                 } else {
                                                     photoUrl = displayDownload.toString()
-                                                    photoOriginalUrl = originalRef.fullPath
+                                                    photoOriginalUrl = originalRef.path
                                                 }
                                                 if (profileVisibility == "public") {
                                                     val photoPost = hashMapOf(
@@ -2426,7 +2426,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                         "authorName" to displayName.ifBlank { "PPA Talk user" },
                                                         "text" to if (isCover) "Updated their cover photo." else "Updated their profile photo.",
                                                         "mediaUrl" to displayDownload.toString(),
-                                                        "originalPath" to originalRef.fullPath,
+                                                        "originalPath" to originalRef.path,
                                                         "thumbnailUrl" to displayDownload.toString(),
                                                         "mediaType" to "image",
                                                         "postType" to "post",
