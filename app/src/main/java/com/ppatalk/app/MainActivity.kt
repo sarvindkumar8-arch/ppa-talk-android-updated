@@ -1663,6 +1663,9 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
     var showSourceChooser by remember { mutableStateOf(true) }
     var showGalleryOptions by remember { mutableStateOf(false) }
     var showProfileMedia by remember { mutableStateOf(false) }
+    var showCameraOptions by remember { mutableStateOf(false) }
+    var showTextStoryDialog by remember { mutableStateOf(false) }
+    var textStoryValue by remember { mutableStateOf("") }
     var profileMediaLoading by remember { mutableStateOf(false) }
     var profileMedia by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
     var profileMediaFilter by remember { mutableStateOf("All") }
@@ -1683,6 +1686,28 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
         storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
         message = ""
         if (uri != null) showSourceChooser = false
+    }
+    val photoCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) {
+            val file = java.io.File(storyContext.cacheDir, "story_camera_${System.currentTimeMillis()}.jpg")
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            selectedUri = Uri.fromFile(file)
+            selectedRemoteUrl = ""
+            mediaType = "image"
+            selectedStoryFilter = "Original"
+            storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
+            showSourceChooser = false
+        }
+    }
+    val videoCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && uri != null) {
+            selectedUri = uri
+            selectedRemoteUrl = ""
+            mediaType = "video"
+            showSourceChooser = false
+            message = ""
+        }
     }
 
     fun loadProfileMedia() {
@@ -1743,228 +1768,129 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
             }
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Create story") },
-        text = {
-            Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (message.isNotBlank()) {
-                    Text(
-                        message,
-                        color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (selectedUri == null && selectedRemoteUrl.isBlank()) {
-                    if (!showGalleryOptions) {
-                        Text("Story kahan se add karni hai?")
-                        OutlinedButton(
-                            onClick = { showGalleryOptions = true },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(8.dp)); Text("Gallery") }
-                        OutlinedButton(
-                            onClick = { showSourceChooser = false; showProfileMedia = true; loadProfileMedia() },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.AccountCircle, null); Spacer(Modifier.width(8.dp)); Text("PPA Profile – Photos & Reels") }
-                    } else {
-                        Text("Choose media from your phone gallery")
-                        OutlinedButton(
-                            onClick = { imagePicker.launch("image/*") },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.Photo, null); Spacer(Modifier.width(8.dp)); Text("Photo") }
-                        OutlinedButton(
-                            onClick = { videoPicker.launch("video/*") },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.VideoLibrary, null); Spacer(Modifier.width(8.dp)); Text("Video") }
-                        TextButton(onClick = { showGalleryOptions = false }) { Text("Back") }
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { if (!busy) onDismiss() }, enabled = !busy) {
+                        Icon(Icons.Default.Close, contentDescription = "Close story creator")
                     }
-                    Text("Your story will be visible for 24 hours.", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    Text(if (selectedRemoteUrl.isNotBlank()) "Selected from PPA Profile" else "Selected from Gallery")
-                    if (mediaType == "image") {
-                        AsyncImage(
-                            model = selectedUri ?: selectedRemoteUrl,
-                            contentDescription = "Selected story photo preview",
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 230.dp),
-                            contentScale = ContentScale.Fit,
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                androidx.compose.ui.graphics.ColorMatrix(
-                                    photoFilterMatrix(selectedStoryFilter, storyBrightness, storyContrast, storySaturation)
-                                )
-                            )
-                        )
-                        Text("Edit photo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Text("Create story", modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { showGalleryOptions = !showGalleryOptions }, enabled = !busy) {
+                        Icon(Icons.Default.Settings, contentDescription = "Story options")
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(onClick = { showTextStoryDialog = true }, enabled = !busy) {
+                        Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(6.dp)); Text("Text")
+                    }
+                    OutlinedButton(onClick = { showGalleryOptions = !showGalleryOptions }, enabled = !busy) {
+                        Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("Gallery")
+                    }
+                    OutlinedButton(onClick = { showProfileMedia = true; showSourceChooser = false; loadProfileMedia() }, enabled = !busy) {
+                        Icon(Icons.Default.Collections, null); Spacer(Modifier.width(6.dp)); Text("PPA Photos / Reels")
+                    }
+                }
+                if (showGalleryOptions && selectedUri == null && selectedRemoteUrl.isBlank()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TextButton(onClick = { imagePicker.launch("image/*"); showGalleryOptions = false }, enabled = !busy) {
+                            Icon(Icons.Default.Photo, null); Text("Photo")
+                        }
+                        TextButton(onClick = { videoPicker.launch("video/*"); showGalleryOptions = false }, enabled = !busy) {
+                            Icon(Icons.Default.VideoLibrary, null); Text("Video")
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    $body
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box {
+                        IconButton(
+                            onClick = { showCameraOptions = true },
+                            modifier = Modifier.size(58.dp).background(RoyalBlue, CircleShape),
+                            enabled = !busy
                         ) {
-                            listOf("Original", "Natural", "Cinematic", "Portrait", "Vivid", "Warm", "Cool", "B&W").forEach { filter ->
-                                Column(
-                                    Modifier.width(68.dp).clickable { selectedStoryFilter = filter },
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    AsyncImage(
-                                        model = selectedUri ?: selectedRemoteUrl,
-                                        contentDescription = "$filter story filter",
-                                        modifier = Modifier.size(58.dp).clip(MaterialTheme.shapes.small),
-                                        contentScale = ContentScale.Crop,
-                                        colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                            androidx.compose.ui.graphics.ColorMatrix(
-                                                photoFilterMatrix(filter, storyBrightness, storyContrast, storySaturation)
-                                            )
-                                        )
-                                    )
-                                    Text(
-                                        filter,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (selectedStoryFilter == filter) RoyalBlue else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
+                            Icon(Icons.Default.CameraAlt, contentDescription = "Capture story photo or video",
+                                tint = Color.White, modifier = Modifier.size(30.dp))
                         }
-                        Text("Brightness  ${storyBrightness.toInt()}", style = MaterialTheme.typography.labelMedium)
-                        Slider(value = storyBrightness, onValueChange = { storyBrightness = it }, valueRange = -0.5f..0.5f)
-                        Text("Contrast  ${(storyContrast * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                        Slider(value = storyContrast, onValueChange = { storyContrast = it }, valueRange = 0.5f..1.8f)
-                        Text("Saturation  ${(storySaturation * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                        Slider(value = storySaturation, onValueChange = { storySaturation = it }, valueRange = 0f..2f)
-                        TextButton(onClick = {
-                            selectedStoryFilter = "Original"
-                            storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
-                        }) { Text("Reset edits") }
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.PlayCircle, null, tint = RoyalBlue, modifier = Modifier.size(42.dp))
-                            Text("Video selected")
+                        DropdownMenu(expanded = showCameraOptions, onDismissRequest = { showCameraOptions = false }) {
+                            DropdownMenuItem(text = { Text("Take photo") }, onClick = {
+                                showCameraOptions = false
+                                photoCaptureLauncher.launch(null)
+                            })
+                            DropdownMenuItem(text = { Text("Record video") }, onClick = {
+                                showCameraOptions = false
+                                videoCaptureLauncher.launch(Intent(android.provider.MediaStore.ACTION_VIDEO_CAPTURE))
+                            })
                         }
                     }
-                    TextButton(onClick = {
-                        selectedUri = null
-                        selectedRemoteUrl = ""
-                        mediaType = ""
-                        selectedStoryFilter = "Original"
-                        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
-                        showSourceChooser = true
-                    }, enabled = !busy) { Text("Choose another") }
-                }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
+                    $confirm
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                enabled = (selectedUri != null || selectedRemoteUrl.isNotBlank()) && !busy,
-                onClick = {
-                    busy = true
-                    message = "Share button received. Preparing story..."
-                    val authenticatedUid = FirebaseAuth.getInstance().currentUser?.uid
-                    if (authenticatedUid.isNullOrBlank()) {
-                        busy = false
-                        message = "Session expire ho gaya hai. Dobara login karke story share karein."
-                        return@Button
-                    }
-                    fun saveStory(url: String) {
-                        val now = System.currentTimeMillis()
-                        val story = hashMapOf(
-                            "uid" to authenticatedUid,
-                            "authorName" to displayName,
-                            "mediaUrl" to url,
-                            "mediaType" to mediaType,
-                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                            "expiresAt" to com.google.firebase.Timestamp(Date(now + 24L * 60L * 60L * 1000L))
-                        )
-                        FirebaseFirestore.getInstance().collection("stories").add(story)
-                            .addOnSuccessListener { busy = false; onDismiss() }
-                            .addOnFailureListener { e ->
-                                busy = false
-                                message = "Story database save failed: ${e.localizedMessage ?: "Permission denied"}"
-                            }
-                    }
-                    fun uploadStoryFile(uri: Uri) {
-                        val resolverMime = storyContext.contentResolver.getType(uri)
-                        val mimeType = when {
-                            mediaType == "image" && uri.scheme == "file" -> "image/jpeg"
-                            !resolverMime.isNullOrBlank() -> resolverMime
-                            mediaType == "image" -> "image/jpeg"
-                            else -> "video/mp4"
+        }
+    }
+    if (showTextStoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showTextStoryDialog = false },
+            title = { Text("Text story") },
+            text = {
+                OutlinedTextField(
+                    value = textStoryValue,
+                    onValueChange = { textStoryValue = it },
+                    placeholder = { Text("What's on your mind?") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 6
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val text = textStoryValue.trim()
+                    if (text.isNotEmpty()) {
+                        val bitmap = Bitmap.createBitmap(1080, 1920, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(bitmap)
+                        canvas.drawColor(android.graphics.Color.rgb(35, 73, 150))
+                        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = android.graphics.Color.WHITE
+                            textSize = 68f
+                            textAlign = Paint.Align.CENTER
+                            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
                         }
-                        val ext = when {
-                            mimeType == "image/png" -> "png"
-                            mimeType == "image/webp" -> "webp"
-                            mimeType.startsWith("video/") -> mimeType.substringAfter("/").substringBefore(";").ifBlank { "mp4" }
-                            else -> "jpg"
-                        }
-                        val storageRef = FirebaseStorage.getInstance().reference
-                            .child("stories/$authenticatedUid/${System.currentTimeMillis()}.$ext")
-                        val metadata = com.google.firebase.storage.StorageMetadata.Builder()
-                            .setContentType(mimeType)
-                            .build()
-                        message = "Uploading media to Firebase Storage..."
-                        val uploadTask = storageRef.putFile(uri, metadata)
-                        uploadTask.addOnProgressListener { snapshot ->
-                            val total = snapshot.totalByteCount.coerceAtLeast(1L)
-                            val percent = (100L * snapshot.bytesTransferred / total).toInt()
-                            message = "Uploading media... $percent%"
-                        }
-                        uploadTask.addOnSuccessListener {
-                                message = "Media uploaded. Saving story details..."
-                                storageRef.downloadUrl.addOnSuccessListener { download ->
-                                    saveStory(download.toString())
-                                }.addOnFailureListener { e ->
-                                    busy = false
-                                    message = e.localizedMessage ?: "Could not get media URL."
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                busy = false
-                                message = e.localizedMessage ?: "Upload failed. Check Storage rules."
-                            }
+                        val lines = text.chunked(24)
+                        val lineHeight = 90f
+                        val startY = 960f - (lines.size - 1) * lineHeight / 2f
+                        lines.forEachIndexed { index, line -> canvas.drawText(line, 540f, startY + index * lineHeight, paint) }
+                        val file = java.io.File(storyContext.cacheDir, "story_text_${System.currentTimeMillis()}.jpg")
+                        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 94, it) }
+                        bitmap.recycle()
+                        selectedUri = Uri.fromFile(file)
+                        selectedRemoteUrl = ""
+                        mediaType = "image"
+                        showSourceChooser = false
+                        showTextStoryDialog = false
                     }
-                    val hasPhotoEdits = mediaType == "image" &&
-                        (selectedStoryFilter != "Original" || storyBrightness != 0f ||
-                            storyContrast != 1f || storySaturation != 1f)
-                    if (selectedRemoteUrl.isNotBlank()) {
-                        if (hasPhotoEdits) {
-                            FirebaseStorage.getInstance().getReferenceFromUrl(selectedRemoteUrl)
-                                .getBytes(20L * 1024L * 1024L)
-                                .addOnSuccessListener { bytes ->
-                                    val sourceFile = java.io.File(storyContext.cacheDir, "story_source_${System.currentTimeMillis()}.jpg")
-                                    sourceFile.writeBytes(bytes)
-                                    val edited = createFilteredPhotoUri(
-                                        storyContext, Uri.fromFile(sourceFile), selectedStoryFilter,
-                                        storyBrightness, storyContrast, storySaturation
-                                    )
-                                    if (edited == null) {
-                                        busy = false
-                                        message = "Photo edit apply nahi ho paaya. Original photo try karein."
-                                    } else uploadStoryFile(edited)
-                                }
-                                .addOnFailureListener { e ->
-                                    busy = false
-                                    message = e.localizedMessage ?: "Profile photo edit ke liye load nahi ho paayi."
-                                }
-                        } else saveStory(selectedRemoteUrl)
-                    } else {
-                        val sourceUri = selectedUri
-                        if (sourceUri == null) { busy = false; return@Button }
-                        if (hasPhotoEdits) {
-                            val edited = createFilteredPhotoUri(
-                                storyContext, sourceUri, selectedStoryFilter,
-                                storyBrightness, storyContrast, storySaturation
-                            )
-                            if (edited == null) {
-                                busy = false
-                                message = "Photo edit apply nahi ho paaya. Original photo try karein."
-                            } else uploadStoryFile(edited)
-                        } else uploadStoryFile(sourceUri)
-                    }
-                }
-            ) { Text(if (busy) "Uploading..." else "Share story") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } }
-    )
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { showTextStoryDialog = false }) { Text("Cancel") } }
+        )
+    }
 
     if (showProfileMedia) {
         val visibleItems = profileMedia.filter {
