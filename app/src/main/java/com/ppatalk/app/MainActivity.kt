@@ -1652,7 +1652,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
-                Spacer(Modifier.width(22.dp))
+                Spacer(Modifier.width(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCommentsClick) {
                         Icon(Icons.Default.ChatBubbleOutline, contentDescription = "Comments", tint = RoyalBlue)
