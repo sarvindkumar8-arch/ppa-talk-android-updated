@@ -1569,10 +1569,16 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                 onClick = {
                     busy = true
                     message = ""
+                    val authenticatedUid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (authenticatedUid.isNullOrBlank()) {
+                        busy = false
+                        message = "Session expire ho gaya hai. Dobara login karke story share karein."
+                        return@Button
+                    }
                     fun saveStory(url: String) {
                         val now = System.currentTimeMillis()
                         val story = hashMapOf(
-                            "uid" to uid,
+                            "uid" to authenticatedUid,
                             "authorName" to displayName,
                             "mediaUrl" to url,
                             "mediaType" to mediaType,
@@ -1583,14 +1589,29 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                             .addOnSuccessListener { busy = false; onDismiss() }
                             .addOnFailureListener { e ->
                                 busy = false
-                                message = e.localizedMessage ?: "Story save failed. Check Firestore rules."
+                                message = "Story database save failed: ${e.localizedMessage ?: "Permission denied"}"
                             }
                     }
                     fun uploadStoryFile(uri: Uri) {
-                        val ext = if (mediaType == "video") "mp4" else "jpg"
+                        val resolverMime = storyContext.contentResolver.getType(uri)
+                        val mimeType = when {
+                            mediaType == "image" && uri.scheme == "file" -> "image/jpeg"
+                            !resolverMime.isNullOrBlank() -> resolverMime
+                            mediaType == "image" -> "image/jpeg"
+                            else -> "video/mp4"
+                        }
+                        val ext = when {
+                            mimeType == "image/png" -> "png"
+                            mimeType == "image/webp" -> "webp"
+                            mimeType.startsWith("video/") -> mimeType.substringAfter("/").substringBefore(";").ifBlank { "mp4" }
+                            else -> "jpg"
+                        }
                         val storageRef = FirebaseStorage.getInstance().reference
-                            .child("stories/$uid/${System.currentTimeMillis()}.$ext")
-                        storageRef.putFile(uri)
+                            .child("stories/$authenticatedUid/${System.currentTimeMillis()}.$ext")
+                        val metadata = com.google.firebase.storage.StorageMetadata.Builder()
+                            .setContentType(mimeType)
+                            .build()
+                        storageRef.putFile(uri, metadata)
                             .addOnSuccessListener {
                                 storageRef.downloadUrl.addOnSuccessListener { download ->
                                     saveStory(download.toString())
