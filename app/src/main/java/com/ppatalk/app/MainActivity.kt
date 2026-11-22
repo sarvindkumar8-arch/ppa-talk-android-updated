@@ -320,26 +320,11 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                 busy = false
                                 message = "Google login succeeded but user details were unavailable."
                             } else {
-                                val db = FirebaseFirestore.getInstance()
-                                val name = firebaseUser.displayName ?: account.displayName ?: "PPA Talk user"
-                                val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                val batch = db.batch()
-                                batch.set(db.collection("users").document(firebaseUser.uid), mapOf(
-                                    "uid" to firebaseUser.uid,
-                                    "email" to (firebaseUser.email ?: account.email.orEmpty()),
-                                    "updatedAt" to timestamp
-                                ), com.google.firebase.firestore.SetOptions.merge())
-                                batch.set(db.collection("publicProfiles").document(firebaseUser.uid), mapOf(
-                                    "uid" to firebaseUser.uid, "displayName" to name,
-                                    "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
-                                    "updatedAt" to timestamp
-                                ), com.google.firebase.firestore.SetOptions.merge())
-                                batch.commit()
-                                    .addOnSuccessListener { busy = false; onAuthenticated() }
-                                    .addOnFailureListener { exception ->
-                                        busy = false
-                                        message = exception.localizedMessage ?: "Could not save Google profile."
-                                    }
+                                // Do not block successful Firebase Authentication on a profile
+                                // Firestore write. MainSocialApp safely initializes profile data
+                                // after entering the app; legacy profile documents may need migration.
+                                busy = false
+                                onAuthenticated()
                             }
                         }
                         .addOnFailureListener { exception ->
@@ -594,24 +579,11 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                             message = "Please verify your email first. A fresh verification link has been sent."
                                         }
                                 } else {
-                                    val db = FirebaseFirestore.getInstance()
-                                    val profileName = signedInUser.displayName?.takeIf { it.isNotBlank() }
-                                        ?: signedInUser.email?.substringBefore("@") ?: "PPA Talk user"
-                                    val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                    val batch = db.batch()
-                                    batch.set(db.collection("users").document(signedInUser.uid), mapOf(
-                                        "uid" to signedInUser.uid, "email" to (signedInUser.email ?: ""),
-                                        "updatedAt" to timestamp
-                                    ), com.google.firebase.firestore.SetOptions.merge())
-                                    batch.set(db.collection("publicProfiles").document(signedInUser.uid), mapOf(
-                                        "uid" to signedInUser.uid, "displayName" to profileName,
-                                        "updatedAt" to timestamp
-                                    ), com.google.firebase.firestore.SetOptions.merge())
-                                    batch.commit().addOnCompleteListener { task ->
-                                        busy = false
-                                        if (task.isSuccessful) onAuthenticated()
-                                        else message = task.exception?.localizedMessage ?: "Profile setup failed."
-                                    }
+                                    // Firebase Authentication has succeeded. Do not make
+                                    // login depend on a profile Firestore batch; legacy profile
+                                    // documents are initialized/migrated after entering the app.
+                                    busy = false
+                                    onAuthenticated()
                                 }
                             }
                             .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Login failed." }
