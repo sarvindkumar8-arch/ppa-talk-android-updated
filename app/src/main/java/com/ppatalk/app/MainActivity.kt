@@ -1438,6 +1438,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     var friendBusy by remember(post.uid, currentUid) { mutableStateOf(false) }
     var friendMessage by remember(post.uid, currentUid) { mutableStateOf("") }
     var postMenuExpanded by remember(post.id) { mutableStateOf(false) }
+    var showPhotoViewer by remember(post.id) { mutableStateOf(false) }
     var showLikesDialog by remember(post.id) { mutableStateOf(false) }
     var feedNotice by remember(post.id) { mutableStateOf("") }
     val db = remember { FirebaseFirestore.getInstance() }
@@ -1586,11 +1587,16 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             if (post.text.isNotBlank()) Text(post.text)
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
-                AsyncImage(
-                    model = post.mediaUrl,
-                    contentDescription = "Post photo",
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
-                    contentScale = ContentScale.Crop
+                val photoPainter = coil.compose.rememberAsyncImagePainter(model = post.mediaUrl)
+                val photoSize = photoPainter.intrinsicSize
+                val photoAspectRatio = if (photoSize.width.isFinite() && photoSize.height.isFinite() &&
+                    photoSize.width > 0f && photoSize.height > 0f) photoSize.width / photoSize.height else 1f
+                Image(
+                    painter = photoPainter,
+                    contentDescription = "Open post photo full screen",
+                    modifier = Modifier.fillMaxWidth().aspectRatio(photoAspectRatio)
+                        .clickable { showPhotoViewer = true },
+                    contentScale = ContentScale.Fit
                 )
             } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
                 Spacer(Modifier.height(10.dp))
@@ -1668,6 +1674,123 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
         }
     }
     if (showLikesDialog) PostLikesDialog(post, onDismiss = { showLikesDialog = false })
+    if (showPhotoViewer && post.mediaUrl.isNotBlank() && post.mediaType == "image") {
+        Dialog(
+            onDismissRequest = { showPhotoViewer = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+                Box(Modifier.fillMaxSize()) {
+                    val viewerPainter = coil.compose.rememberAsyncImagePainter(model = post.mediaUrl)
+                    Image(
+                        painter = viewerPainter,
+                        contentDescription = "Full-screen post photo",
+                        modifier = Modifier.fillMaxSize().padding(top = 62.dp, bottom = 205.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Row(
+                        Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { showPhotoViewer = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close photo", tint = Color.White,
+                                modifier = Modifier.size(30.dp))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Box {
+                            IconButton(onClick = { postMenuExpanded = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More post options",
+                                    tint = Color.White, modifier = Modifier.size(28.dp))
+                            }
+                            DropdownMenu(expanded = postMenuExpanded, onDismissRequest = { postMenuExpanded = false }) {
+                                DropdownMenuItem(text = { Text("Save post") },
+                                    leadingIcon = { Icon(Icons.Default.BookmarkBorder, null) },
+                                    onClick = {
+                                        postMenuExpanded = false
+                                        db.collection("users").document(currentUid).collection("savedPosts").document(post.id)
+                                            .set(mapOf("postId" to post.id, "ownerUid" to post.uid,
+                                                "savedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                                            .addOnSuccessListener { feedNotice = "Saved." }
+                                            .addOnFailureListener { feedNotice = it.localizedMessage ?: "Save failed." }
+                                    })
+                                DropdownMenuItem(text = { Text("Report post") },
+                                    leadingIcon = { Icon(Icons.Default.Report, null) },
+                                    onClick = {
+                                        postMenuExpanded = false
+                                        db.collection("postReports").add(mapOf("postId" to post.id,
+                                            "postOwnerUid" to post.uid, "reporterUid" to currentUid,
+                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                                    })
+                            }
+                        }
+                    }
+                    Column(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.88f)).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(Modifier.size(42.dp), shape = CircleShape, color = Color.DarkGray) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = "Author profile",
+                                    tint = Color.White, modifier = Modifier.padding(2.dp))
+                            }
+                            Spacer(Modifier.width(9.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(post.authorName, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text(post.createdAt?.let {
+                                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(it)
+                                } ?: "PPA Talk", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        if (post.text.isNotBlank()) {
+                            Text(post.text, color = Color.White, maxLines = 3, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(enabled = !actionBusy, onClick = {
+                                    actionBusy = true
+                                    val likeRef = db.collection("posts").document(post.id).collection("likes").document(currentUid)
+                                    if (liked) likeRef.delete().addOnCompleteListener { actionBusy = false }
+                                    else likeRef.set(mapOf("uid" to currentUid, "reaction" to "👍",
+                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                                        .addOnCompleteListener { actionBusy = false }
+                                }) {
+                                    Icon(if (liked) Icons.Default.ThumbUp else Icons.Default.ThumbUpOffAlt,
+                                        contentDescription = "Like post", tint = Color.White)
+                                }
+                                Text(if (likeCount >= 1000) String.format("%.1fK", likeCount / 1000f) else likeCount.toString(),
+                                    color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = {
+                                    showPhotoViewer = false
+                                    onCommentsClick()
+                                }) { Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = Color.White) }
+                                Text(if (commentCount >= 1000) String.format("%.1fK", commentCount / 1000f) else commentCount.toString(),
+                                    color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            }
+                            IconButton(onClick = {
+                                val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\n" + post.mediaUrl
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
+                            }) { Icon(Icons.Default.Share, contentDescription = "Share post", tint = Color.White) }
+                            IconButton(onClick = {
+                                db.collection("users").document(currentUid).collection("savedPosts").document(post.id)
+                                    .set(mapOf("postId" to post.id, "ownerUid" to post.uid,
+                                        "savedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                                    .addOnSuccessListener { feedNotice = "Saved." }
+                            }) { Icon(Icons.Default.BookmarkBorder, contentDescription = "Save post", tint = Color.White) }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 
