@@ -2455,11 +2455,6 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                     isError = true
                                     message = exception.localizedMessage ?: "Display photo upload failed."
                                 }
-                        }.addOnFailureListener { exception ->
-                            saving = false
-                            isError = true
-                            message = exception.localizedMessage ?: "Original photo URL nahi mil paya."
-                        }
                     }
                     .addOnFailureListener { exception ->
                         saving = false
