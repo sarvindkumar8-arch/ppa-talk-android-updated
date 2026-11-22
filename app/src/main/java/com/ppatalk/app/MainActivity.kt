@@ -2408,7 +2408,11 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (post.uid != currentUid && friendState != "Friends") {
+                if (post.uid != currentUid && post.postType == "reel") {
+                    OutlinedButton(onClick = onOpenAuthorProfile, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                        Text("Follow")
+                    }
+                } else if (post.uid != currentUid && friendState != "Friends") {
                     OutlinedButton(
                         enabled = !friendBusy && friendState in listOf("Add Friend", "Respond", "Requested"),
                         onClick = {
@@ -2493,13 +2497,46 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         .clickable { showPhotoViewer = true },
                     contentScale = ContentScale.Fit
                 )
-            } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
-                Spacer(Modifier.height(10.dp))
-                AndroidView(
-                    factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); setVideoURI(Uri.parse(post.mediaUrl)) } },
-                    update = { },
-                    modifier = Modifier.fillMaxWidth().height(230.dp)
-                )
+            } else if (post.mediaUrl.isNotBlank() && (post.mediaType == "video" || post.postType == "reel")) {
+                Spacer(Modifier.height(8.dp))
+                var reelMuted by remember(post.id) { mutableStateOf(true) }
+                var reelPlayer by remember(post.id) { mutableStateOf<MediaPlayer?>(null) }
+                Box(
+                    Modifier.fillMaxWidth().aspectRatio(4f / 5f).background(Color.Black)
+                ) {
+                    AndroidView(
+                        factory = { context ->
+                            VideoView(context).apply {
+                                setVideoURI(Uri.parse(post.mediaUrl))
+                                setOnPreparedListener { player ->
+                                    player.isLooping = true
+                                    player.setVolume(0f, 0f)
+                                    reelPlayer = player
+                                    start()
+                                }
+                            }
+                        },
+                        update = { view ->
+                            reelPlayer?.setVolume(if (reelMuted) 0f else 1f, if (reelMuted) 0f else 1f)
+                            if (!view.isPlaying) view.start()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    IconButton(
+                        onClick = {
+                            reelMuted = !reelMuted
+                            reelPlayer?.setVolume(if (reelMuted) 0f else 1f, if (reelMuted) 0f else 1f)
+                        },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    ) {
+                        Icon(
+                            if (reelMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = if (reelMuted) "Unmute reel" else "Mute reel",
+                            tint = Color.White
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
             if (showReactionPicker) {
@@ -2573,6 +2610,15 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
                 }) {
                     Icon(Icons.Outlined.Reply, contentDescription = "Share", tint = Color.Black, modifier = Modifier.graphicsLayer(scaleX = -1f))
+                }
+                IconButton(onClick = {
+                    db.collection("users").document(currentUid).collection("savedPosts").document(post.id)
+                        .set(mapOf("postId" to post.id, "ownerUid" to post.uid,
+                            "savedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                        .addOnSuccessListener { feedNotice = "Saved." }
+                        .addOnFailureListener { feedNotice = it.localizedMessage ?: "Save failed." }
+                }) {
+                    Icon(Icons.Outlined.BookmarkBorder, contentDescription = "Save reel or post", tint = Color.Black)
                 }
                 Spacer(Modifier.weight(1f))
                 if (post.uid == currentUid) {
