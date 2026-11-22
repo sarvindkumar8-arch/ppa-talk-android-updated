@@ -1344,18 +1344,86 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
 @Composable
 fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedRemoteUrl by remember { mutableStateOf("") }
     var mediaType by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var showSourceChooser by remember { mutableStateOf(true) }
+    var showProfileMedia by remember { mutableStateOf(false) }
+    var profileMediaLoading by remember { mutableStateOf(false) }
+    var profileMedia by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
+    var profileMediaFilter by remember { mutableStateOf("All") }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedUri = uri
+        selectedRemoteUrl = ""
         mediaType = if (uri == null) "" else "image"
         message = ""
+        if (uri != null) showSourceChooser = false
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedUri = uri
+        selectedRemoteUrl = ""
         mediaType = if (uri == null) "" else "video"
         message = ""
+        if (uri != null) showSourceChooser = false
+    }
+
+    fun loadProfileMedia() {
+        profileMediaLoading = true
+        profileMedia = emptyList()
+        val db = FirebaseFirestore.getInstance()
+        val items = mutableListOf<Map<String, String>>()
+        db.collection("publicProfiles").document(uid).get()
+            .addOnSuccessListener { profile ->
+                profile.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let {
+                    items.add(mapOf("url" to it, "type" to "image", "title" to "Profile photo", "source" to "Profile"))
+                }
+                profile.getString("coverPhotoUrl")?.takeIf { it.isNotBlank() }?.let {
+                    items.add(mapOf("url" to it, "type" to "image", "title" to "Cover photo", "source" to "Profile"))
+                }
+                db.collection("posts").whereEqualTo("uid", uid).get()
+                    .addOnSuccessListener { snapshot ->
+                        snapshot.documents.forEach { doc ->
+                            val url = doc.getString("mediaUrl").orEmpty()
+                            if (url.isNotBlank()) {
+                                val type = doc.getString("mediaType").orEmpty().lowercase()
+                                val postType = doc.getString("postType").orEmpty().lowercase()
+                                val isVideo = type.contains("video") || postType == "reel" || postType == "reels"
+                                items.add(mapOf(
+                                    "url" to url,
+                                    "type" to if (isVideo) "video" else "image",
+                                    "title" to (if (isVideo) "Reel" else "Photo"),
+                                    "source" to if (isVideo) "Reels" else "Photos"
+                                ))
+                            }
+                        }
+                        profileMedia = items.distinctBy { it["url"] }
+                        profileMediaLoading = false
+                    }
+                    .addOnFailureListener { error ->
+                        profileMedia = items.distinctBy { it["url"] }
+                        profileMediaLoading = false
+                        message = error.localizedMessage ?: "Profile media load nahi ho paayi."
+                    }
+            }
+            .addOnFailureListener { error ->
+                db.collection("posts").whereEqualTo("uid", uid).get()
+                    .addOnSuccessListener { snapshot ->
+                        profileMedia = snapshot.documents.mapNotNull { doc ->
+                            val url = doc.getString("mediaUrl").orEmpty()
+                            if (url.isBlank()) null else {
+                                val type = doc.getString("mediaType").orEmpty().lowercase()
+                                val postType = doc.getString("postType").orEmpty().lowercase()
+                                val isVideo = type.contains("video") || postType == "reel" || postType == "reels"
+                                mapOf("url" to url, "type" to if (isVideo) "video" else "image",
+                                    "title" to if (isVideo) "Reel" else "Photo",
+                                    "source" to if (isVideo) "Reels" else "Photos")
+                            }
+                        }.distinctBy { it["url"] }
+                        profileMediaLoading = false
+                    }
+                    .addOnFailureListener { profileMediaLoading = false; message = error.localizedMessage ?: "Profile media load nahi ho paayi." }
+            }
     }
 
     AlertDialog(
@@ -1363,50 +1431,162 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
         title = { Text("Create story") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Choose a photo or video. Your story will be visible for 24 hours.")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy) { Icon(Icons.Default.Photo, null); Text("Photo") }
-                    OutlinedButton(onClick = { videoPicker.launch("video/*") }, enabled = !busy) { Icon(Icons.Default.VideoLibrary, null); Text("Video") }
-                }
-                selectedUri?.let { uri ->
-                    if (mediaType == "image") AsyncImage(model = uri, contentDescription = "Selected story",
-                        modifier = Modifier.fillMaxWidth().height(170.dp), contentScale = ContentScale.Crop)
-                    else Text("Video selected")
+                if (selectedUri == null && selectedRemoteUrl.isBlank()) {
+                    Text("Story kahan se add karni hai?")
+                    OutlinedButton(
+                        onClick = { showSourceChooser = false; imagePicker.launch("image/*") },
+                        modifier = Modifier.fillMaxWidth(), enabled = !busy
+                    ) { Icon(Icons.Default.Photo, null); Spacer(Modifier.width(8.dp)); Text("Gallery – Photo") }
+                    OutlinedButton(
+                        onClick = { showSourceChooser = false; videoPicker.launch("video/*") },
+                        modifier = Modifier.fillMaxWidth(), enabled = !busy
+                    ) { Icon(Icons.Default.VideoLibrary, null); Spacer(Modifier.width(8.dp)); Text("Gallery – Video") }
+                    OutlinedButton(
+                        onClick = { showSourceChooser = false; showProfileMedia = true; loadProfileMedia() },
+                        modifier = Modifier.fillMaxWidth(), enabled = !busy
+                    ) { Icon(Icons.Default.AccountCircle, null); Spacer(Modifier.width(8.dp)); Text("PPA Profile – Photos & Reels") }
+                    Text("Your story will be visible for 24 hours.", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(if (selectedRemoteUrl.isNotBlank()) "Selected from PPA Profile" else "Selected from Gallery")
+                    if (mediaType == "image") {
+                        AsyncImage(
+                            model = selectedUri ?: selectedRemoteUrl,
+                            contentDescription = "Selected story",
+                            modifier = Modifier.fillMaxWidth().height(190.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.PlayCircle, null, tint = RoyalBlue, modifier = Modifier.size(42.dp))
+                            Text("Video selected")
+                        }
+                    }
+                    TextButton(onClick = {
+                        selectedUri = null
+                        selectedRemoteUrl = ""
+                        mediaType = ""
+                        showSourceChooser = true
+                    }, enabled = !busy) { Text("Choose another") }
                 }
                 if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
-            Button(enabled = selectedUri != null && !busy, onClick = {
-                val uri = selectedUri ?: return@Button
-                busy = true
-                message = ""
-                val ext = if (mediaType == "video") "mp4" else "jpg"
-                val storageRef = FirebaseStorage.getInstance().reference
-                    .child("stories/$uid/${System.currentTimeMillis()}.$ext")
-                storageRef.putFile(uri)
-                    .addOnSuccessListener {
-                        storageRef.downloadUrl.addOnSuccessListener { download ->
-                            val now = System.currentTimeMillis()
-                            val story = hashMapOf(
-                                "uid" to uid,
-                                "authorName" to displayName,
-                                "mediaUrl" to download.toString(),
-                                "mediaType" to mediaType,
-                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                                "expiresAt" to com.google.firebase.Timestamp(Date(now + 24L * 60L * 60L * 1000L))
-                            )
-                            FirebaseFirestore.getInstance().collection("stories").add(story)
-                                .addOnSuccessListener { busy = false; onDismiss() }
-                                .addOnFailureListener { e -> busy = false; message = e.localizedMessage ?: "Story save failed. Check Firestore rules." }
-                        }.addOnFailureListener { e -> busy = false; message = e.localizedMessage ?: "Could not get media URL." }
+            Button(
+                enabled = (selectedUri != null || selectedRemoteUrl.isNotBlank()) && !busy,
+                onClick = {
+                    busy = true
+                    message = ""
+                    fun saveStory(url: String) {
+                        val now = System.currentTimeMillis()
+                        val story = hashMapOf(
+                            "uid" to uid,
+                            "authorName" to displayName,
+                            "mediaUrl" to url,
+                            "mediaType" to mediaType,
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                            "expiresAt" to com.google.firebase.Timestamp(Date(now + 24L * 60L * 60L * 1000L))
+                        )
+                        FirebaseFirestore.getInstance().collection("stories").add(story)
+                            .addOnSuccessListener { busy = false; onDismiss() }
+                            .addOnFailureListener { e ->
+                                busy = false
+                                message = e.localizedMessage ?: "Story save failed. Check Firestore rules."
+                            }
                     }
-                    .addOnFailureListener { e -> busy = false; message = e.localizedMessage ?: "Upload failed. Check Storage rules." }
-            }) { Text(if (busy) "Uploading..." else "Share story") }
+                    if (selectedRemoteUrl.isNotBlank()) {
+                        saveStory(selectedRemoteUrl)
+                    } else {
+                        val uri = selectedUri
+                        if (uri == null) { busy = false; return@Button }
+                        val ext = if (mediaType == "video") "mp4" else "jpg"
+                        val storageRef = FirebaseStorage.getInstance().reference
+                            .child("stories/$uid/${System.currentTimeMillis()}.$ext")
+                        storageRef.putFile(uri)
+                            .addOnSuccessListener {
+                                storageRef.downloadUrl.addOnSuccessListener { download ->
+                                    saveStory(download.toString())
+                                }.addOnFailureListener { e ->
+                                    busy = false
+                                    message = e.localizedMessage ?: "Could not get media URL."
+                                }
+                            }
+                            .addOnFailureListener { e ->
+                                busy = false
+                                message = e.localizedMessage ?: "Upload failed. Check Storage rules."
+                            }
+                    }
+                }
+            ) { Text(if (busy) "Uploading..." else "Share story") }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } }
     )
+
+    if (showProfileMedia) {
+        val visibleItems = profileMedia.filter {
+            profileMediaFilter == "All" ||
+                (profileMediaFilter == "Photos" && it["type"] == "image") ||
+                (profileMediaFilter == "Reels" && it["type"] == "video")
+        }
+        AlertDialog(
+            onDismissRequest = { showProfileMedia = false; showSourceChooser = true },
+            title = { Text("Choose from PPA Profile") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("All", "Photos", "Reels").forEach { filter ->
+                            FilterChip(
+                                selected = profileMediaFilter == filter,
+                                onClick = { profileMediaFilter = filter },
+                                label = { Text(filter) }
+                            )
+                        }
+                    }
+                    when {
+                        profileMediaLoading -> Box(Modifier.fillMaxWidth().height(110.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                        visibleItems.isEmpty() -> Text("Is section mein abhi koi photo ya reel nahi hai.")
+                        else -> LazyColumn(Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(visibleItems.size) { index ->
+                                val item = visibleItems[index]
+                                Row(
+                                    Modifier.fillMaxWidth().clickable {
+                                        selectedRemoteUrl = item["url"].orEmpty()
+                                        mediaType = item["type"].orEmpty()
+                                        selectedUri = null
+                                        showProfileMedia = false
+                                        showSourceChooser = false
+                                        message = ""
+                                    }.padding(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AsyncImage(
+                                        model = item["url"],
+                                        contentDescription = item["title"],
+                                        modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item["title"].orEmpty(), fontWeight = FontWeight.SemiBold)
+                                        Text(item["source"].orEmpty(), style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.AddCircle, contentDescription = "Select for story", tint = RoyalBlue)
+                                }
+                            }
+                        }
+                    }
+                    if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showProfileMedia = false; showSourceChooser = true }) { Text("Back") } }
+        )
+    }
 }
+
 
 @Composable
 fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {},
