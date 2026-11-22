@@ -566,3 +566,33 @@ exports.getSecureProfileMediaUrl = onCall({
   const [signedUrl] = await file.getSignedUrl({ action: "read", expires: Date.now() + 5 * 60 * 1000 });
   return { url: signedUrl, expiresInSeconds: 300 };
 });
+
+exports.revokeLegacyProfileMediaTokens = onCall({
+  region: REGION,
+  enforceAppCheck: false,
+  maxInstances: 10
+}, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to secure your profile photos.");
+  const profileUid = typeof request.data?.profileUid === "string" ? request.data.profileUid.trim() : "";
+  if (profileUid !== uid) throw new HttpsError("permission-denied", "Only the profile owner can secure legacy photo links.");
+
+  const markerRef = db.collection("users").doc(uid);
+  const marker = await markerRef.get();
+  if (marker.get("profileMediaTokensRevokedAt")) return { alreadySecured: true };
+
+  const bucket = getStorage().bucket();
+  let revokedCount = 0;
+  for (const folder of ["profile_photos", "cover_photos"]) {
+    const [files] = await bucket.getFiles({ prefix: folder + "/" + uid + "/original_" });
+    for (const file of files) {
+      const [metadata] = await file.getMetadata();
+      if (metadata.metadata?.firebaseStorageDownloadTokens) {
+        await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: null } });
+        revokedCount += 1;
+      }
+    }
+  }
+  await markerRef.set({ profileMediaTokensRevokedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { alreadySecured: false, revokedCount };
+});
