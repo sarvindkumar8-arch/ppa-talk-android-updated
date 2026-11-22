@@ -1655,7 +1655,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.width(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCommentsClick) {
-                        Icon(Icons.Default.ChatBubbleOutline, contentDescription = "Comments", tint = RoyalBlue)
+                        Icon(Icons.Default.ModeComment, contentDescription = "Comments", tint = RoyalBlue)
                     }
                     Text(
                         commentCount.toString(),
@@ -1673,7 +1673,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     }
                     context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
                 }) {
-                    Icon(Icons.Filled.Forward, contentDescription = "Share", tint = Orange)
+                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Orange)
                 }
                 Spacer(Modifier.weight(1f))
                 if (post.uid == currentUid) {
