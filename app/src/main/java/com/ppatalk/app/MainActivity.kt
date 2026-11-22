@@ -644,19 +644,41 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             Text("MAKE IN INDIA", style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        Box(
-            modifier = Modifier
-                .background(Color(0xFF07102F), RoundedCornerShape(24.dp))
-                .padding(horizontal = 18.dp, vertical = 9.dp)
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Your Voice", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold, color = Color(0xFFF5F7FF))
-                Text(" • ", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold, color = Color(0xFFFF8A00))
-                Text("Your World", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold, color = Color(0xFFFFD21C))
+                Text(
+                    "Your Voice",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = Color(0xFFFFFFFF)
+                )
+                Text(
+                    " • ",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFFFFA500)
+                )
+                Text(
+                    "Your World",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = Color(0xFFFFE000)
+                )
             }
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier
+                    .width(250.dp)
+                    .height(4.dp)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(Color(0xFFFFD800), Color(0xFFFF8A00), Color(0xFFFFD800))
+                        ),
+                        shape = RoundedCornerShape(50)
+                    )
+            )
         }
         Spacer(Modifier.height(8.dp))
     }
