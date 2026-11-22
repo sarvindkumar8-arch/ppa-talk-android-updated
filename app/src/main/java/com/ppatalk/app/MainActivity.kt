@@ -1466,7 +1466,16 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Create story") },
         text = {
-            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (message.isNotBlank()) {
+                    Text(
+                        message,
+                        color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (selectedUri == null && selectedRemoteUrl.isBlank()) {
                     if (!showGalleryOptions) {
                         Text("Story kahan se add karni hai?")
@@ -1560,11 +1569,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                         showSourceChooser = true
                     }, enabled = !busy) { Text("Choose another") }
                 }
-                if (message.isNotBlank()) Text(
-                    message,
-                    color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                }
             }
         },
         confirmButton = {
