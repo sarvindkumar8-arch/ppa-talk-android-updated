@@ -1346,6 +1346,46 @@ fun StoriesStrip(uid: String, displayName: String) {
             viewingStory = nextStory
         }
         val storyPhotoUrl = remember(storyOwnerUid) { mutableStateOf("") }
+        fun sendStoryReply() {
+            val reply = replyText.trim()
+            if (reply.isBlank()) return
+            if (storyOwnerUid.isBlank() || storyOwnerUid == uid) {
+                actionMessage = if (storyOwnerUid == uid) "You cannot message yourself about your own story." else "Story owner could not be identified."
+                return
+            }
+            val chatId = listOf(uid, storyOwnerUid).sorted().joinToString("_")
+            val chatRef = db.collection("chats").document(chatId)
+            val chatMessage = "↩️ Replied to your story: $reply"
+            replyText = ""
+            actionMessage = "Sending..."
+            chatRef.set(
+                mapOf(
+                    "participantIds" to listOf(uid, storyOwnerUid).sorted(),
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            ).onSuccessTask {
+                chatRef.collection("messages").add(hashMapOf(
+                    "uid" to uid,
+                    "text" to chatMessage,
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ))
+            }.addOnSuccessListener {
+                chatRef.set(
+                    mapOf(
+                        "lastMessage" to chatMessage,
+                        "lastMessageAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "lastSenderUid" to uid,
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                actionMessage = "Message sent to chat"
+            }.addOnFailureListener {
+                replyText = reply
+                actionMessage = it.localizedMessage ?: "Message could not be sent to chat."
+            }
+        }
         DisposableEffect(storyOwnerUid) {
             fun updatePhoto(snapshot: com.google.firebase.firestore.DocumentSnapshot?) {
                 snapshot?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { storyPhotoUrl.value = it }
@@ -1493,15 +1533,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                             shape = RoundedCornerShape(30.dp),
                             keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
                             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = {
-                                val text = replyText.trim()
-                                if (text.isNotEmpty()) {
-                                    db.collection("storyReplies").add(hashMapOf(
-                                        "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
-                                        "fromUid" to uid, "message" to text,
-                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                    )).addOnSuccessListener { replyText = ""; actionMessage = "Message sent" }
-                                        .addOnFailureListener { actionMessage = it.localizedMessage ?: "Message send nahi hua." }
-                                }
+                                sendStoryReply()
                             }),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White, unfocusedTextColor = Color.White,
