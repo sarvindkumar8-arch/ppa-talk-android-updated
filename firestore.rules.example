@@ -153,7 +153,11 @@ service cloud.firestore {
       // otherwise reading a non-existent request is denied before Unfriend opens.
       allow read: if signedIn()
         && (
-          requestId.matches('^' + request.auth.uid + '_[^_]+
+          requestId.matches('^' + request.auth.uid + '_[^_]+$')
+          || requestId.matches('^[^_]+_' + request.auth.uid + '$')
+          || resource.data.fromUid == request.auth.uid
+          || resource.data.toUid == request.auth.uid
+        );
       allow create: if signedIn()
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
