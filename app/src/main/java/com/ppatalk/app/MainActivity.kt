@@ -1442,6 +1442,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     var showLikesDialog by remember(post.id) { mutableStateOf(false) }
     var feedNotice by remember(post.id) { mutableStateOf("") }
     val db = remember { FirebaseFirestore.getInstance() }
+    val context = LocalContext.current
 
     DisposableEffect(post.uid, currentUid) {
         if (post.uid == currentUid) return@DisposableEffect onDispose { }
