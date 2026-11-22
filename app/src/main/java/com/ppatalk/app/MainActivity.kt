@@ -1372,6 +1372,11 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var selectedRemoteUrl by remember { mutableStateOf("") }
     var mediaType by remember { mutableStateOf("") }
+    var selectedStoryFilter by remember { mutableStateOf("Original") }
+    var storyBrightness by remember { mutableFloatStateOf(0f) }
+    var storyContrast by remember { mutableFloatStateOf(1f) }
+    var storySaturation by remember { mutableFloatStateOf(1f) }
+    val storyContext = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var showSourceChooser by remember { mutableStateOf(true) }
@@ -1384,6 +1389,8 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
         selectedUri = uri
         selectedRemoteUrl = ""
         mediaType = if (uri == null) "" else "image"
+        selectedStoryFilter = "Original"
+        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
         message = ""
         if (uri != null) showSourceChooser = false
     }
@@ -1391,6 +1398,8 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
         selectedUri = uri
         selectedRemoteUrl = ""
         mediaType = if (uri == null) "" else "video"
+        selectedStoryFilter = "Original"
+        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
         message = ""
         if (uri != null) showSourceChooser = false
     }
@@ -1488,10 +1497,54 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                     if (mediaType == "image") {
                         AsyncImage(
                             model = selectedUri ?: selectedRemoteUrl,
-                            contentDescription = "Selected story",
-                            modifier = Modifier.fillMaxWidth().height(190.dp),
-                            contentScale = ContentScale.Fit
+                            contentDescription = "Selected story photo preview",
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 230.dp),
+                            contentScale = ContentScale.Fit,
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                androidx.compose.ui.graphics.ColorMatrix(
+                                    photoFilterMatrix(selectedStoryFilter, storyBrightness, storyContrast, storySaturation)
+                                )
+                            )
                         )
+                        Text("Edit photo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("Original", "Natural", "Cinematic", "Portrait", "Vivid", "Warm", "Cool", "B&W").forEach { filter ->
+                                Column(
+                                    Modifier.width(68.dp).clickable { selectedStoryFilter = filter },
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    AsyncImage(
+                                        model = selectedUri ?: selectedRemoteUrl,
+                                        contentDescription = "$filter story filter",
+                                        modifier = Modifier.size(58.dp).clip(MaterialTheme.shapes.small),
+                                        contentScale = ContentScale.Crop,
+                                        colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                            androidx.compose.ui.graphics.ColorMatrix(
+                                                photoFilterMatrix(filter, storyBrightness, storyContrast, storySaturation)
+                                            )
+                                        )
+                                    )
+                                    Text(
+                                        filter,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (selectedStoryFilter == filter) RoyalBlue else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                        Text("Brightness  ${storyBrightness.toInt()}", style = MaterialTheme.typography.labelMedium)
+                        Slider(value = storyBrightness, onValueChange = { storyBrightness = it }, valueRange = -0.5f..0.5f)
+                        Text("Contrast  ${(storyContrast * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                        Slider(value = storyContrast, onValueChange = { storyContrast = it }, valueRange = 0.5f..1.8f)
+                        Text("Saturation  ${(storySaturation * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                        Slider(value = storySaturation, onValueChange = { storySaturation = it }, valueRange = 0f..2f)
+                        TextButton(onClick = {
+                            selectedStoryFilter = "Original"
+                            storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
+                        }) { Text("Reset edits") }
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.PlayCircle, null, tint = RoyalBlue, modifier = Modifier.size(42.dp))
@@ -1502,6 +1555,8 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                         selectedUri = null
                         selectedRemoteUrl = ""
                         mediaType = ""
+                        selectedStoryFilter = "Original"
+                        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
                         showSourceChooser = true
                     }, enabled = !busy) { Text("Choose another") }
                 }
@@ -1531,11 +1586,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                                 message = e.localizedMessage ?: "Story save failed. Check Firestore rules."
                             }
                     }
-                    if (selectedRemoteUrl.isNotBlank()) {
-                        saveStory(selectedRemoteUrl)
-                    } else {
-                        val uri = selectedUri
-                        if (uri == null) { busy = false; return@Button }
+                    fun uploadStoryFile(uri: Uri) {
                         val ext = if (mediaType == "video") "mp4" else "jpg"
                         val storageRef = FirebaseStorage.getInstance().reference
                             .child("stories/$uid/${System.currentTimeMillis()}.$ext")
@@ -1552,6 +1603,44 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                                 busy = false
                                 message = e.localizedMessage ?: "Upload failed. Check Storage rules."
                             }
+                    }
+                    val hasPhotoEdits = mediaType == "image" &&
+                        (selectedStoryFilter != "Original" || storyBrightness != 0f ||
+                            storyContrast != 1f || storySaturation != 1f)
+                    if (selectedRemoteUrl.isNotBlank()) {
+                        if (hasPhotoEdits) {
+                            FirebaseStorage.getInstance().getReferenceFromUrl(selectedRemoteUrl)
+                                .getBytes(20L * 1024L * 1024L)
+                                .addOnSuccessListener { bytes ->
+                                    val sourceFile = java.io.File(storyContext.cacheDir, "story_source_${System.currentTimeMillis()}.jpg")
+                                    sourceFile.writeBytes(bytes)
+                                    val edited = createFilteredPhotoUri(
+                                        storyContext, Uri.fromFile(sourceFile), selectedStoryFilter,
+                                        storyBrightness, storyContrast, storySaturation
+                                    )
+                                    if (edited == null) {
+                                        busy = false
+                                        message = "Photo edit apply nahi ho paaya. Original photo try karein."
+                                    } else uploadStoryFile(edited)
+                                }
+                                .addOnFailureListener { e ->
+                                    busy = false
+                                    message = e.localizedMessage ?: "Profile photo edit ke liye load nahi ho paayi."
+                                }
+                        } else saveStory(selectedRemoteUrl)
+                    } else {
+                        val sourceUri = selectedUri
+                        if (sourceUri == null) { busy = false; return@Button }
+                        if (hasPhotoEdits) {
+                            val edited = createFilteredPhotoUri(
+                                storyContext, sourceUri, selectedStoryFilter,
+                                storyBrightness, storyContrast, storySaturation
+                            )
+                            if (edited == null) {
+                                busy = false
+                                message = "Photo edit apply nahi ho paaya. Original photo try karein."
+                            } else uploadStoryFile(edited)
+                        } else uploadStoryFile(sourceUri)
                     }
                 }
             ) { Text(if (busy) "Uploading..." else "Share story") }
@@ -1591,6 +1680,8 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                                     Modifier.fillMaxWidth().clickable {
                                         selectedRemoteUrl = item["url"].orEmpty()
                                         mediaType = item["type"].orEmpty()
+                                        selectedStoryFilter = "Original"
+                                        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
                                         selectedUri = null
                                         showProfileMedia = false
                                         showSourceChooser = false
