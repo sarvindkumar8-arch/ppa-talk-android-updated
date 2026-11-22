@@ -643,12 +643,20 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             Text("MAKE IN INDIA", style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        Text(
-            "Your Voice • Your World",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = RoyalBlue
-        )
+        Box(
+            modifier = Modifier
+                .background(Color(0xFF07102F), RoundedCornerShape(24.dp))
+                .padding(horizontal = 18.dp, vertical = 9.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Your Voice", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold, color = Color(0xFFF5F7FF))
+                Text(" • ", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold, color = Color(0xFFFF8A00))
+                Text("Your World", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold, color = Color(0xFFFFD21C))
+            }
+        }
         Spacer(Modifier.height(8.dp))
     }
 }
