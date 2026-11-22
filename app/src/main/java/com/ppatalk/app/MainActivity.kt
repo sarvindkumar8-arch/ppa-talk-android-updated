@@ -713,6 +713,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var viewedProfileUid by remember { mutableStateOf(uid) }
+    var returnToProfileAfterChat by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     val backStack = remember { mutableStateListOf<String>() }
 
@@ -852,7 +853,13 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 friendUid = activeChatUid!!,
                 friendName = activeChatName,
                 modifier = Modifier.padding(padding),
-                onBack = { activeChatUid = null },
+                onBack = {
+                    activeChatUid = null
+                    if (returnToProfileAfterChat) {
+                        selected = "Profile"
+                        returnToProfileAfterChat = false
+                    }
+                },
                 onOpenProfile = {
                     viewedProfileUid = activeChatUid!!
                     backStack.add(selected)
@@ -871,7 +878,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Profile" -> if (viewedProfileUid == uid) {
                 ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
             } else {
-                PublicProfileScreen(viewedProfileUid, currentUid = uid, currentName = displayName, onOpenChat = { friendUid, friendName -> activeChatUid = friendUid; activeChatName = friendName }, modifier = Modifier.padding(padding))
+                PublicProfileScreen(viewedProfileUid, currentUid = uid, currentName = displayName, onOpenChat = { friendUid, friendName ->
+                    returnToProfileAfterChat = true
+                    activeChatUid = friendUid
+                    activeChatName = friendName
+                    selected = "Messenger"
+                }, modifier = Modifier.padding(padding))
             }
             "Menu" -> Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
