@@ -1891,7 +1891,9 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
     }
 }
 
-private fun photoFilterMatrix(filter: String): FloatArray {
+private fun photoFilterMatrix(
+    filter: String, brightness: Float = 0f, contrast: Float = 1f, saturation: Float = 1f
+): FloatArray {
     val matrix = ColorMatrix()
     when (filter) {
         "Vivid" -> matrix.setSaturation(1.35f)
@@ -1901,29 +1903,45 @@ private fun photoFilterMatrix(filter: String): FloatArray {
         "Soft" -> matrix.setSaturation(0.78f)
         "Drama" -> matrix.set(floatArrayOf(1.18f,0f,0f,0f,-18f, 0f,1.18f,0f,0f,-18f, 0f,0f,1.18f,0f,-18f, 0f,0f,0f,1f,0f))
     }
+    matrix.postConcat(ColorMatrix().apply { setSaturation(saturation) })
+    val offset = 128f * (1f - contrast) + brightness * 255f
+    matrix.postConcat(ColorMatrix(floatArrayOf(
+        contrast,0f,0f,0f,offset, 0f,contrast,0f,0f,offset,
+        0f,0f,contrast,0f,offset, 0f,0f,0f,1f,0f
+    )))
     return matrix.array
 }
 
-private fun createFilteredPhotoUri(context: android.content.Context, source: Uri, filter: String): Uri? {
+private fun createFilteredPhotoUri(
+    context: android.content.Context, source: Uri, filter: String,
+    brightness: Float, contrast: Float, saturation: Float
+): Uri? {
     return runCatching {
         val original = context.contentResolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it) } ?: return null
         val output = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { colorFilter = ColorMatrixColorFilter(ColorMatrix(photoFilterMatrix(filter))) }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(ColorMatrix(photoFilterMatrix(filter, brightness, contrast, saturation)))
+        }
         canvas.drawBitmap(original, 0f, 0f, paint)
         val file = java.io.File(context.cacheDir, "ppa_edited_" + System.currentTimeMillis() + ".jpg")
         file.outputStream().use { stream -> output.compress(Bitmap.CompressFormat.JPEG, 94, stream) }
-        original.recycle(); output.recycle()
+        original.recycle()
+        output.recycle()
         Uri.fromFile(file)
     }.getOrNull()
 }
+
 @Composable
 fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier) {
     var postText by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf("") }
     var selectedPhotoFilter by remember { mutableStateOf("Original") }
-    var showPhotoTools by remember { mutableStateOf(true) }
+    var selectedPhotoTool by remember { mutableStateOf("Edit") }
+    var photoBrightness by remember { mutableFloatStateOf(0f) }
+    var photoContrast by remember { mutableFloatStateOf(1f) }
+    var photoSaturation by remember { mutableFloatStateOf(1f) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var success by remember { mutableStateOf(false) }
@@ -1932,12 +1950,16 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         selectedMedia = uri
         mediaType = if (uri == null) "" else "image"
         selectedPhotoFilter = "Original"
+        selectedPhotoTool = "Edit"
+        photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f
         message = ""
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedMedia = uri
         mediaType = if (uri == null) "" else "video"
         selectedPhotoFilter = "Original"
+        selectedPhotoTool = "Edit"
+        photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f
         message = ""
     }
 
@@ -1975,7 +1997,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(if (mediaType == "video") "Video selected" else "Photo preview", color = RoyalBlue,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { selectedMedia = null; mediaType = ""; selectedPhotoFilter = "Original" }) { Text("Remove") }
+                TextButton(onClick = { selectedMedia = null; mediaType = ""; selectedPhotoFilter = "Original"; photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f }) { Text("Remove") }
             }
             if (mediaType == "image") {
                 AsyncImage(
@@ -1984,19 +2006,19 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     contentScale = ContentScale.Fit,
                     colorFilter = if (selectedPhotoFilter == "Original") null else
                         androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                            androidx.compose.ui.graphics.ColorMatrix(photoFilterMatrix(selectedPhotoFilter))
+                            androidx.compose.ui.graphics.ColorMatrix(photoFilterMatrix(selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation))
                         )
                 )
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Edit", "Filters", "Adjust").forEach { tool ->
-                        FilterChip(selected = showPhotoTools && tool == "Filters", onClick = { showPhotoTools = true },
+                    listOf("Edit", "Filters").forEach { tool ->
+                        FilterChip(selected = selectedPhotoTool == tool, onClick = { selectedPhotoTool = tool },
                             label = { Text(tool) }, leadingIcon = {
-                                Icon(when(tool) { "Edit" -> Icons.Default.Crop; "Filters" -> Icons.Default.AutoAwesome; else -> Icons.Default.Tune }, null)
+                                Icon(if (tool == "Edit") Icons.Default.Tune else Icons.Default.AutoAwesome, null)
                             })
                     }
                 }
-                if (showPhotoTools) {
+                if (selectedPhotoTool == "Filters") {
                     Text("Choose a filter", modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
@@ -2006,10 +2028,24 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                 label = { Text(filter) })
                         }
                     }
-                    Text("The selected filter will be applied to the uploaded photo.",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("Photo adjustments", modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Text("Brightness  ${(photoBrightness * 100).toInt()}")
+                        Slider(value = photoBrightness, onValueChange = { photoBrightness = it }, valueRange = -0.5f..0.5f)
+                        Text("Contrast  ${(photoContrast * 100).toInt()}")
+                        Slider(value = photoContrast, onValueChange = { photoContrast = it }, valueRange = 0.5f..1.8f)
+                        Text("Saturation  ${(photoSaturation * 100).toInt()}")
+                        Slider(value = photoSaturation, onValueChange = { photoSaturation = it }, valueRange = 0f..2f)
+                        TextButton(onClick = { photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f }) {
+                            Text("Reset adjustments")
+                        }
+                    }
                 }
+                Text("Edits and filters will be applied to the uploaded photo.",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 Text("Video ready to upload. You can publish it as a Reel.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -2069,8 +2105,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     val extension = if (mediaType == "video") "mp4" else "jpg"
                     val folder = if (mediaType == "video") "reels" else "post_photos"
                     val mediaRef = FirebaseStorage.getInstance().reference.child("$folder/$uid/${System.currentTimeMillis()}.$extension")
-                    val uploadUri = if (mediaType == "image" && selectedPhotoFilter != "Original") {
-                        createFilteredPhotoUri(context, uri, selectedPhotoFilter) ?: uri
+                    val uploadUri = if (mediaType == "image" && (selectedPhotoFilter != "Original" || photoBrightness != 0f || photoContrast != 1f || photoSaturation != 1f)) {
+                        createFilteredPhotoUri(context, uri, selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation) ?: uri
                     } else uri
                     mediaRef.putFile(uploadUri)
                         .addOnSuccessListener {
