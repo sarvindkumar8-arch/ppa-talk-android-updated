@@ -1245,11 +1245,12 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () ->
 fun StoriesStrip(uid: String, displayName: String) {
     val db = remember { FirebaseFirestore.getInstance() }
     var stories by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    var profilePhotoUrl by remember(uid) { mutableStateOf("") }
     var showCreate by remember { mutableStateOf(false) }
     var viewingStory by remember { mutableStateOf<Map<String, Any>?>(null) }
 
     DisposableEffect(uid) {
-        val listener = db.collection("stories").orderBy("createdAt", Query.Direction.DESCENDING)
+        val storyListener = db.collection("stories").orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, _ ->
                 val now = System.currentTimeMillis()
                 stories = snapshot?.documents.orEmpty().mapNotNull { doc ->
@@ -1257,24 +1258,64 @@ fun StoriesStrip(uid: String, displayName: String) {
                     if (expires > now) doc.data?.plus("id" to doc.id) else null
                 }
             }
-        onDispose { listener.remove() }
+        val directoryListener = db.collection("profileDirectory").document(uid)
+            .addSnapshotListener { snap, _ -> snap?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it } }
+        val publicProfileListener = db.collection("publicProfiles").document(uid)
+            .addSnapshotListener { snap, _ -> snap?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it } }
+        val userListener = db.collection("users").document(uid)
+            .addSnapshotListener { snap, _ -> snap?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it } }
+        onDispose {
+            storyListener.remove()
+            directoryListener.remove()
+            publicProfileListener.remove()
+            userListener.remove()
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(
-            modifier = Modifier.fillMaxWidth().height(118.dp).horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().height(210.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Card(
                 onClick = { showCreate = true },
-                modifier = Modifier.width(92.dp).fillMaxHeight(),
+                modifier = Modifier.width(116.dp).fillMaxHeight(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center) {
-                    Icon(Icons.Default.AddCircle, contentDescription = "Create story", tint = RoyalBlue, modifier = Modifier.size(34.dp))
-                    Text("Create story", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (profilePhotoUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = profilePhotoUrl,
+                                contentDescription = "Your profile photo",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = "Your profile photo",
+                                    tint = RoyalBlue, modifier = Modifier.size(64.dp))
+                            }
+                        }
+                        Surface(
+                            modifier = Modifier.align(Alignment.BottomCenter).offset(y = 19.dp).size(44.dp),
+                            shape = CircleShape,
+                            color = RoyalBlue,
+                            border = BorderStroke(3.dp, Color.White),
+                            shadowElevation = 3.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Add, contentDescription = "Create story",
+                                    tint = Color.White, modifier = Modifier.size(30.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text("Create story", style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp))
                 }
             }
             stories.forEach { story ->
@@ -1345,12 +1386,12 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
             }
         onDispose { registration.remove() }
     }
-    Card(onClick = onClick, modifier = Modifier.width(92.dp).fillMaxHeight()) {
+    Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight()) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story",
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Surface(
-                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(34.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(42.dp),
                 shape = CircleShape, color = RoyalBlue, border = BorderStroke(2.dp, Color.White)
             ) {
                 if (profilePhotoUrl.isNotBlank()) AsyncImage(model = profilePhotoUrl,
