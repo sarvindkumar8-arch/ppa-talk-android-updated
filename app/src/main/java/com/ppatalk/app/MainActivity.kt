@@ -44,7 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Forward
+import androidx.compose.material.icons.outlined.Reply
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1647,7 +1647,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         if (liked) {
                             Text(selectedReaction.ifBlank { "👍" }, style = MaterialTheme.typography.titleLarge)
                         } else {
-                            Icon(Icons.Outlined.ThumbUp, contentDescription = "Like", tint = RoyalBlue)
+                            Icon(Icons.Outlined.ThumbUp, contentDescription = "Like", tint = Color.Black)
                         }
                     }
                     Text(
@@ -1659,7 +1659,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.width(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCommentsClick) {
-                        Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Comments", tint = RoyalBlue)
+                        Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Comments", tint = Color.Black)
                     }
                     Text(
                         commentCount.toString(),
@@ -1677,14 +1677,14 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     }
                     context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
                 }) {
-                    Icon(Icons.Outlined.Forward, contentDescription = "Share", tint = Orange)
+                    Icon(Icons.Outlined.Reply, contentDescription = "Share", tint = Color.Black, modifier = Modifier.graphicsLayer(scaleX = -1f))
                 }
                 Spacer(Modifier.weight(1f))
                 if (post.uid == currentUid) {
                     IconButton(
                         onClick = { db.collection("posts").document(post.id).delete() }
                     ) {
-                        Icon(Icons.Outlined.Delete, contentDescription = "Delete post", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Outlined.Delete, contentDescription = "Delete post", tint = Color.Black)
                     }
                 }
             }
