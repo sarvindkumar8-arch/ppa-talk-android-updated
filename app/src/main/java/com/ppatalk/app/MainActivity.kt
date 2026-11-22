@@ -1804,7 +1804,7 @@ fun StoryAvatarButton(story: Map<String, Any>, selected: Boolean, onClick: () ->
 }
 
 @Composable
-fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
+fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit, publishAsReel: Boolean = false) {
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var selectedRemoteUrl by remember { mutableStateOf("") }
     var mediaType by remember { mutableStateOf("") }
@@ -1831,6 +1831,11 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
             selectedRemoteUrl = ""
             val mimeType = storyContext.contentResolver.getType(uri).orEmpty().lowercase()
             mediaType = if (mimeType.startsWith("video/")) "video" else "image"
+            if (publishAsReel && mediaType != "video") {
+                selectedUri = null
+                message = "Reel ke liye video select karein."
+                return@rememberLauncherForActivityResult
+            }
             selectedStoryFilter = "Original"
             storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
             message = ""
@@ -1839,9 +1844,9 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
     }
     val openGallery = {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "*/*"
+            type = if (publishAsReel) "video/*" else "*/*"
             addCategory(Intent.CATEGORY_OPENABLE)
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+            if (!publishAsReel) putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
         }
         galleryPicker.launch(intent)
     }
@@ -1940,7 +1945,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                     IconButton(onClick = { if (!busy) onDismiss() }, enabled = !busy) {
                         Icon(Icons.Default.Close, contentDescription = "Close story creator")
                     }
-                    Text("Create story", modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    Text(if (publishAsReel) "Create Reel" else "Create story", modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     IconButton(onClick = { showGalleryOptions = !showGalleryOptions }, enabled = !busy) {
                         Icon(Icons.Default.Settings, contentDescription = "Story options")
@@ -1950,14 +1955,18 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(onClick = { showTextStoryDialog = true }, enabled = !busy) {
-                        Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(6.dp)); Text("Text")
+                    if (!publishAsReel) {
+                        OutlinedButton(onClick = { showTextStoryDialog = true }, enabled = !busy) {
+                            Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(6.dp)); Text("Text")
+                        }
                     }
                     OutlinedButton(onClick = { openGallery() }, enabled = !busy) {
-                        Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("Gallery")
+                        Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text(if (publishAsReel) "Video Gallery" else "Gallery")
                     }
-                    OutlinedButton(onClick = { showGalleryOptions = false; showProfileMedia = true; showSourceChooser = false; loadProfileMedia() }, enabled = !busy) {
-                        Icon(Icons.Default.Collections, null); Spacer(Modifier.width(6.dp)); Text("PPA Photos / Reels")
+                    if (!publishAsReel) {
+                        OutlinedButton(onClick = { showGalleryOptions = false; showProfileMedia = true; showSourceChooser = false; loadProfileMedia() }, enabled = !busy) {
+                            Icon(Icons.Default.Collections, null); Spacer(Modifier.width(6.dp)); Text("PPA Photos / Reels")
+                        }
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -1972,7 +1981,8 @@ Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spaced
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (selectedUri == null && selectedRemoteUrl.isBlank()) {
-                    Text("Your story will be visible for 24 hours.", style = MaterialTheme.typography.bodySmall,
+                    Text(if (publishAsReel) "Choose a video from your gallery to publish as a Reel."
+                        else "Your story will be visible for 24 hours.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     Text(if (selectedRemoteUrl.isNotBlank()) "Selected from PPA Profile" else "Selected from Gallery")
@@ -2085,7 +2095,16 @@ Button(
                     }
                     fun saveStory(url: String) {
                         val now = System.currentTimeMillis()
-                        val story = hashMapOf(
+                        val reelData = hashMapOf(
+                            "uid" to authenticatedUid,
+                            "authorName" to displayName,
+                            "text" to "",
+                            "mediaUrl" to url,
+                            "mediaType" to mediaType,
+                            "postType" to "reel",
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                        val storyData = hashMapOf(
                             "uid" to authenticatedUid,
                             "authorName" to displayName,
                             "mediaUrl" to url,
@@ -2093,11 +2112,13 @@ Button(
                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                             "expiresAt" to com.google.firebase.Timestamp(Date(now + 24L * 60L * 60L * 1000L))
                         )
-                        FirebaseFirestore.getInstance().collection("stories").add(story)
+                        val collection = if (publishAsReel) "posts" else "stories"
+                        val payload: Map<String, Any> = if (publishAsReel) reelData else storyData
+                        FirebaseFirestore.getInstance().collection(collection).add(payload)
                             .addOnSuccessListener { busy = false; onDismiss() }
                             .addOnFailureListener { e ->
                                 busy = false
-                                message = "Story database save failed: ${e.localizedMessage ?: "Permission denied"}"
+                                message = (if (publishAsReel) "Reel" else "Story") + " save failed: " + (e.localizedMessage ?: "Permission denied")
                             }
                     }
                     fun uploadStoryFile(uri: Uri) {
@@ -2115,7 +2136,7 @@ Button(
                             else -> "jpg"
                         }
                         val storageRef = FirebaseStorage.getInstance().reference
-                            .child("stories/$authenticatedUid/${System.currentTimeMillis()}.$ext")
+                            .child("${if (publishAsReel) "reels" else "stories"}/$authenticatedUid/${System.currentTimeMillis()}.$ext")
                         val metadata = com.google.firebase.storage.StorageMetadata.Builder()
                             .setContentType(mimeType)
                             .build()
@@ -2179,7 +2200,7 @@ Button(
                         } else uploadStoryFile(sourceUri)
                     }
                 }
-            ) { Text(if (busy) "Uploading..." else "Share story") }
+            ) { Text(if (busy) "Uploading..." else if (publishAsReel) "Share Reel" else "Share story") }
         }
                 }
             }
@@ -2842,6 +2863,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var success by remember { mutableStateOf(false) }
+    var showReelCreator by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedMedia = uri
@@ -2866,6 +2888,10 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 Icon(Icons.Default.Close, contentDescription = "Close")
             }
             Text("New post", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            TextButton(onClick = { showReelCreator = true }, enabled = !busy) {
+                Icon(Icons.Default.PlayCircle, contentDescription = "Create Reel", tint = RoyalBlue)
+                Text("Reel", color = RoyalBlue)
+            }
             TextButton(enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
                 onClick = { /* Publish using the existing button below. */ }) { Text("Next", color = if (postText.isNotBlank() || selectedMedia != null) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant) }
         }
@@ -3071,6 +3097,9 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         ) { Text(if (busy) "Uploading..." else "Share") }
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
+    }
+    if (showReelCreator) {
+        CreateStoryDialog(uid, displayName, onDismiss = { showReelCreator = false }, publishAsReel = true)
     }
     if (showPostCropDialog && selectedMedia != null && mediaType == "image") {
         PhotoCropDialog(
