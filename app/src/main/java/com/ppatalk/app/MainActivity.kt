@@ -1661,7 +1661,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var showSourceChooser by remember { mutableStateOf(true) }
-    var showGalleryOptions by remember { mutableStateOf(false) }
+    var showGalleryOptions by remember { mutableStateOf(true) }
     var showProfileMedia by remember { mutableStateOf(false) }
     var showCameraOptions by remember { mutableStateOf(false) }
     var showTextStoryDialog by remember { mutableStateOf(false) }
@@ -1791,13 +1791,13 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(onClick = { showTextStoryDialog = true }, enabled = !busy) {
+                    OutlinedButton(onClick = { showGalleryOptions = false; showTextStoryDialog = true }, enabled = !busy) {
                         Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(6.dp)); Text("Text")
                     }
                     OutlinedButton(onClick = { showGalleryOptions = !showGalleryOptions }, enabled = !busy) {
                         Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("Gallery")
                     }
-                    OutlinedButton(onClick = { showProfileMedia = true; showSourceChooser = false; loadProfileMedia() }, enabled = !busy) {
+                    OutlinedButton(onClick = { showGalleryOptions = false; showProfileMedia = true; showSourceChooser = false; loadProfileMedia() }, enabled = !busy) {
                         Icon(Icons.Default.Collections, null); Spacer(Modifier.width(6.dp)); Text("PPA Photos / Reels")
                     }
                 }
@@ -1823,28 +1823,6 @@ Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spaced
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (selectedUri == null && selectedRemoteUrl.isBlank()) {
-                    if (!showGalleryOptions) {
-                        Text("Story kahan se add karni hai?")
-                        OutlinedButton(
-                            onClick = { showGalleryOptions = true },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(8.dp)); Text("Gallery") }
-                        OutlinedButton(
-                            onClick = { showSourceChooser = false; showProfileMedia = true; loadProfileMedia() },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.AccountCircle, null); Spacer(Modifier.width(8.dp)); Text("PPA Profile – Photos & Reels") }
-                    } else {
-                        Text("Choose media from your phone gallery")
-                        OutlinedButton(
-                            onClick = { imagePicker.launch("image/*") },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.Photo, null); Spacer(Modifier.width(8.dp)); Text("Photo") }
-                        OutlinedButton(
-                            onClick = { videoPicker.launch("video/*") },
-                            modifier = Modifier.fillMaxWidth(), enabled = !busy
-                        ) { Icon(Icons.Default.VideoLibrary, null); Spacer(Modifier.width(8.dp)); Text("Video") }
-                        TextButton(onClick = { showGalleryOptions = false }) { Text("Back") }
-                    }
                     Text("Your story will be visible for 24 hours.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
