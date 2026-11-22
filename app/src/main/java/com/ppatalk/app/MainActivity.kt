@@ -2520,10 +2520,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 val isReels = profileTab == "Reels"
                 val currentProfilePhotos = listOfNotNull(
                     (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let {
-                        ProfileGalleryItem("current-profile", it, photoUrl.ifBlank { it }, "image", "Profile pictures", "Profile photo")
+                        ProfileGalleryItem("current-profile", photoUrl, photoUrl, "image", "Profile pictures", "Profile photo", it)
                     },
                     (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let {
-                        ProfileGalleryItem("current-cover", it, coverPhotoUrl.ifBlank { it }, "image", "Cover photos", "Cover photo")
+                        ProfileGalleryItem("current-cover", coverPhotoUrl, coverPhotoUrl, "image", "Cover photos", "Cover photo", it)
                     }
                 )
                 val gallerySource = galleryItems + currentProfilePhotos.filter { current ->
@@ -2972,10 +2972,18 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         photoRow.forEach { item ->
                                             Box(Modifier.weight(1f).aspectRatio(1f).clickable {
+                                                val selectedOriginalPath = item.securePath ?: firebaseStorageObjectPath(item.url).orEmpty()
+                                                val selectedDisplayUrl = item.thumbnailUrl.ifBlank { item.url }
                                                 val updates = if (photoLibraryTarget == "cover") mapOf(
-                                                    "coverPhotoUrl" to item.url, "coverPhotoOriginalUrl" to item.url, "updatedAt" to System.currentTimeMillis()
+                                                    "coverPhotoUrl" to selectedDisplayUrl,
+                                                    "coverPhotoOriginalPath" to selectedOriginalPath,
+                                                    "coverPhotoOriginalUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                                                    "updatedAt" to System.currentTimeMillis()
                                                 ) else mapOf(
-                                                    "photoUrl" to item.url, "photoOriginalUrl" to item.url, "updatedAt" to System.currentTimeMillis()
+                                                    "photoUrl" to selectedDisplayUrl,
+                                                    "photoOriginalPath" to selectedOriginalPath,
+                                                    "photoOriginalUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                                                    "updatedAt" to System.currentTimeMillis()
                                                 )
                                                 FirebaseFirestore.getInstance().collection("users").document(uid)
                                                     .set(updates, com.google.firebase.firestore.SetOptions.merge())
@@ -2985,11 +2993,11 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                         FirebaseFirestore.getInstance().collection("publicProfileDirectory").document(uid)
                                                             .set(updates, com.google.firebase.firestore.SetOptions.merge())
                                                         if (photoLibraryTarget == "cover") {
-                                                            coverPhotoUrl = item.url
-                                                            coverPhotoOriginalUrl = item.url
+                                                            coverPhotoUrl = selectedDisplayUrl
+                                                            coverPhotoOriginalUrl = selectedOriginalPath
                                                         } else {
-                                                            photoUrl = item.url
-                                                            photoOriginalUrl = item.url
+                                                            photoUrl = selectedDisplayUrl
+                                                            photoOriginalUrl = selectedOriginalPath
                                                         }
                                                         showPhotoLibraryPicker = false
                                                         message = if (photoLibraryTarget == "cover") "Cover photo update ho gayi." else "Profile photo update ho gayi."
