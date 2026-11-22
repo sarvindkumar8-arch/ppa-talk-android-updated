@@ -1285,25 +1285,51 @@ fun StoriesStrip(uid: String, displayName: String) {
 
     if (showCreate) CreateStoryDialog(uid, displayName, onDismiss = { showCreate = false })
     viewingStory?.let { story ->
-        AlertDialog(
+        Dialog(
             onDismissRequest = { viewingStory = null },
-            title = { Text(story["authorName"] as? String ?: "Story") },
-            text = {
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
                 if (story["mediaType"] == "video") {
-                    AndroidView(factory = { viewContext ->
-                        VideoView(viewContext).apply {
-                            setMediaController(MediaController(viewContext).also { it.setAnchorView(this) })
-                            setVideoURI(Uri.parse(story["mediaUrl"] as? String ?: ""))
-                            setOnPreparedListener { player -> player.isLooping = true; start() }
-                        }
-                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 480.dp))
+                    AndroidView(
+                        factory = { viewContext ->
+                            VideoView(viewContext).apply {
+                                setMediaController(MediaController(viewContext).also { it.setAnchorView(this) })
+                                setVideoURI(Uri.parse(story["mediaUrl"] as? String ?: ""))
+                                setOnPreparedListener { player -> player.isLooping = true; start() }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
-                    AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story media",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit)
+                    AsyncImage(
+                        model = story["mediaUrl"] as? String,
+                        contentDescription = "Full-screen story photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
                 }
-            },
-            confirmButton = { TextButton(onClick = { viewingStory = null }) { Text("Close") } }
-        )
+                Row(
+                    Modifier.align(Alignment.TopStart).fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.42f))
+                        .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        story["authorName"] as? String ?: "PPA Talk user",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { viewingStory = null }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close story", tint = Color.White)
+                    }
+                }
+            }
+        }
     }
 }
 
