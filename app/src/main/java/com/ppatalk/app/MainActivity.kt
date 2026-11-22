@@ -1335,15 +1335,20 @@ fun StoriesStrip(uid: String, displayName: String) {
         val storyOwnerUid = story["uid"] as? String ?: ""
         val storyId = story["id"] as? String ?: ""
         val storyProgress = remember(storyId) { androidx.compose.animation.core.Animatable(0f) }
+        val orderedStories = remember(stories) {
+            stories.groupBy { it["uid"] as? String ?: "" }.values.flatten()
+        }
+        val advanceStory = {
+            val currentIndex = orderedStories.indexOfFirst { (it["id"] as? String) == storyId }
+            viewingStory = orderedStories.getOrNull(currentIndex + 1)
+        }
         LaunchedEffect(storyId) {
             storyProgress.snapTo(0f)
             storyProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = androidx.compose.animation.core.tween(durationMillis = 10_000, easing = androidx.compose.animation.core.LinearEasing)
             )
-            val currentIndex = stories.indexOfFirst { (it["id"] as? String) == storyId }
-            val nextStory = stories.getOrNull(currentIndex + 1)
-            viewingStory = nextStory
+            advanceStory()
         }
         val storyPhotoUrl = remember(storyOwnerUid) { mutableStateOf("") }
         fun sendStoryReply() {
@@ -1425,6 +1430,13 @@ fun StoriesStrip(uid: String, displayName: String) {
                         contentScale = ContentScale.Fit
                     )
                 }
+                // Tap anywhere on the story canvas to advance; controls drawn above remain interactive.
+                Box(
+                    Modifier.fillMaxSize().clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ) { advanceStory() }
+                )
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.20f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
                     if (showAllStoryIcons) {
