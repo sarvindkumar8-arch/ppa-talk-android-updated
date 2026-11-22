@@ -638,7 +638,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("🇮🇳", fontSize = 27.sp)
+            Text("🇮🇳", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.width(9.dp))
             Text("MAKE IN INDIA", style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
