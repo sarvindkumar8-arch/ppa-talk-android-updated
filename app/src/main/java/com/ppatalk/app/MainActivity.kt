@@ -672,6 +672,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         // Existing accounts created before profile visibility was added may have no
         // visibility field. Default those legacy profiles to public exactly once.
         val directoryRef = db.collection("profileDirectory").document(uid)
+        val presenceRef = db.collection("profilePresence").document(uid)
         publicProfileRef.get().addOnSuccessListener { profile ->
             if (!profile.exists()) {
                 publicProfileRef.set(mapOf(
@@ -681,7 +682,10 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 ), com.google.firebase.firestore.SetOptions.merge())
                 directoryRef.set(mapOf("uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
-                    "profileVisibility" to "public", "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                    "profileVisibility" to "public",
+                    "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
+                    "lastSeen" to com.google.firebase.firestore.FieldValue.delete(),
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
                     com.google.firebase.firestore.SetOptions.merge())
             } else {
                 if (!profile.contains("profileVisibility")) {
@@ -689,6 +693,11 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
                         com.google.firebase.firestore.SetOptions.merge())
                 }
+                // Remove legacy presence fields from the broadly readable profile documents.
+                publicProfileRef.set(mapOf(
+                    "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
+                    "lastSeen" to com.google.firebase.firestore.FieldValue.delete()
+                ), com.google.firebase.firestore.SetOptions.merge())
                 directoryRef.set(mapOf(
                     "uid" to uid,
                     "displayName" to (profile.getString("displayName") ?: displayName.ifBlank { "PPA Talk user" }),
@@ -696,14 +705,20 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     "photoUrl" to profile.getString("photoUrl").orEmpty(),
                     "coverPhotoUrl" to profile.getString("coverPhotoUrl").orEmpty(),
                     "profileVisibility" to (profile.getString("profileVisibility") ?: "public"),
+                    "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
+                    "lastSeen" to com.google.firebase.firestore.FieldValue.delete(),
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 ), com.google.firebase.firestore.SetOptions.merge())
             }
         }
         fun setPresence(online: Boolean) {
-            val presence = mapOf("isOnline" to online, "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-            publicProfileRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
-            directoryRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
+            val presence = mapOf(
+                "uid" to uid,
+                "isOnline" to online,
+                "lastSeen" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+            presenceRef.set(presence, com.google.firebase.firestore.SetOptions.merge())
         }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -3656,11 +3671,20 @@ fun FriendsScreen(
             }
         onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
     }
-    DisposableEffect(uid) {
-        val registration = db.collection("profileDirectory").addSnapshotListener { snap, _ ->
-            if (snap != null) onlineFriends = snap.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
+    DisposableEffect(uid, friends.map { it.uid }.sorted().joinToString("|")) {
+        val registrations = friends.map { friend ->
+            db.collection("profilePresence").document(friend.uid).addSnapshotListener { snap, _ ->
+                onlineFriends = if (snap?.getBoolean("isOnline") == true) {
+                    onlineFriends + friend.uid
+                } else {
+                    onlineFriends - friend.uid
+                }
+            }
         }
-        onDispose { registration.remove() }
+        onDispose {
+            registrations.forEach { it.remove() }
+            onlineFriends = emptySet()
+        }
     }
 
     var selectedFriendsTab by remember(uid) { mutableStateOf("Requests") }
@@ -3869,11 +3893,20 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
     }
     var people by remember(uid) { mutableStateOf<List<PPAUser>>(emptyList()) }
     var onlinePeople by remember(uid) { mutableStateOf<Set<String>>(emptySet()) }
-    DisposableEffect(uid) {
-        val presenceRegistration = db.collection("profileDirectory").addSnapshotListener { snapshot, _ ->
-            if (snapshot != null) onlinePeople = snapshot.documents.filter { it.getBoolean("isOnline") == true }.map { it.id }.toSet()
+    DisposableEffect(uid, people.map { it.uid }.sorted().joinToString("|")) {
+        val presenceRegistrations = people.map { person ->
+            db.collection("profilePresence").document(person.uid).addSnapshotListener { snapshot, _ ->
+                onlinePeople = if (snapshot?.getBoolean("isOnline") == true) {
+                    onlinePeople + person.uid
+                } else {
+                    onlinePeople - person.uid
+                }
+            }
         }
-        onDispose { presenceRegistration.remove() }
+        onDispose {
+            presenceRegistrations.forEach { it.remove() }
+            onlinePeople = emptySet()
+        }
     }
     var friendsLoadError by remember(uid) { mutableStateOf("") }
     DisposableEffect(uid) {

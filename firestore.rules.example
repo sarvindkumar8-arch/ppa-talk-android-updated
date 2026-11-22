@@ -50,14 +50,16 @@ service cloud.firestore {
         || resource.data.profileVisibility == "public";
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt', 'createdAt'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'updatedAt', 'createdAt'
         ])
         && request.resource.data.uid == userId;
       allow update: if owns(userId)
         && request.resource.data.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt'
-        ]);
+        ])
+        // Permit deletion of legacy presence fields only; never permit them to remain.
+        && !request.resource.data.keys().hasAny(['isOnline', 'lastSeen']);
       allow delete: if owns(userId);
     }
 
@@ -65,12 +67,40 @@ service cloud.firestore {
     // Contains only name, username, avatar, cover and visibility; no bio or personal details.
     match /profileDirectory/{userId} {
       allow read: if signedIn();
-      allow create, update: if owns(userId)
+      allow create: if owns(userId)
         && request.resource.data.uid == userId
         && request.resource.data.keys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
-          'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt'
+          'profileVisibility', 'updatedAt'
         ]);
+      // Existing presence fields are removed during app migration and cannot be re-added.
+      allow update: if owns(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
+          'profileVisibility', 'updatedAt'
+        ]);
+      allow delete: if owns(userId);
+    }
+
+    // Presence is isolated from the signed-in-readable profile directory.
+    // Only the owner and accepted friends can read a user's presence document.
+    match /profilePresence/{userId} {
+      function isAcceptedFriend() {
+        return signedIn()
+          && exists(/databases/$(database)/documents/friends/$(userId)/list/$(request.auth.uid))
+          && (
+            (exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid))
+              && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid)).data.status == 'accepted')
+            || (exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId))
+              && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == 'accepted')
+          );
+      }
+      allow get: if owns(userId) || isAcceptedFriend();
+      allow list: if false;
+      allow create, update: if owns(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly(['uid', 'isOnline', 'lastSeen', 'updatedAt']);
       allow delete: if owns(userId);
     }
 
