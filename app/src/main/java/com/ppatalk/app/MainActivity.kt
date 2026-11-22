@@ -23,6 +23,7 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.app.Activity
 import android.net.Uri
+import android.media.MediaPlayer
 import android.content.Intent
 import android.widget.VideoView
 import android.widget.MediaController
