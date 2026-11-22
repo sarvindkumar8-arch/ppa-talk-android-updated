@@ -29,7 +29,7 @@ if (!Number.isInteger(LIMIT) && LIMIT !== Infinity || LIMIT <= 0) {
 }
 
 if (getApps().length === 0) {
-  initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
+  initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID, storageBucket: "ppa-talk.firebasestorage.app" });
 }
 
 const db = getFirestore();
