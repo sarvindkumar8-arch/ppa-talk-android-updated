@@ -11,6 +11,7 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1033,7 +1034,7 @@ fun ReelsScreen(
     var reels by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
-    var selectedReel by remember { mutableStateOf<FeedPost?>(null) }
+    var selectedReelIndex by remember { mutableIntStateOf(-1) }
     var hiddenReelIds by remember { mutableStateOf(setOf<String>()) }
 
     DisposableEffect(Unit) {
@@ -1048,13 +1049,10 @@ fun ReelsScreen(
                         val mediaType = doc.getString("mediaType").orEmpty()
                         val postType = doc.getString("postType").orEmpty()
                         if (mediaType != "video" && postType != "reel") return@mapNotNull null
-                        FeedPost(
-                            doc.id, doc.getString("uid").orEmpty(),
+                        FeedPost(doc.id, doc.getString("uid").orEmpty(),
                             doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("text").orEmpty(),
-                            doc.getTimestamp("createdAt")?.toDate(),
-                            doc.getString("mediaUrl").orEmpty(), mediaType, postType
-                        )
+                            doc.getString("text").orEmpty(), doc.getTimestamp("createdAt")?.toDate(),
+                            doc.getString("mediaUrl").orEmpty(), mediaType, postType)
                     }
                     loading = false
                     error = ""
@@ -1063,31 +1061,176 @@ fun ReelsScreen(
         onDispose { registration.remove() }
     }
 
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Text("Reels", style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, color = RoyalBlue)
+    val visibleReels = reels.filterNot { it.id in hiddenReelIds }
+    Column(modifier.fillMaxSize().background(Color.Black)) {
+        Row(Modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Reels", color = Color.White, style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Icon(Icons.Default.PlayCircleFilled, contentDescription = "Reels", tint = Color.White)
         }
-        if (loading) item { CircularProgressIndicator() }
-        if (error.isNotBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
-        if (!loading && reels.isEmpty() && error.isBlank()) {
-            item { Text("Abhi koi Reel nahi hai. Create Post mein Video / Reel select karke share karein.") }
-        }
-        items(reels.filterNot { it.id in hiddenReelIds }, key = { it.id }) { reel ->
-            FeedPostCard(reel, currentUid,
-                onOpenAuthorProfile = { onOpenUserProfile(reel.uid) },
-                onHidePost = { hiddenReelIds = hiddenReelIds + reel.id }) {
-                selectedReel = reel
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+            error.isNotBlank() -> Text(error, color = Color.White, modifier = Modifier.padding(16.dp))
+            visibleReels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Abhi koi Reel nahi hai. Create Post mein Video / Reel select karke share karein.",
+                    color = Color.White, modifier = Modifier.padding(24.dp))
+            }
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(visibleReels, key = { it.id }) { reel ->
+                    Card(onClick = { selectedReelIndex = visibleReels.indexOfFirst { it.id == reel.id } },
+                        modifier = Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 10.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF171717))) {
+                        Box(Modifier.fillMaxSize()) {
+                            AndroidView(factory = { context ->
+                                VideoView(context).apply {
+                                    setVideoURI(Uri.parse(reel.mediaUrl))
+                                    setOnPreparedListener { player -> player.isLooping = true; start() }
+                                }
+                            }, modifier = Modifier.fillMaxSize())
+                            Text("▶  Open Reel", color = Color.White,
+                                modifier = Modifier.align(Alignment.BottomStart)
+                                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                                    .padding(horizontal = 12.dp, vertical = 7.dp))
+                        }
+                    }
+                }
             }
         }
     }
-    selectedReel?.let { reel ->
-        PostCommentsDialog(reel, currentUid) { selectedReel = null }
+    if (selectedReelIndex >= 0 && visibleReels.isNotEmpty()) {
+        ReelFullscreenViewer(visibleReels, selectedReelIndex, currentUid,
+            onClose = { selectedReelIndex = -1 }, onOpenUserProfile = onOpenUserProfile,
+            onHideReel = { id -> hiddenReelIds = hiddenReelIds + id; selectedReelIndex = -1 })
     }
 }
 
+@Composable
+private fun ReelFullscreenViewer(
+    reels: List<FeedPost>, initialIndex: Int, currentUid: String,
+    onClose: () -> Unit, onOpenUserProfile: (String) -> Unit, onHideReel: (String) -> Unit
+) {
+    var index by remember { mutableIntStateOf(initialIndex.coerceIn(0, reels.lastIndex)) }
+    var showComments by remember { mutableStateOf(false) }
+    var liked by remember(reels.getOrNull(index)?.id) { mutableStateOf(false) }
+    var likeCount by remember(reels.getOrNull(index)?.id) { mutableIntStateOf(0) }
+    var commentCount by remember(reels.getOrNull(index)?.id) { mutableIntStateOf(0) }
+    var saved by remember(reels.getOrNull(index)?.id) { mutableStateOf(false) }
+    var dragAmount by remember { mutableFloatStateOf(0f) }
+    val context = LocalContext.current
+    val db = remember { FirebaseFirestore.getInstance() }
+    val reel = reels.getOrNull(index) ?: return
 
+    DisposableEffect(reel.id, currentUid) {
+        val likeListener = db.collection("posts").document(reel.id).collection("likes")
+            .addSnapshotListener { snap, _ ->
+                likeCount = snap?.size() ?: 0
+                liked = snap?.documents?.any { it.id == currentUid } == true
+            }
+        val commentListener = db.collection("posts").document(reel.id).collection("comments")
+            .addSnapshotListener { snap, _ -> commentCount = snap?.size() ?: 0 }
+        val savedListener = db.collection("users").document(currentUid).collection("savedPosts")
+            .document(reel.id).addSnapshotListener { snap, _ -> saved = snap?.exists() == true }
+        onDispose { likeListener.remove(); commentListener.remove(); savedListener.remove() }
+    }
+
+    Dialog(onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)
+            .pointerInput(index, reels.size) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { _, amount -> dragAmount += amount },
+                    onDragEnd = {
+                        if (dragAmount < -55f && index < reels.lastIndex) index++
+                        else if (dragAmount > 55f && index > 0) index--
+                        dragAmount = 0f
+                    },
+                    onDragCancel = { dragAmount = 0f }
+                )
+            }) {
+            AndroidView(factory = { viewContext ->
+                VideoView(viewContext).apply {
+                    setVideoURI(Uri.parse(reel.mediaUrl))
+                    setOnPreparedListener { player -> player.isLooping = true; start() }
+                }
+            }, update = { view -> if (!view.isPlaying) view.start() },
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f).align(Alignment.Center))
+            Row(Modifier.align(Alignment.TopStart).fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.32f)).padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, contentDescription = "Close reels", tint = Color.White)
+                }
+                Text("Reels", color = Color.White, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.weight(1f))
+                Text("${index + 1}/${reels.size}", color = Color.White)
+            }
+            Column(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp, top = 34.dp, bottom = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = {
+                        val ref = db.collection("posts").document(reel.id).collection("likes").document(currentUid)
+                        if (liked) ref.delete() else ref.set(mapOf("uid" to currentUid, "reaction" to "👍",
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                    }) { Icon(Icons.Default.ThumbUp, contentDescription = "Like reel",
+                        tint = if (liked) RoyalBlue else Color.White, modifier = Modifier.size(32.dp)) }
+                    Text(likeCount.toString(), color = Color.White, style = MaterialTheme.typography.labelLarge)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = { showComments = true }) {
+                        Icon(Icons.Default.ChatBubbleOutline, contentDescription = "Comment on reel",
+                            tint = Color.White, modifier = Modifier.size(32.dp))
+                    }
+                    Text(commentCount.toString(), color = Color.White, style = MaterialTheme.typography.labelLarge)
+                }
+                IconButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"; putExtra(Intent.EXTRA_TEXT, reel.mediaUrl)
+                    }
+                    context.startActivity(Intent.createChooser(send, "Share reel"))
+                }) { Icon(Icons.Default.Share, contentDescription = "Share reel", tint = Color.White, modifier = Modifier.size(32.dp)) }
+                IconButton(onClick = {
+                    val ref = db.collection("users").document(currentUid).collection("savedPosts").document(reel.id)
+                    if (saved) ref.delete() else ref.set(mapOf("postId" to reel.id, "ownerUid" to reel.uid,
+                        "savedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+                }) { Icon(if (saved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    contentDescription = "Save reel", tint = Color.White, modifier = Modifier.size(32.dp)) }
+                IconButton(onClick = { onHideReel(reel.id) }) {
+                    Icon(Icons.Default.MoreHoriz, contentDescription = "More reel options", tint = Color.White)
+                }
+            }
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(0.82f)
+                .background(Color.Black.copy(alpha = 0.38f)).padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(Modifier.size(38.dp).clickable { onOpenUserProfile(reel.uid) },
+                        shape = CircleShape, color = Color.DarkGray) {
+                        Icon(Icons.Default.AccountCircle, contentDescription = "Open creator profile",
+                            tint = Color.White, modifier = Modifier.padding(3.dp))
+                    }
+                    Spacer(Modifier.width(9.dp))
+                    Text(reel.authorName, color = Color.White, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f).clickable { onOpenUserProfile(reel.uid) }, maxLines = 1)
+                    if (reel.uid != currentUid) {
+                        OutlinedButton(onClick = { onOpenUserProfile(reel.uid) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) {
+                            Text("Follow", color = Color.White)
+                        }
+                    }
+                }
+                if (reel.text.isNotBlank()) Text(reel.text, color = Color.White,
+                    modifier = Modifier.padding(top = 9.dp), maxLines = 3)
+            }
+            Text("Swipe up for next · Swipe down for previous", color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
+        }
+    }
+    if (showComments) PostCommentsDialog(reel, currentUid) { showComments = false }
+}
 
 @Composable
 fun HomeFeed(
