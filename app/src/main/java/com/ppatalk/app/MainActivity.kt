@@ -1345,9 +1345,20 @@ fun StoriesStrip(uid: String, displayName: String) {
         }
         val storyPhotoUrl = remember(storyOwnerUid) { mutableStateOf("") }
         DisposableEffect(storyOwnerUid) {
-            val reg = db.collection("profileDirectory").document(storyOwnerUid)
-                .addSnapshotListener { snap, _ -> storyPhotoUrl.value = snap?.getString("photoUrl").orEmpty() }
-            onDispose { reg.remove() }
+            fun updatePhoto(snapshot: com.google.firebase.firestore.DocumentSnapshot?) {
+                snapshot?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { storyPhotoUrl.value = it }
+            }
+            val directoryReg = db.collection("profileDirectory").document(storyOwnerUid)
+                .addSnapshotListener { snap, _ -> updatePhoto(snap) }
+            val publicReg = db.collection("publicProfiles").document(storyOwnerUid)
+                .addSnapshotListener { snap, _ -> updatePhoto(snap) }
+            val userReg = db.collection("users").document(storyOwnerUid)
+                .addSnapshotListener { snap, _ -> updatePhoto(snap) }
+            onDispose {
+                directoryReg.remove()
+                publicReg.remove()
+                userReg.remove()
+            }
         }
         Dialog(
             onDismissRequest = { viewingStory = null },
@@ -1512,11 +1523,21 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
     val storyUid = story["uid"] as? String ?: ""
     DisposableEffect(storyUid) {
         if (storyUid.isBlank()) return@DisposableEffect onDispose { }
-        val registration = FirebaseFirestore.getInstance().collection("publicProfiles")
-            .document(storyUid).addSnapshotListener { profile, _ ->
-                profilePhotoUrl = profile?.getString("photoUrl").orEmpty()
-            }
-        onDispose { registration.remove() }
+        val db = FirebaseFirestore.getInstance()
+        fun updatePhoto(profile: com.google.firebase.firestore.DocumentSnapshot?) {
+            profile?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it }
+        }
+        val directoryReg = db.collection("profileDirectory").document(storyUid)
+            .addSnapshotListener { profile, _ -> updatePhoto(profile) }
+        val publicReg = db.collection("publicProfiles").document(storyUid)
+            .addSnapshotListener { profile, _ -> updatePhoto(profile) }
+        val userReg = db.collection("users").document(storyUid)
+            .addSnapshotListener { profile, _ -> updatePhoto(profile) }
+        onDispose {
+            directoryReg.remove()
+            publicReg.remove()
+            userReg.remove()
+        }
     }
     Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight()) {
         Box(Modifier.fillMaxSize()) {
