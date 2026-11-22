@@ -1673,7 +1673,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     }
                     context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
                 }) {
-                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Share", tint = Orange)
+                    Icon(Icons.Filled.Reply, contentDescription = "Share", tint = Orange)
                 }
                 Spacer(Modifier.weight(1f))
                 if (post.uid == currentUid) {
