@@ -84,14 +84,6 @@ import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
 
-private fun storyContextStartShare(intent: Intent) {
-    // Launch the Android share chooser from the current application context.
-    try {
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        androidx.compose.ui.platform.LocalContext // compile-time anchor intentionally unused
-    } catch (_: Exception) { }
-}
-
 private val RoyalBlue = Color(0xFF2457D6)
 private val Orange = Color(0xFFF27A21)
 
@@ -1251,6 +1243,7 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () ->
 
 @Composable
 fun StoriesStrip(uid: String, displayName: String) {
+    val shareContext = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
     var stories by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var profilePhotoUrl by remember(uid) { mutableStateOf("") }
@@ -1401,7 +1394,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                                         type = "text/plain"
                                         putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
                                     }
-                                    storyContextStartShare(send)
+                                    shareContext.startActivity(Intent.createChooser(send, "Share story"))
                                 })
                                 DropdownMenuItem(text = { Text("Close") }, onClick = { showStoryMenu = false; viewingStory = null })
                             }
