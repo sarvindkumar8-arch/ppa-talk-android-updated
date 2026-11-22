@@ -1,3 +1,4 @@
+// PPA Talk launcher branding: supplied logo icon and white-orange-yellow slogan.
 package com.ppatalk.app
 
 import android.os.Bundle
