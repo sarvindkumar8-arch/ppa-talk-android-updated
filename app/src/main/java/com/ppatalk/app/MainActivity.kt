@@ -1560,7 +1560,11 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                         showSourceChooser = true
                     }, enabled = !busy) { Text("Choose another") }
                 }
-                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+                if (message.isNotBlank()) Text(
+                    message,
+                    color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         },
         confirmButton = {
@@ -1568,7 +1572,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                 enabled = (selectedUri != null || selectedRemoteUrl.isNotBlank()) && !busy,
                 onClick = {
                     busy = true
-                    message = ""
+                    message = "Share button received. Preparing story..."
                     val authenticatedUid = FirebaseAuth.getInstance().currentUser?.uid
                     if (authenticatedUid.isNullOrBlank()) {
                         busy = false
@@ -1611,8 +1615,15 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                         val metadata = com.google.firebase.storage.StorageMetadata.Builder()
                             .setContentType(mimeType)
                             .build()
-                        storageRef.putFile(uri, metadata)
-                            .addOnSuccessListener {
+                        message = "Uploading media to Firebase Storage..."
+                        val uploadTask = storageRef.putFile(uri, metadata)
+                        uploadTask.addOnProgressListener { snapshot ->
+                            val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                            val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                            message = "Uploading media... $percent%"
+                        }
+                        uploadTask.addOnSuccessListener {
+                                message = "Media uploaded. Saving story details..."
                                 storageRef.downloadUrl.addOnSuccessListener { download ->
                                     saveStory(download.toString())
                                 }.addOnFailureListener { e ->
