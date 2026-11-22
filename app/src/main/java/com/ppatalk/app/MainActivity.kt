@@ -1438,6 +1438,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     var friendBusy by remember(post.uid, currentUid) { mutableStateOf(false) }
     var friendMessage by remember(post.uid, currentUid) { mutableStateOf("") }
     var postMenuExpanded by remember(post.id) { mutableStateOf(false) }
+    var showPhotoViewer by remember(post.id) { mutableStateOf(false) }
     var showLikesDialog by remember(post.id) { mutableStateOf(false) }
     var feedNotice by remember(post.id) { mutableStateOf("") }
     val db = remember { FirebaseFirestore.getInstance() }
@@ -1588,8 +1589,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.height(10.dp))
                 AsyncImage(
                     model = post.mediaUrl,
-                    contentDescription = "Post photo",
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    contentDescription = "Open post photo full screen",
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)
+                        .clickable { showPhotoViewer = true },
                     contentScale = ContentScale.Crop
                 )
             } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
@@ -1668,6 +1670,40 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
         }
     }
     if (showLikesDialog) PostLikesDialog(post, onDismiss = { showLikesDialog = false })
+    if (showPhotoViewer && post.mediaUrl.isNotBlank() && post.mediaType == "image") {
+        Dialog(
+            onDismissRequest = { showPhotoViewer = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AsyncImage(
+                    model = post.mediaUrl,
+                    contentDescription = "Full-screen post photo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { showPhotoViewer = false },
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                        .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close photo", tint = Color.White)
+                }
+                Row(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = post.authorName,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+        }
+    }
 }
 
 
