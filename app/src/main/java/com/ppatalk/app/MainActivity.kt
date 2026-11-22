@@ -2450,7 +2450,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                             saving = false
                                                             isError = true
                                                             photoEditorUri = null
-                                                            message = "Photo profile par save ho gayi, lekin Feed post nahi ban paayi: ${exception.localizedMessage ?: "permission denied"}"
+                                                            message = "FIRESTORE_FEED_POST_FAILED: ${exception.localizedMessage ?: "permission denied"}"
                                                         }
                                                 } else {
                                                     saving = false
@@ -2461,24 +2461,24 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                             .addOnFailureListener { exception ->
                                                 saving = false
                                                 isError = true
-                                                message = exception.localizedMessage ?: "Photo details save nahi hui."
+                                                message = "FIRESTORE_PROFILE_SAVE_FAILED: ${exception.localizedMessage ?: "permission denied"}"
                                             }
                                     }.addOnFailureListener { exception ->
                                         saving = false
                                         isError = true
-                                        message = exception.localizedMessage ?: "Display photo URL nahi mil paya."
+                                        message = "STORAGE_DOWNLOAD_URL_FAILED: ${exception.localizedMessage ?: "permission denied"}"
                                     }
                                 }
                                 .addOnFailureListener { exception ->
                                     saving = false
                                     isError = true
-                                    message = exception.localizedMessage ?: "Display photo upload failed."
+                                    message = "STORAGE_DISPLAY_UPLOAD_FAILED: ${exception.localizedMessage ?: "permission denied"}"
                                 }
                     }
                     .addOnFailureListener { exception ->
                         saving = false
                         isError = true
-                        message = exception.localizedMessage ?: "Original photo upload failed. Firebase Storage rules check karein."
+                        message = "STORAGE_ORIGINAL_UPLOAD_FAILED: ${exception.localizedMessage ?: "permission denied"}"
                     }
                 }
             }
