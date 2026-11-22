@@ -632,6 +632,47 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Text("Public community • Be respectful and stay safe",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(26.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Canvas(Modifier.size(width = 38.dp, height = 26.dp)) {
+                val stripeHeight = size.height / 3f
+                drawRect(Color(0xFFFF9933), topLeft = androidx.compose.ui.geometry.Offset.Zero,
+                    size = androidx.compose.ui.geometry.Size(size.width, stripeHeight))
+                drawRect(Color.White, topLeft = androidx.compose.ui.geometry.Offset(0f, stripeHeight),
+                    size = androidx.compose.ui.geometry.Size(size.width, stripeHeight))
+                drawRect(Color(0xFF138808), topLeft = androidx.compose.ui.geometry.Offset(0f, stripeHeight * 2f),
+                    size = androidx.compose.ui.geometry.Size(size.width, stripeHeight))
+                val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                val radius = stripeHeight * 0.39f
+                drawCircle(Color(0xFF000080), radius = radius, center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2.dp.toPx()))
+                for (spoke in 0 until 12) {
+                    val angle = spoke * (Math.PI / 6.0)
+                    val start = androidx.compose.ui.geometry.Offset(
+                        center.x + kotlin.math.cos(angle).toFloat() * radius * 0.18f,
+                        center.y + kotlin.math.sin(angle).toFloat() * radius * 0.18f
+                    )
+                    val end = androidx.compose.ui.geometry.Offset(
+                        center.x + kotlin.math.cos(angle).toFloat() * radius * 0.88f,
+                        center.y + kotlin.math.sin(angle).toFloat() * radius * 0.88f
+                    )
+                    drawLine(Color(0xFF000080), start, end, strokeWidth = 0.7.dp.toPx())
+                }
+            }
+            Spacer(Modifier.width(9.dp))
+            Text("MAKE IN INDIA", style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        Text(
+            "Your Voice • Your World",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = RoyalBlue
+        )
+        Spacer(Modifier.height(8.dp))
     }
 }
 
