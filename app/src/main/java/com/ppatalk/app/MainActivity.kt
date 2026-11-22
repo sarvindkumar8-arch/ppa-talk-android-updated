@@ -1466,7 +1466,7 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Create story") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (selectedUri == null && selectedRemoteUrl.isBlank()) {
                     if (!showGalleryOptions) {
                         Text("Story kahan se add karni hai?")
