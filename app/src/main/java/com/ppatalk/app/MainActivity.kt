@@ -3429,6 +3429,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
     var galleryFilter by remember { mutableStateOf("All photos") }
     var selectedGalleryItem by remember { mutableStateOf<ProfileGalleryItem?>(null) }
     var showStoryComposer by remember { mutableStateOf(false) }
+    var showProfileReelCreator by remember { mutableStateOf(false) }
     var showProfileSetup by remember { mutableStateOf(false) }
     var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
     var photoEditorIsCover by remember { mutableStateOf(false) }
@@ -3837,24 +3838,63 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     }
                 }
                 Text(if (isReels) "Your Reels" else "Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (filteredItems.isEmpty()) Text(if (isReels) "Abhi koi reel nahi hai." else "Abhi is category mein koi photo nahi hai.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp))
-                else filteredItems.chunked(3).forEach { rowItems ->
+                if (isReels || filteredItems.isNotEmpty()) {
+                    val reelGridItems = if (isReels) listOf<ProfileGalleryItem?>(null) + filteredItems else filteredItems.map { it as ProfileGalleryItem? }
+                    reelGridItems.chunked(3).forEach { rowItems ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         rowItems.forEach { item ->
+                            if (item == null) {
+                                Box(
+                                    Modifier.weight(1f).aspectRatio(1f)
+                                        .clip(MaterialTheme.shapes.small)
+                                        .background(Brush.linearGradient(listOf(Color(0xFFEC407A), Color(0xFFFF9800), Color(0xFF673AB7)))
+                                        .clickable { showProfileReelCreator = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.size(58.dp).background(Color.White.copy(alpha = 0.95f), CircleShape), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.Movie, contentDescription = "Create reel", tint = Color(0xFFE85D75), modifier = Modifier.size(34.dp))
+                                        }
+                                        Text("Create reel", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            } else {
                             Box(Modifier.weight(1f).aspectRatio(1f).clip(MaterialTheme.shapes.small).clickable { openGalleryItem(item) }) {
                                 AsyncImage(model = item.thumbnailUrl, contentDescription = item.caption.ifBlank { "Open media" },
                                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                 if (item.type == "video") Icon(Icons.Default.PlayCircleFilled, contentDescription = "Play reel",
                                     tint = Color.White, modifier = Modifier.align(Alignment.Center).size(42.dp))
                             }
+                            }
                         }
                         repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
                     }
+                    }
+                } else {
+                    Text("Abhi is category mein koi photo nahi hai.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp))
                 }
             }
         }
 
+
+        if (showProfileReelCreator) {
+            Dialog(
+                onDismissRequest = { showProfileReelCreator = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+            ) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                    CreatePostScreen(
+                        uid = uid,
+                        displayName = displayName,
+                        email = email,
+                        modifier = Modifier.fillMaxSize(),
+                        initialPicker = "media",
+                        onPublished = { showProfileReelCreator = false }
+                    )
+                }
+            }
+        }
 
         if (!showProfileSetup && (profileTab == "All" || profileTab == "More")) {
             Column(
