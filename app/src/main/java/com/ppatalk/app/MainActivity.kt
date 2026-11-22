@@ -2911,7 +2911,7 @@ private fun createFilteredPhotoUri(
 }
 
 @Composable
-fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier, initialPicker: String? = null) {
+fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier, initialPicker: String? = null, onPublished: () -> Unit = {}) {
     var postText by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf("") }
@@ -2944,11 +2944,22 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f
         message = ""
     }
+    val mixedMediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedMedia = uri
+        mediaType = if (uri == null) "" else {
+            context.contentResolver.getType(uri)?.let { if (it.startsWith("video/")) "video" else "image" } ?: "image"
+        }
+        selectedPhotoFilter = "Original"
+        selectedPhotoTool = if (mediaType == "video") "Edit" else "AI Studio"
+        photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f
+        message = ""
+    }
 
     LaunchedEffect(initialPicker) {
         when (initialPicker) {
             "image" -> imagePicker.launch("image/*")
             "video" -> videoPicker.launch("video/*")
+            "media" -> mixedMediaPicker.launch("*/*")
         }
     }
 
@@ -3177,6 +3188,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             mediaType = ""
                             success = true
                             message = "Your post was published!"
+                            onPublished()
                         }
                         .addOnFailureListener { ex ->
                             busy = false
