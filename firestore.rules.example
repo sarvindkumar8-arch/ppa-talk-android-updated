@@ -50,13 +50,13 @@ service cloud.firestore {
         || resource.data.profileVisibility == "public";
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt', 'createdAt'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt', 'createdAt'
         ])
         && request.resource.data.uid == userId;
       allow update: if owns(userId)
         && request.resource.data.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'isOnline', 'lastSeen', 'updatedAt'
         ]);
       allow delete: if owns(userId);
     }
