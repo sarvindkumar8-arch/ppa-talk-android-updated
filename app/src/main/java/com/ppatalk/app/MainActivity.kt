@@ -882,6 +882,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 uid,
                 Modifier.padding(padding),
                 onCreatePost = { navigateTo("Create") },
+                onCreatePhoto = { navigateTo("CreatePhoto") },
+                onCreateVideo = { navigateTo("CreateVideo") },
                 onOpenProfile = { viewedProfileUid = uid; navigateTo("Profile") },
                 onOpenUserProfile = { profileUid -> viewedProfileUid = profileUid; navigateTo("Profile") },
                 displayName = displayName
@@ -914,6 +916,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             }, onBack = { handleBack() }, screenTitle = "Search Friends")
             "Messenger" -> MessengerScreen(uid, onOpenChat = { friendUid, friendName -> activeChatUid = friendUid; activeChatName = friendName }, modifier = Modifier.padding(padding))
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
+            "CreatePhoto" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "image")
+            "CreateVideo" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "video")
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
             "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
                 activeChatUid = friendUid
@@ -1238,6 +1242,8 @@ fun HomeFeed(
     currentUid: String,
     modifier: Modifier = Modifier,
     onCreatePost: () -> Unit = {},
+    onCreatePhoto: () -> Unit = onCreatePost,
+    onCreateVideo: () -> Unit = onCreatePost,
     onOpenProfile: () -> Unit = {},
     onOpenUserProfile: (String) -> Unit = {},
     displayName: String = "PPA Talk user"
@@ -1273,6 +1279,8 @@ fun HomeFeed(
             HomeComposerCard(
                 uid = currentUid,
                 onCreatePost = onCreatePost,
+                onCreatePhoto = onCreatePhoto,
+                onCreateVideo = onCreateVideo,
                 onOpenProfile = onOpenProfile
             )
         }
@@ -1299,7 +1307,7 @@ fun HomeFeed(
 
 
 @Composable
-fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () -> Unit) {
+fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onCreatePhoto: () -> Unit, onCreateVideo: () -> Unit, onOpenProfile: () -> Unit) {
     var profilePhotoUrl by remember(uid) { mutableStateOf("") }
 
     DisposableEffect(uid) {
@@ -1366,12 +1374,12 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onOpenProfile: () ->
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                TextButton(onClick = onCreatePost) {
+                TextButton(onClick = onCreatePhoto) {
                     Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue)
                     Spacer(Modifier.width(5.dp))
                     Text("Photo")
                 }
-                TextButton(onClick = onCreatePost) {
+                TextButton(onClick = onCreateVideo) {
                     Icon(Icons.Default.VideoCall, contentDescription = null, tint = Orange)
                     Spacer(Modifier.width(5.dp))
                     Text("Video")
@@ -2903,7 +2911,7 @@ private fun createFilteredPhotoUri(
 }
 
 @Composable
-fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier) {
+fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier, initialPicker: String? = null) {
     var postText by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf("") }
@@ -2917,6 +2925,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var message by remember { mutableStateOf("") }
     var success by remember { mutableStateOf(false) }
     var showReelCreator by remember { mutableStateOf(false) }
+    var videoMuted by remember { mutableStateOf(false) }
+    var videoPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedMedia = uri
@@ -2933,6 +2943,13 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         selectedPhotoTool = "Edit"
         photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f
         message = ""
+    }
+
+    LaunchedEffect(initialPicker) {
+        when (initialPicker) {
+            "image" -> imagePicker.launch("image/*")
+            "video" -> videoPicker.launch("video/*")
+        }
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.surface)) {
@@ -3077,7 +3094,45 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Text("Video ready to upload. You can publish it as a Reel.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Video editing", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(9f / 16f)
+                    .clip(RoundedCornerShape(16.dp)).background(Color.Black)) {
+                    AndroidView(
+                        factory = { viewContext ->
+                            VideoView(viewContext).apply {
+                                setVideoURI(uri)
+                                setOnPreparedListener { player ->
+                                    player.isLooping = true
+                                    videoPlayer = player
+                                    player.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                                    start()
+                                }
+                            }
+                        },
+                        update = { view ->
+                            videoPlayer?.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                            if (!view.isPlaying) view.start()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        videoMuted = !videoMuted
+                        videoPlayer?.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                    }) {
+                        Icon(if (videoMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (videoMuted) "Unmute" else "Mute")
+                    }
+                    Text("Preview your video and add a caption above.", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("Video selected. Add a caption, preview the clip, then share it as a Reel.",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
