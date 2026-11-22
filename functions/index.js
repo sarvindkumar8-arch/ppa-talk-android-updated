@@ -3,6 +3,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getStorage } = require("firebase-admin/storage");
 const { scrypt: scryptCallback, randomBytes, timingSafeEqual, createHash } = require("node:crypto");
 const { promisify } = require("node:util");
 
@@ -521,4 +522,47 @@ exports.createLiveKitToken = onCall({
     roomName: callId,
     identity: uid
   };
+});
+
+
+exports.getSecureProfileMediaUrl = onCall({
+  region: REGION,
+  enforceAppCheck: false,
+  maxInstances: 20
+}, async (request) => {
+  const viewerUid = request.auth?.uid;
+  if (!viewerUid) throw new HttpsError("unauthenticated", "Sign in to view this photo.");
+
+  const profileUid = typeof request.data?.profileUid === "string" ? request.data.profileUid.trim() : "";
+  const objectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(profileUid) ||
+      !new RegExp("^(profile_photos|cover_photos)/" + profileUid + "/original_[A-Za-z0-9_.-]+$").test(objectPath)) {
+    throw new HttpsError("invalid-argument", "Invalid profile media reference.");
+  }
+
+  const profileSnapshot = await db.collection("publicProfiles").doc(profileUid).get();
+  if (!profileSnapshot.exists) throw new HttpsError("not-found", "Profile was not found.");
+  const visibility = profileSnapshot.get("profileVisibility");
+  let canView = viewerUid === profileUid || visibility === "public";
+  if (!canView) {
+    const pairIds = [profileUid + "_" + viewerUid, viewerUid + "_" + profileUid];
+    const [friendEntry, requestSnapshots] = await Promise.all([
+      db.collection("friends").doc(profileUid).collection("list").doc(viewerUid).get(),
+      Promise.all(pairIds.map((id) => db.collection("friendRequests").doc(id).get()))
+    ]);
+    canView = friendEntry.exists && requestSnapshots.some((snapshot) =>
+      snapshot.exists && snapshot.get("status") === "accepted"
+    );
+  }
+  if (!canView) throw new HttpsError("permission-denied", "Only the owner, public viewers, or accepted friends can view this original photo.");
+
+  const file = getStorage().bucket().file(objectPath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError("not-found", "Original photo was not found.");
+  const [metadata] = await file.getMetadata();
+  if (metadata.metadata?.firebaseStorageDownloadTokens) {
+    await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: null } });
+  }
+  const [signedUrl] = await file.getSignedUrl({ action: "read", expires: Date.now() + 5 * 60 * 1000 });
+  return { url: signedUrl, expiresInSeconds: 300 };
 });
