@@ -3862,7 +3862,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                 Box(
                                     Modifier.weight(1f).aspectRatio(1f)
                                         .clip(MaterialTheme.shapes.small)
-                                        .background(Color(0xFFE86B55)
+                                        .background(Color(0xFFE86B55))
                                         .clickable { showProfileReelCreator = true },
                                     contentAlignment = Alignment.Center
                                 ) {
