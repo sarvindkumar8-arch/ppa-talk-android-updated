@@ -635,16 +635,6 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         Text("Public community • Be respectful and stay safe",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(26.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("🇮🇳", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.width(9.dp))
-            Text("MAKE IN INDIA", style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
-        }
         Spacer(Modifier.height(8.dp))
     }
 }
