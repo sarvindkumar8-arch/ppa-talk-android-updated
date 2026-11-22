@@ -1669,24 +1669,28 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
     var profileMediaLoading by remember { mutableStateOf(false) }
     var profileMedia by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
     var profileMediaFilter by remember { mutableStateOf("All") }
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        selectedUri = uri
-        selectedRemoteUrl = ""
-        mediaType = if (uri == null) "" else "image"
-        selectedStoryFilter = "Original"
-        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
-        message = ""
-        if (uri != null) showSourceChooser = false
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && uri != null) {
+            selectedUri = uri
+            selectedRemoteUrl = ""
+            val mimeType = storyContext.contentResolver.getType(uri).orEmpty().lowercase()
+            mediaType = if (mimeType.startsWith("video/")) "video" else "image"
+            selectedStoryFilter = "Original"
+            storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
+            message = ""
+            showSourceChooser = false
+        }
     }
-    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        selectedUri = uri
-        selectedRemoteUrl = ""
-        mediaType = if (uri == null) "" else "video"
-        selectedStoryFilter = "Original"
-        storyBrightness = 0f; storyContrast = 1f; storySaturation = 1f
-        message = ""
-        if (uri != null) showSourceChooser = false
+    val openGallery = {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "*/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+        }
+        galleryPicker.launch(intent)
     }
+    LaunchedEffect(Unit) { openGallery() }
     val photoCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap != null) {
             val file = java.io.File(storyContext.cacheDir, "story_camera_${System.currentTimeMillis()}.jpg")
@@ -1791,24 +1795,14 @@ fun CreateStoryDialog(uid: String, displayName: String, onDismiss: () -> Unit) {
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(onClick = { showGalleryOptions = false; showTextStoryDialog = true }, enabled = !busy) {
+                    OutlinedButton(onClick = { showTextStoryDialog = true }, enabled = !busy) {
                         Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(6.dp)); Text("Text")
                     }
-                    OutlinedButton(onClick = { showGalleryOptions = !showGalleryOptions }, enabled = !busy) {
+                    OutlinedButton(onClick = { openGallery() }, enabled = !busy) {
                         Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("Gallery")
                     }
                     OutlinedButton(onClick = { showGalleryOptions = false; showProfileMedia = true; showSourceChooser = false; loadProfileMedia() }, enabled = !busy) {
                         Icon(Icons.Default.Collections, null); Spacer(Modifier.width(6.dp)); Text("PPA Photos / Reels")
-                    }
-                }
-                if (showGalleryOptions && selectedUri == null && selectedRemoteUrl.isBlank()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TextButton(onClick = { imagePicker.launch("image/*"); showGalleryOptions = false }, enabled = !busy) {
-                            Icon(Icons.Default.Photo, null); Text("Photo")
-                        }
-                        TextButton(onClick = { videoPicker.launch("video/*"); showGalleryOptions = false }, enabled = !busy) {
-                            Icon(Icons.Default.VideoLibrary, null); Text("Video")
-                        }
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
