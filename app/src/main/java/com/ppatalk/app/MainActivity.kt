@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -644,41 +645,69 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             Text("MAKE IN INDIA", style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     "Your Voice",
-                    style = MaterialTheme.typography.headlineSmall,
+                    fontSize = 34.sp,
                     fontWeight = FontWeight.Black,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    color = Color(0xFFFFFFFF)
+                    letterSpacing = (-1.2).sp,
+                    color = Color(0xFFFFFFFF),
+                    maxLines = 1
                 )
-                Text(
-                    " • ",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFFFFA500)
+                Spacer(Modifier.width(7.dp))
+                Box(
+                    Modifier
+                        .size(12.dp)
+                        .background(Color(0xFFFF8A00), CircleShape)
                 )
+                Spacer(Modifier.width(7.dp))
                 Text(
                     "Your World",
-                    style = MaterialTheme.typography.headlineSmall,
+                    fontSize = 34.sp,
                     fontWeight = FontWeight.Black,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    color = Color(0xFFFFE000)
+                    letterSpacing = (-1.2).sp,
+                    color = Color(0xFFFFFF00),
+                    maxLines = 1
                 )
             }
-            Spacer(Modifier.height(4.dp))
-            Box(
-                Modifier
-                    .width(250.dp)
-                    .height(4.dp)
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            listOf(Color(0xFFFFD800), Color(0xFFFF8A00), Color(0xFFFFD800))
-                        ),
-                        shape = RoundedCornerShape(50)
+            Spacer(Modifier.height(2.dp))
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .height(18.dp)
+            ) {
+                val underline = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(0f, size.height * 0.78f)
+                    quadraticTo(
+                        size.width * 0.50f, -size.height * 0.35f,
+                        size.width, size.height * 0.78f
                     )
-            )
+                }
+                drawPath(
+                    path = underline,
+                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFFFD800),
+                            Color(0xFFFFA000),
+                            Color(0xFFFF4B16)
+                        )
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 4.dp.toPx(),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
     }
