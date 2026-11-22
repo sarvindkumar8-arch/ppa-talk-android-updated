@@ -1413,70 +1413,70 @@ fun StoriesStrip(uid: String, displayName: String) {
                     }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.38f)).padding(horizontal = 12.dp, vertical = 12.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        listOf("😍", "🥰", "❤️", "😂", "😮").forEach { emoji ->
-                            TextButton(onClick = {
-                                db.collection("storyReactions").add(hashMapOf(
-                                    "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
-                                    "fromUid" to uid, "emoji" to emoji,
-                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )).addOnFailureListener { actionMessage = it.localizedMessage ?: "Reaction send nahi hui." }
-                                actionMessage = "Reaction sent: $emoji"
-                            }) {
-                                Text(emoji, fontSize = 26.sp)
-                            }
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IconButton(onClick = {
-                            val send = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
-                            }
-                            shareContext.startActivity(Intent.createChooser(send, "Share story"))
-                        }, modifier = Modifier.size(44.dp).background(Color.White.copy(alpha = 0.22f), CircleShape)) {
-                            Icon(Icons.Default.Share, contentDescription = "Share story", tint = Color.White)
+                    .background(Color.Black.copy(alpha = 0.42f)).padding(horizontal = 12.dp, vertical = 12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().height(54.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
+                                }
+                                shareContext.startActivity(Intent.createChooser(send, "Share story"))
+                            },
+                            modifier = Modifier.size(54.dp).background(Color(0xFF484848), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share story",
+                                tint = Color.White, modifier = Modifier.size(30.dp))
                         }
                         OutlinedTextField(
-                            value = replyText, onValueChange = { replyText = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("Send message...", color = Color.White.copy(alpha = 0.8f)) },
+                            value = replyText,
+                            onValueChange = { replyText = it },
+                            modifier = Modifier.weight(1f).height(54.dp),
+                            placeholder = { Text("Send message...", color = Color.White.copy(alpha = 0.85f), maxLines = 1) },
                             singleLine = true,
-                            shape = RoundedCornerShape(28.dp),
+                            shape = RoundedCornerShape(30.dp),
+                            keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = {
+                                val text = replyText.trim()
+                                if (text.isNotEmpty()) {
+                                    db.collection("storyReplies").add(hashMapOf(
+                                        "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
+                                        "fromUid" to uid, "message" to text,
+                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    )).addOnSuccessListener { replyText = ""; actionMessage = "Message sent" }
+                                        .addOnFailureListener { actionMessage = it.localizedMessage ?: "Message send nahi hua." }
+                                }
+                            }),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color.White.copy(alpha = 0.7f), unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
-                                cursorColor = Color.White, focusedContainerColor = Color.DarkGray.copy(alpha = 0.65f),
-                                unfocusedContainerColor = Color.DarkGray.copy(alpha = 0.65f)
+                                focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
+                                cursorColor = Color.White, focusedContainerColor = Color(0xFF484848),
+                                unfocusedContainerColor = Color(0xFF484848)
                             )
                         )
-                        IconButton(onClick = {
-                            val text = replyText.trim()
-                            if (text.isNotEmpty()) {
-                                db.collection("storyReplies").add(hashMapOf(
-                                    "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
-                                    "fromUid" to uid, "message" to text,
-                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )).addOnSuccessListener { replyText = ""; actionMessage = "Message sent" }
-                                    .addOnFailureListener { actionMessage = it.localizedMessage ?: "Message send nahi hua." }
-                            }
-                        }, modifier = Modifier.size(42.dp).background(Color.DarkGray, CircleShape)) {
-                            Icon(Icons.Default.Send, contentDescription = "Send message", tint = Color.White)
-                        }
                         listOf(Icons.Default.Favorite, Icons.Default.ThumbUp, Icons.Default.EmojiEmotions).forEachIndexed { index, icon ->
-                            IconButton(onClick = {
-                                val emoji = listOf("❤️", "👍", "😂")[index]
-                                db.collection("storyReactions").add(hashMapOf(
-                                    "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
-                                    "fromUid" to uid, "emoji" to emoji,
-                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )).addOnSuccessListener { actionMessage = "Reaction sent" }
-                                    .addOnFailureListener { actionMessage = it.localizedMessage ?: "Reaction send nahi hui." }
-                            }, modifier = Modifier.size(42.dp)) {
+                            IconButton(
+                                onClick = {
+                                    val emoji = listOf("❤️", "👍", "😂")[index]
+                                    db.collection("storyReactions").add(hashMapOf(
+                                        "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
+                                        "fromUid" to uid, "emoji" to emoji,
+                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    )).addOnSuccessListener { actionMessage = "Reaction sent" }
+                                        .addOnFailureListener { actionMessage = it.localizedMessage ?: "Reaction send nahi hui." }
+                                },
+                                modifier = Modifier.size(54.dp).background(
+                                    listOf(Color(0xFFE93672), Color(0xFF087FE5), Color(0xFFFFC84A))[index],
+                                    CircleShape
+                                )
+                            ) {
                                 Icon(icon, contentDescription = listOf("Love reaction", "Like reaction", "Laugh reaction")[index],
-                                    tint = listOf(Color(0xFFFF4D78), Color(0xFF168CFF), Color(0xFFFFC44D))[index],
-                                    modifier = Modifier.size(30.dp))
+                                    tint = if (index == 2) Color(0xFF38220A) else Color.White,
+                                    modifier = Modifier.size(31.dp))
                             }
                         }
                     }
