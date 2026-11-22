@@ -84,6 +84,24 @@ async function run() {
     }],
     ["Owner cannot upload non-image content as cover photo", async () => {
       await assertFails(uploadBytes(ref(owner, "cover_photos/profile-owner/not-image.bin"), tinyImage, { contentType: "application/octet-stream" }));
+    }],
+    ["Non-owner cannot delete profile thumbnail", async () => {
+      await assertFails(deleteObject(ref(stranger, profileThumb)));
+    }],
+    ["Owner can delete profile thumbnail", async () => {
+      await assertSucceeds(deleteObject(ref(owner, profileThumb)));
+    }],
+    ["Owner can delete original profile image", async () => {
+      await assertSucceeds(deleteObject(ref(owner, profileOriginal)));
+    }],
+    ["Non-owner cannot delete cover thumbnail", async () => {
+      await assertFails(deleteObject(ref(stranger, coverThumb)));
+    }],
+    ["Owner can delete cover thumbnail", async () => {
+      await assertSucceeds(deleteObject(ref(owner, coverThumb)));
+    }],
+    ["Owner can delete original cover image", async () => {
+      await assertSucceeds(deleteObject(ref(owner, coverOriginal)));
     }]
   ];
 
