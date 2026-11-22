@@ -45,9 +45,11 @@ service cloud.firestore {
           );
       }
       // Missing visibility is denied by default; legacy profiles must be explicitly marked public.
-      allow read: if owns(userId)
+      allow read: if signedIn() && (
+        owns(userId)
         || isAcceptedFriend()
-        || resource.data.profileVisibility == "public";
+        || resource.data.profileVisibility == "public"
+      );
       allow create: if owns(userId)
         && request.resource.data.keys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'updatedAt', 'createdAt'
