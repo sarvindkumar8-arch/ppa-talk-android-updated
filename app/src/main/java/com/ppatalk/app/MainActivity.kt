@@ -84,6 +84,14 @@ import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
 
+private fun storyContextStartShare(intent: Intent) {
+    // Launch the Android share chooser from the current application context.
+    try {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        androidx.compose.ui.platform.LocalContext // compile-time anchor intentionally unused
+    } catch (_: Exception) { }
+}
+
 private val RoyalBlue = Color(0xFF2457D6)
 private val Orange = Color(0xFFF27A21)
 
@@ -1326,19 +1334,26 @@ fun StoriesStrip(uid: String, displayName: String) {
 
     if (showCreate) CreateStoryDialog(uid, displayName, onDismiss = { showCreate = false })
     viewingStory?.let { story ->
+        var replyText by remember(story["id"]) { mutableStateOf("") }
+        var showStoryMenu by remember(story["id"]) { mutableStateOf(false) }
+        var actionMessage by remember(story["id"]) { mutableStateOf("") }
+        val storyOwnerUid = story["uid"] as? String ?: ""
+        val storyId = story["id"] as? String ?: ""
+        val storyPhotoUrl = remember(storyOwnerUid) { mutableStateOf("") }
+        DisposableEffect(storyOwnerUid) {
+            val reg = db.collection("profileDirectory").document(storyOwnerUid)
+                .addSnapshotListener { snap, _ -> storyPhotoUrl.value = snap?.getString("photoUrl").orEmpty() }
+            onDispose { reg.remove() }
+        }
         Dialog(
             onDismissRequest = { viewingStory = null },
             properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
-            Box(
-                Modifier.fillMaxSize().background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
                 if (story["mediaType"] == "video") {
                     AndroidView(
                         factory = { viewContext ->
                             VideoView(viewContext).apply {
-                                setMediaController(MediaController(viewContext).also { it.setAnchorView(this) })
                                 setVideoURI(Uri.parse(story["mediaUrl"] as? String ?: ""))
                                 setOnPreparedListener { player -> player.isLooping = true; start() }
                             }
@@ -1353,21 +1368,126 @@ fun StoriesStrip(uid: String, displayName: String) {
                         contentScale = ContentScale.Fit
                     )
                 }
-                Row(
-                    Modifier.align(Alignment.TopStart).fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.42f))
-                        .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        story["authorName"] as? String ?: "PPA Talk user",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { viewingStory = null }) {
-                        Icon(Icons.Default.Close, contentDescription = "Close story", tint = Color.White)
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.20f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(4.dp)).background(Color.White))
                     }
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(Modifier.size(38.dp), shape = CircleShape, color = Color.DarkGray) {
+                            if (storyPhotoUrl.value.isNotBlank()) AsyncImage(model = storyPhotoUrl.value,
+                                contentDescription = "Story author profile photo", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            else Icon(Icons.Default.AccountCircle, null, tint = Color.White)
+                        }
+                        Spacer(Modifier.width(9.dp))
+                        Text(story["authorName"] as? String ?: "PPA Talk user", color = Color.White,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(story["createdAt"]?.let { value ->
+                            val date = (value as? com.google.firebase.Timestamp)?.toDate()
+                            date?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(it) } ?: ""
+                        } ?: "", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall)
+                        IconButton(onClick = { viewingStory = null }) {
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close story", tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
+                        Box {
+                            IconButton(onClick = { showStoryMenu = true }) {
+                                Icon(Icons.Default.MoreHoriz, contentDescription = "Story options", tint = Color.White)
+                            }
+                            DropdownMenu(expanded = showStoryMenu, onDismissRequest = { showStoryMenu = false }) {
+                                DropdownMenuItem(text = { Text("Share story") }, onClick = {
+                                    showStoryMenu = false
+                                    val send = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
+                                    }
+                                    storyContextStartShare(send)
+                                })
+                                DropdownMenuItem(text = { Text("Close") }, onClick = { showStoryMenu = false; viewingStory = null })
+                            }
+                        }
+                    }
+                }
+                val musicTitle = story["musicTitle"] as? String ?: story["music"] as? String ?: ""
+                if (musicTitle.isNotBlank()) {
+                    Surface(Modifier.align(Alignment.TopStart).padding(top = 92.dp, start = 14.dp),
+                        color = Color.Black.copy(alpha = 0.55f), shape = RoundedCornerShape(24.dp)) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.MusicNote, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text(musicTitle, color = Color.White, maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.38f)).padding(horizontal = 12.dp, vertical = 12.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        listOf("😍", "🥰", "❤️", "😂", "😮").forEach { emoji ->
+                            TextButton(onClick = {
+                                db.collection("storyReactions").add(hashMapOf(
+                                    "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
+                                    "fromUid" to uid, "emoji" to emoji,
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )).addOnFailureListener { actionMessage = it.localizedMessage ?: "Reaction send nahi hui." }
+                                actionMessage = "Reaction sent: $emoji"
+                            }) {
+                                Text(emoji, fontSize = 26.sp)
+                            }
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(onClick = {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
+                            }
+                            storyContextStartShare(send)
+                        }, modifier = Modifier.size(44.dp).background(Color.White.copy(alpha = 0.22f), CircleShape)) {
+                            Icon(Icons.Default.Share, contentDescription = "Share story", tint = Color.White)
+                        }
+                        OutlinedTextField(
+                            value = replyText, onValueChange = { replyText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Send message...", color = Color.White.copy(alpha = 0.8f)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(28.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color.White.copy(alpha = 0.7f), unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
+                                cursorColor = Color.White, focusedContainerColor = Color.DarkGray.copy(alpha = 0.65f),
+                                unfocusedContainerColor = Color.DarkGray.copy(alpha = 0.65f)
+                            )
+                        )
+                        IconButton(onClick = {
+                            val text = replyText.trim()
+                            if (text.isNotEmpty()) {
+                                db.collection("storyReplies").add(hashMapOf(
+                                    "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
+                                    "fromUid" to uid, "message" to text,
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )).addOnSuccessListener { replyText = ""; actionMessage = "Message sent" }
+                                    .addOnFailureListener { actionMessage = it.localizedMessage ?: "Message send nahi hua." }
+                            }
+                        }, modifier = Modifier.size(42.dp).background(Color.DarkGray, CircleShape)) {
+                            Icon(Icons.Default.Send, contentDescription = "Send message", tint = Color.White)
+                        }
+                        listOf(Icons.Default.Favorite, Icons.Default.ThumbUp, Icons.Default.EmojiEmotions).forEachIndexed { index, icon ->
+                            IconButton(onClick = {
+                                val emoji = listOf("❤️", "👍", "😂")[index]
+                                db.collection("storyReactions").add(hashMapOf(
+                                    "storyId" to storyId, "storyOwnerUid" to storyOwnerUid,
+                                    "fromUid" to uid, "emoji" to emoji,
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )).addOnSuccessListener { actionMessage = "Reaction sent" }
+                                    .addOnFailureListener { actionMessage = it.localizedMessage ?: "Reaction send nahi hui." }
+                            }, modifier = Modifier.size(42.dp)) {
+                                Icon(icon, contentDescription = listOf("Love reaction", "Like reaction", "Laugh reaction")[index],
+                                    tint = listOf(Color(0xFFFF4D78), Color(0xFF168CFF), Color(0xFFFFC44D))[index],
+                                    modifier = Modifier.size(30.dp))
+                            }
+                        }
+                    }
+                    if (actionMessage.isNotBlank()) Text(actionMessage, color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
