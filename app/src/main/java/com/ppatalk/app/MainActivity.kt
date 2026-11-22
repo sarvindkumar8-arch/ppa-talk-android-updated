@@ -80,8 +80,18 @@ private val Orange = Color(0xFFF27A21)
 
 private data class ProfileGalleryItem(
     val id: String, val url: String, val thumbnailUrl: String,
-    val type: String, val category: String, val caption: String
+    val type: String, val category: String, val caption: String,
+    val securePath: String? = null
 )
+
+private fun firebaseStorageObjectPath(value: String): String? {
+    if (value.startsWith("profile_photos/") || value.startsWith("cover_photos/")) return value
+    val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return null
+    val segments = uri.pathSegments
+    val objectIndex = segments.indexOf("o")
+    if (objectIndex < 0 || objectIndex + 1 >= segments.size) return null
+    return runCatching { Uri.decode(segments[objectIndex + 1]) }.getOrNull()
+}
 
 class MainActivity : ComponentActivity() {
     private fun createIncomingCallNotificationChannel() {
@@ -2216,10 +2226,13 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     val mediaType = doc.getString("mediaType").orEmpty().lowercase()
                     val postType = doc.getString("postType").orEmpty().lowercase()
                     val photoKind = doc.getString("photoKind").orEmpty().lowercase()
+                    val isProfileOriginal = photoKind == "profile" || photoKind == "cover"
+                    val originalPath = doc.getString("originalPath")
+                        ?: if (isProfileOriginal) firebaseStorageObjectPath(url) else null
                     ProfileGalleryItem(doc.id, url, doc.getString("thumbnailUrl").orEmpty().ifBlank { url },
                         if (mediaType.contains("video") || postType == "reel" || postType == "reels") "video" else "image",
                         when (photoKind) { "profile" -> "Profile pictures"; "cover" -> "Cover photos"; else -> "Uploads" },
-                        doc.getString("text").orEmpty())
+                        doc.getString("text").orEmpty(), originalPath)
                 }
             }.sortedByDescending { it.id }
         }
@@ -2265,8 +2278,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 education = snapshot.getString("education") ?: education
                 relationshipStatus = snapshot.getString("relationshipStatus") ?: relationshipStatus
                 interests = snapshot.getString("interests") ?: interests
-                photoOriginalUrl = snapshot.getString("photoOriginalUrl") ?: photoUrl
-                coverPhotoOriginalUrl = snapshot.getString("coverPhotoOriginalUrl") ?: coverPhotoUrl
+                photoOriginalUrl = snapshot.getString("photoOriginalPath")
+                    ?: firebaseStorageObjectPath(snapshot.getString("photoOriginalUrl").orEmpty()).orEmpty()
+                coverPhotoOriginalUrl = snapshot.getString("coverPhotoOriginalPath")
+                    ?: firebaseStorageObjectPath(snapshot.getString("coverPhotoOriginalUrl").orEmpty()).orEmpty()
             }
         }
         onDispose { privateRegistration.remove(); publicRegistration.remove() }
@@ -2304,7 +2319,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     // Close the editor so upload progress and any error are visible on the Profile screen.
                     photoEditorUri = null
                 val isCover = photoEditorIsCover
-                val originalField = if (isCover) "coverPhotoOriginalUrl" else "photoOriginalUrl"
+                val originalPathField = if (isCover) "coverPhotoOriginalPath" else "photoOriginalPath"
+                val legacyOriginalField = if (isCover) "coverPhotoOriginalUrl" else "photoOriginalUrl"
                 val displayField = if (isCover) "coverPhotoUrl" else "photoUrl"
                 val folder = if (isCover) "cover_photos/$uid" else "profile_photos/$uid"
                 val storage = FirebaseStorage.getInstance().reference
@@ -2320,15 +2336,15 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     .setContentType("image/jpeg").build()
                 originalRef.putBytes(originalBytes, originalMetadata)
                     .addOnSuccessListener {
-                        originalRef.downloadUrl.addOnSuccessListener { originalDownload ->
-                            displayRef.putBytes(croppedBytes, croppedMetadata)
-                                .addOnSuccessListener {
-                                    displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
-                                        val updates = mapOf(
-                                            originalField to originalDownload.toString(),
-                                            displayField to displayDownload.toString(),
-                                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        )
+                        displayRef.putBytes(croppedBytes, croppedMetadata)
+                            .addOnSuccessListener {
+                                displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
+                                    val updates = mapOf(
+                                        originalPathField to originalRef.fullPath,
+                                        legacyOriginalField to com.google.firebase.firestore.FieldValue.delete(),
+                                        displayField to displayDownload.toString(),
+                                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    )
                                         val firestore = FirebaseFirestore.getInstance()
                                         val profileRef = firestore.collection("publicProfiles").document(uid)
                                         val directoryRef = firestore.collection("profileDirectory").document(uid)
@@ -2346,17 +2362,18 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                             .addOnSuccessListener {
                                                 if (isCover) {
                                                     coverPhotoUrl = displayDownload.toString()
-                                                    coverPhotoOriginalUrl = originalDownload.toString()
+                                                    coverPhotoOriginalUrl = originalRef.fullPath
                                                 } else {
                                                     photoUrl = displayDownload.toString()
-                                                    photoOriginalUrl = originalDownload.toString()
+                                                    photoOriginalUrl = originalRef.fullPath
                                                 }
                                                 if (profileVisibility == "public") {
                                                     val photoPost = hashMapOf(
                                                         "uid" to uid,
                                                         "authorName" to displayName.ifBlank { "PPA Talk user" },
                                                         "text" to if (isCover) "Updated their cover photo." else "Updated their profile photo.",
-                                                        "mediaUrl" to originalDownload.toString(),
+                                                        "mediaUrl" to displayDownload.toString(),
+                                                        "originalPath" to originalRef.fullPath,
                                                         "thumbnailUrl" to displayDownload.toString(),
                                                         "mediaType" to "image",
                                                         "postType" to "post",
@@ -2369,8 +2386,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                             saving = false
                                                             photoEditorUri = null
                                                             message = if (isCover)
-                                                                "Original cover photo save ho gayi aur Feed + Photos mein share ho gayi."
-                                                            else "Original profile photo save ho gayi aur Feed + Photos mein share ho gayi."
+                                                                "Cover photo save ho gayi aur Feed + Photos mein share ho gayi."
+                                                            else "Profile photo save ho gayi aur Feed + Photos mein share ho gayi."
                                                         }
                                                         .addOnFailureListener { exception ->
                                                             saving = false
@@ -2531,7 +2548,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 else filteredItems.chunked(3).forEach { rowItems ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         rowItems.forEach { item ->
-                            Box(Modifier.weight(1f).aspectRatio(1f).clip(MaterialTheme.shapes.small).clickable { selectedGalleryItem = item }) {
+                            Box(Modifier.weight(1f).aspectRatio(1f).clip(MaterialTheme.shapes.small).clickable { openGalleryItem(item) }) {
                                 AsyncImage(model = item.thumbnailUrl, contentDescription = item.caption.ifBlank { "Open media" },
                                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                 if (item.type == "video") Icon(Icons.Default.PlayCircleFilled, contentDescription = "Play reel",
@@ -2782,6 +2799,32 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
         }
     }
 
+    fun openGalleryItem(item: ProfileGalleryItem) {
+        val path = item.securePath ?: firebaseStorageObjectPath(item.url)
+        val isProtectedProfileImage = path != null &&
+            (path.startsWith("profile_photos/$uid/original_") || path.startsWith("cover_photos/$uid/original_"))
+        if (!isProtectedProfileImage) {
+            selectedGalleryItem = item
+            return
+        }
+        FirebaseFunctions.getInstance("asia-south1")
+            .getHttpsCallable("getSecureProfileMediaUrl")
+            .call(mapOf("profileUid" to uid, "objectPath" to path))
+            .addOnSuccessListener { result ->
+                val secureUrl = (result.data as? Map<*, *>)?.get("url") as? String
+                if (secureUrl.isNullOrBlank()) {
+                    message = "Secure photo URL nahi mil paya."
+                    isError = true
+                } else {
+                    selectedGalleryItem = item.copy(url = secureUrl, securePath = null)
+                }
+            }
+            .addOnFailureListener { error ->
+                message = error.localizedMessage ?: "Photo access verify nahi ho paya."
+                isError = true
+            }
+    }
+
     if (selectedGalleryItem != null) {
         val item = selectedGalleryItem!!
         Dialog(onDismissRequest = { selectedGalleryItem = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -2824,9 +2867,9 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         val profilePhotoAction: (String) -> Unit = { action ->
                             dismissPhotoOptions()
                             when (action) {
-                                "see-profile" -> if (photoUrl.isNotBlank()) selectedGalleryItem = ProfileGalleryItem("current-profile-preview", photoOriginalUrl.ifBlank { photoUrl }, photoUrl, "image", "Profile pictures", "Profile photo")
+                                "see-profile" -> if (photoUrl.isNotBlank()) openGalleryItem(ProfileGalleryItem("current-profile-preview", photoUrl, photoUrl, "image", "Profile pictures", "Profile photo", photoOriginalUrl.takeIf { it.isNotBlank() }))
                                 "choose-profile" -> { photoLibraryTarget = "profile"; photoLibraryTab = "Photos of you"; photoLibraryAlbum = null; showPhotoLibraryPicker = true }
-                                "see-cover" -> if (coverPhotoUrl.isNotBlank()) selectedGalleryItem = ProfileGalleryItem("current-cover-preview", coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }, coverPhotoUrl, "image", "Cover photos", "Cover photo")
+                                "see-cover" -> if (coverPhotoUrl.isNotBlank()) openGalleryItem(ProfileGalleryItem("current-cover-preview", coverPhotoUrl, coverPhotoUrl, "image", "Cover photos", "Cover photo", coverPhotoOriginalUrl.takeIf { it.isNotBlank() }))
                                 "upload-cover" -> coverPicker.launch("image/*")
                                 "choose-cover" -> { photoLibraryTarget = "cover"; photoLibraryTab = "Photos of you"; photoLibraryAlbum = null; showPhotoLibraryPicker = true }
                             }
