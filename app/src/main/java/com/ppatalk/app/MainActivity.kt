@@ -1673,12 +1673,15 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     }
                     context.startActivity(Intent.createChooser(intent, "Share PPA Talk post"))
                 }) {
-                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Orange)
+                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Share", tint = Orange)
                 }
-            }
-            if (post.uid == currentUid) {
-                TextButton(onClick = { db.collection("posts").document(post.id).delete() }) {
-                    Icon(Icons.Default.Delete, contentDescription = null); Text("Delete post")
+                Spacer(Modifier.weight(1f))
+                if (post.uid == currentUid) {
+                    IconButton(
+                        onClick = { db.collection("posts").document(post.id).delete() }
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete post", tint = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
