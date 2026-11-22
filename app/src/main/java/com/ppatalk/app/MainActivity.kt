@@ -1453,8 +1453,8 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
         onDispose { likeListener.remove(); commentsListener.remove() }
     }
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(38.dp), shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant, onClick = onOpenAuthorProfile
@@ -1556,19 +1556,19 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
                 IconButton(onClick = onHidePost) { Icon(Icons.Default.Close, contentDescription = "Hide post from my feed") }
             }
-            if (friendMessage.isNotBlank()) Text(friendMessage, style = MaterialTheme.typography.labelSmall,
+            if (friendMessage.isNotBlank()) Text(friendMessage, modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)
-            if (feedNotice.isNotBlank()) Text(feedNotice, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(12.dp))
-            if (post.text.isNotBlank()) Text(post.text)
+            if (feedNotice.isNotBlank()) Text(feedNotice, modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
+            if (post.text.isNotBlank()) Text(post.text, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
                 AsyncImage(
                     model = post.mediaUrl,
                     contentDescription = "Open post photo full screen",
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)
+                    modifier = Modifier.fillMaxWidth().wrapContentHeight()
                         .clickable { showPhotoViewer = true },
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Fit
                 )
             } else if (post.mediaUrl.isNotBlank() && post.mediaType == "video") {
                 Spacer(Modifier.height(10.dp))
@@ -1581,7 +1581,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             Spacer(Modifier.height(8.dp))
             if (showReactionPicker) {
                 Row(
-                    Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1610,7 +1610,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
             }
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
