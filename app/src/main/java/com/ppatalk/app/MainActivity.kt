@@ -1329,6 +1329,7 @@ fun StoriesStrip(uid: String, displayName: String) {
     viewingStory?.let { story ->
         var replyText by remember(story["id"]) { mutableStateOf("") }
         var showStoryMenu by remember(story["id"]) { mutableStateOf(false) }
+        var showAllStoryIcons by remember(story["id"]) { mutableStateOf(false) }
         var actionMessage by remember(story["id"]) { mutableStateOf("") }
         val storyOwnerUid = story["uid"] as? String ?: ""
         val storyId = story["id"] as? String ?: ""
@@ -1385,6 +1386,21 @@ fun StoriesStrip(uid: String, displayName: String) {
                 }
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.20f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    if (showAllStoryIcons) {
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            stories.forEach { item ->
+                                StoryAvatarButton(
+                                    story = item,
+                                    selected = (item["id"] as? String) == storyId,
+                                    onClick = { viewingStory = item }
+                                )
+                            }
+                        }
+                    }
                     Box(
                         Modifier.fillMaxWidth().height(4.dp)
                             .clip(RoundedCornerShape(4.dp))
@@ -1410,8 +1426,13 @@ fun StoriesStrip(uid: String, displayName: String) {
                             val date = (value as? com.google.firebase.Timestamp)?.toDate()
                             date?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(it) } ?: ""
                         } ?: "", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall)
-                        IconButton(onClick = { viewingStory = null }) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close story", tint = Color.White, modifier = Modifier.size(32.dp))
+                        IconButton(onClick = { showAllStoryIcons = !showAllStoryIcons }) {
+                            Icon(
+                                if (showAllStoryIcons) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (showAllStoryIcons) "Hide all stories" else "Show all stories",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
                         }
                         Box {
                             IconButton(onClick = { showStoryMenu = true }) {
@@ -1557,6 +1578,39 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.55f)).padding(5.dp),
                 color = Color.White, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+fun StoryAvatarButton(story: Map<String, Any>, selected: Boolean, onClick: () -> Unit) {
+    var photoUrl by remember(story["uid"]) { mutableStateOf("") }
+    val storyUid = story["uid"] as? String ?: ""
+    DisposableEffect(storyUid) {
+        if (storyUid.isBlank()) return@DisposableEffect onDispose { }
+        val db = FirebaseFirestore.getInstance()
+        fun update(snapshot: com.google.firebase.firestore.DocumentSnapshot?) {
+            snapshot?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { photoUrl = it }
+        }
+        val a = db.collection("profileDirectory").document(storyUid).addSnapshotListener { snap, _ -> update(snap) }
+        val b = db.collection("publicProfiles").document(storyUid).addSnapshotListener { snap, _ -> update(snap) }
+        val c = db.collection("users").document(storyUid).addSnapshotListener { snap, _ -> update(snap) }
+        onDispose { a.remove(); b.remove(); c.remove() }
+    }
+    Box(
+        Modifier.size(76.dp).clip(CircleShape)
+            .border(if (selected) 3.dp else 2.dp, Color(0xFF168CFF), CircleShape)
+            .padding(5.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        if (photoUrl.isNotBlank()) {
+            AsyncImage(model = photoUrl, contentDescription = "Story profile photo",
+                modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+        } else {
+            Box(Modifier.fillMaxSize().background(Color.DarkGray, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo", tint = Color.White, modifier = Modifier.size(42.dp))
+            }
         }
     }
 }
