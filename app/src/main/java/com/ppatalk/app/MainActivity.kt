@@ -2619,7 +2619,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         .addOnSuccessListener { feedNotice = "Saved." }
                         .addOnFailureListener { feedNotice = it.localizedMessage ?: "Save failed." }
                 }) {
-                    Icon(Icons.Outlined.BookmarkBorder, contentDescription = "Save reel or post", tint = Color.Black)
+                    Icon(Icons.Default.BookmarkBorder, contentDescription = "Save reel or post", tint = Color.Black)
                 }
                 Spacer(Modifier.weight(1f))
                 if (post.uid == currentUid) {
