@@ -2,9 +2,11 @@
   "name": "ppa-talk-profile-security-tests",
   "version": "1.0.0",
   "private": true,
-  "description": "Isolated Firestore profile and presence security rule tests for PPA Talk",
+  "description": "Isolated Firestore and Storage profile security rule tests for PPA Talk",
   "scripts": {
-    "test": "node profile-security.test.cjs"
+    "test": "node profile-security.test.cjs",
+    "test:storage": "node profile-storage-security.test.cjs",
+    "test:all": "npm test && npm run test:storage"
   },
   "type": "commonjs",
   "devDependencies": {
