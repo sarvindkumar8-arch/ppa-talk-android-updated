@@ -2070,10 +2070,12 @@ Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spaced
                                 tint = Color.White, modifier = Modifier.size(30.dp))
                         }
                         DropdownMenu(expanded = showCameraOptions, onDismissRequest = { showCameraOptions = false }) {
-                            DropdownMenuItem(text = { Text("Take photo") }, onClick = {
-                                showCameraOptions = false
-                                photoCaptureLauncher.launch(null)
-                            })
+                            if (!publishAsReel) {
+                                DropdownMenuItem(text = { Text("Take photo") }, onClick = {
+                                    showCameraOptions = false
+                                    photoCaptureLauncher.launch(null)
+                                })
+                            }
                             DropdownMenuItem(text = { Text("Record video") }, onClick = {
                                 showCameraOptions = false
                                 videoCaptureLauncher.launch(Intent(android.provider.MediaStore.ACTION_VIDEO_CAPTURE))
@@ -2085,8 +2087,12 @@ Column(Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spaced
 Button(
                 enabled = (selectedUri != null || selectedRemoteUrl.isNotBlank()) && !busy,
                 onClick = {
+                    if (publishAsReel && mediaType != "video") {
+                        message = "Reel ke liye gallery se video select karein."
+                        return@Button
+                    }
                     busy = true
-                    message = "Share button received. Preparing story..."
+                    message = if (publishAsReel) "Preparing Reel upload..." else "Share button received. Preparing story..."
                     val authenticatedUid = FirebaseAuth.getInstance().currentUser?.uid
                     if (authenticatedUid.isNullOrBlank()) {
                         busy = false
