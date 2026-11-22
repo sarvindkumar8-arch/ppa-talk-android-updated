@@ -2369,7 +2369,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     saving = true
                     message = if (photoEditorIsCover) "Original cover photo upload ho rahi hai..." else "Original profile photo upload ho rahi hai..."
                     isError = false
-                    // Close the editor so upload progress and any error are visible on the Profile screen.
+                    // Close the editor after the user confirms the cropped photo.
                     photoEditorUri = null
                 val isCover = photoEditorIsCover
                 val originalPathField = if (isCover) "coverPhotoOriginalPath" else "photoOriginalPath"
