@@ -1,0 +1,44 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function owns(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /profile_photos/{uid}/{fileName} {
+      allow read: if signedIn() && !fileName.matches('^original_.*');
+      allow create, update: if owns(uid)
+                            && request.resource.size < 10 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+      allow delete: if owns(uid);
+    }
+    match /cover_photos/{uid}/{fileName} {
+      allow read: if signedIn() && !fileName.matches('^original_.*');
+      allow create, update: if owns(uid)
+                            && request.resource.size < 15 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+      allow delete: if owns(uid);
+    }
+    match /post_photos/{uid}/{fileName} {
+      allow read: if signedIn();
+      allow write: if owns(uid)
+                    && request.resource.size < 25 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+    match /stories/{uid}/{fileName} {
+      allow read: if signedIn();
+      allow write: if owns(uid)
+                    && request.resource.size < 100 * 1024 * 1024
+                    && request.resource.contentType.matches('(image|video)/.*');
+    }
+    match /reels/{uid}/{fileName} {
+      allow read: if signedIn();
+      allow write: if owns(uid)
+                    && request.resource.size < 100 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*');
+    }
+  }
+}
