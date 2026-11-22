@@ -593,6 +593,32 @@ exports.revokeLegacyProfileMediaTokens = onCall({
       }
     }
   }
+  // Replace legacy token URLs in the profile document with non-secret object paths.
+  const profileRef = db.collection("publicProfiles").doc(uid);
+  const profileDoc = await profileRef.get();
+  if (profileDoc.exists) {
+    const profileUpdates = {};
+    for (const [urlField, pathField, folder] of [
+      ["photoOriginalUrl", "photoOriginalPath", "profile_photos"],
+      ["coverPhotoOriginalUrl", "coverPhotoOriginalPath", "cover_photos"]
+    ]) {
+      const legacyUrl = profileDoc.get(urlField);
+      let objectPath = profileDoc.get(pathField);
+      if (!objectPath && typeof legacyUrl === "string") {
+        try {
+          const parsed = new URL(legacyUrl);
+          const objectSegment = parsed.pathname.split("/o/")[1];
+          if (objectSegment) objectPath = decodeURIComponent(objectSegment);
+        } catch (_) {}
+      }
+      if (typeof objectPath === "string" && objectPath.startsWith(folder + "/" + uid + "/original_")) {
+        profileUpdates[pathField] = objectPath;
+        profileUpdates[urlField] = FieldValue.delete();
+      }
+    }
+    if (Object.keys(profileUpdates).length) await profileRef.update(profileUpdates);
+  }
+
   // Keep existing profile-photo feed posts rendering with their safe thumbnail URLs.
   const profilePosts = await db.collection("posts").where("uid", "==", uid).get();
   let migratedPostCount = 0;
