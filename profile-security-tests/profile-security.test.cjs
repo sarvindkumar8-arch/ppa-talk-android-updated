@@ -5,11 +5,17 @@ const {
   assertSucceeds,
   assertFails
 } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, setDoc } = require("firebase/firestore");
+const {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc
+} = require("firebase/firestore");
 
 const PROJECT_ID = "ppa-talk-profile-security-test";
 const EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8085";
-const RULES_PATH = path.resolve(__dirname, "../firestore.rules.example");
+const RULES_PATH = path.resolve(__dirname, "firestore.rules.test");
 
 let testEnv;
 
@@ -37,6 +43,16 @@ async function seedData() {
 
     await setDoc(doc(db, "friends/private-user/list/friend-user"), {
       uid: "friend-user"
+    });
+
+    await setDoc(doc(db, "profileDirectory/private-user"), {
+      uid: "private-user",
+      displayName: "Private User",
+      username: "privateuser",
+      photoUrl: "https://example.test/avatar.jpg",
+      coverPhotoUrl: "https://example.test/cover.jpg",
+      profileVisibility: "private",
+      updatedAt: new Date()
     });
 
     await setDoc(doc(db, "profilePresence/private-user"), {
@@ -91,6 +107,85 @@ async function run() {
     ["Accepted friend can read profile presence", async () => {
       const db = testEnv.authenticatedContext("friend-user").firestore();
       await assertSucceeds(getDoc(doc(db, "profilePresence/private-user")));
+    }],
+    ["Non-owner cannot create a profile directory entry", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "profileDirectory/another-user"), {
+        uid: "another-user",
+        displayName: "Forged User",
+        profileVisibility: "public"
+      }));
+    }],
+    ["Non-owner cannot update another user's profile directory", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(updateDoc(doc(db, "profileDirectory/private-user"), {
+        displayName: "Hacked Name"
+      }));
+    }],
+    ["Non-owner cannot delete another user's profile directory", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(deleteDoc(doc(db, "profileDirectory/private-user")));
+    }],
+    ["Owner can update allowed profile directory fields", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(updateDoc(doc(db, "profileDirectory/private-user"), {
+        displayName: "Updated Private User"
+      }));
+    }],
+    ["Owner cannot add online status to profile directory", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertFails(updateDoc(doc(db, "profileDirectory/private-user"), {
+        isOnline: true
+      }));
+    }],
+    ["Owner cannot add private fields to profile directory", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertFails(updateDoc(doc(db, "profileDirectory/private-user"), {
+        bio: "This must not be in the directory"
+      }));
+    }],
+    ["Non-owner cannot create profile presence", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "profilePresence/stranger-user"), {
+        uid: "stranger-user",
+        isOnline: true,
+        lastSeen: new Date(),
+        updatedAt: new Date()
+      }));
+    }],
+    ["Non-owner cannot update another user's profile presence", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(updateDoc(doc(db, "profilePresence/private-user"), {
+        isOnline: false
+      }));
+    }],
+    ["Accepted friend cannot update another user's profile presence", async () => {
+      const db = testEnv.authenticatedContext("friend-user").firestore();
+      await assertFails(updateDoc(doc(db, "profilePresence/private-user"), {
+        isOnline: false
+      }));
+    }],
+    ["Owner can update their own profile presence", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(updateDoc(doc(db, "profilePresence/private-user"), {
+        isOnline: false,
+        lastSeen: new Date()
+      }));
+    }],
+    ["Owner cannot add unapproved fields to profile presence", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertFails(updateDoc(doc(db, "profilePresence/private-user"), {
+        privateNote: "not allowed"
+      }));
+    }],
+    ["Owner cannot create profile presence for another UID", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertFails(setDoc(doc(db, "profilePresence/fake-user"), {
+        uid: "fake-user",
+        isOnline: true,
+        lastSeen: new Date(),
+        updatedAt: new Date()
+      }));
     }]
   ];
 
