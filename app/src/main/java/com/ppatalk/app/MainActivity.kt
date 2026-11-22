@@ -2911,7 +2911,7 @@ private fun createFilteredPhotoUri(
 }
 
 @Composable
-fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier, initialPicker: String? = null, onPublished: () -> Unit = {}) {
+fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier, initialPicker: String? = null, onPublished: () -> Unit = {}, onClose: () -> Unit = {}) {
     var postText by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf("") }
@@ -2965,7 +2965,10 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { postText = ""; selectedMedia = null; mediaType = ""; message = "" }) {
+            IconButton(onClick = {
+                if (initialPicker == "media") onClose()
+                else { postText = ""; selectedMedia = null; mediaType = ""; message = "" }
+            }) {
                 Icon(Icons.Default.Close, contentDescription = "Close")
             }
             Text("New post", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -3859,13 +3862,13 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                 Box(
                                     Modifier.weight(1f).aspectRatio(1f)
                                         .clip(MaterialTheme.shapes.small)
-                                        .background(Brush.linearGradient(listOf(Color(0xFFEC407A), Color(0xFFFF9800), Color(0xFF673AB7)))
+                                        .background(Color(0xFFE86B55)
                                         .clickable { showProfileReelCreator = true },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Box(Modifier.size(58.dp).background(Color.White.copy(alpha = 0.95f), CircleShape), contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Movie, contentDescription = "Create reel", tint = Color(0xFFE85D75), modifier = Modifier.size(34.dp))
+                                            Icon(Icons.Default.PlayCircleFilled, contentDescription = "Create reel", tint = Color(0xFFE85D75), modifier = Modifier.size(34.dp))
                                         }
                                         Text("Create reel", color = Color.White, fontWeight = FontWeight.SemiBold)
                                     }
@@ -3902,7 +3905,8 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                         email = email,
                         modifier = Modifier.fillMaxSize(),
                         initialPicker = "media",
-                        onPublished = { showProfileReelCreator = false }
+                        onPublished = { showProfileReelCreator = false },
+                        onClose = { showProfileReelCreator = false }
                     )
                 }
             }
