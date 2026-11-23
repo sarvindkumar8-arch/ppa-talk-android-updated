@@ -24,7 +24,7 @@ service cloud.firestore {
       return signedIn() && (
         post.uid == request.auth.uid
         || (profileIsPublic(post.uid) && post.get('audience', 'public') == 'public')
-        || (isAcceptedFriend(post.uid) && post.get('audience', 'public') == 'friends')
+        || (isAcceptedFriend(post.uid) && post.get('audience', 'public') in ['public', 'friends'])
       );
     }
 
