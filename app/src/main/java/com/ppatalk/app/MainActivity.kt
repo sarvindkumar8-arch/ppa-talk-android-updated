@@ -3342,6 +3342,153 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
     }
+    if (selectedMedia != null && mediaType == "video" && reelStage == "editor") {
+        var editorPlayer by remember(selectedMedia) { mutableStateOf<MediaPlayer?>(null) }
+        var editorPlaying by remember(selectedMedia) { mutableStateOf(true) }
+        var editorProgress by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var editorDuration by remember(selectedMedia) { mutableIntStateOf(0) }
+        var editorToolPanel by remember { mutableStateOf("Edit") }
+        Dialog(
+            onDismissRequest = {
+                selectedMedia = null
+                mediaType = ""
+                if (initialPicker == "media") onClose()
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                Column(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = {
+                            selectedMedia = null
+                            mediaType = ""
+                            if (initialPicker == "media") onClose()
+                        }) { Text("Cancel", color = Color.White, style = MaterialTheme.typography.titleMedium) }
+                        Text("Edit Reel", color = Color.White, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { reelStage = "settings" }) {
+                            Text("Done", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        AndroidView(
+                            factory = { viewContext ->
+                                VideoView(viewContext).apply {
+                                    setVideoURI(selectedMedia)
+                                    setOnPreparedListener { player ->
+                                        player.isLooping = true
+                                        editorPlayer = player
+                                        editorDuration = player.duration.coerceAtLeast(0)
+                                        player.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                                        start()
+                                    }
+                                }
+                            },
+                            update = { view ->
+                                editorPlayer?.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                                if (editorPlaying && !view.isPlaying) view.start()
+                                if (!editorPlaying && view.isPlaying) view.pause()
+                            },
+                            modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f)
+                        )
+                        if (reelOverlayText.isNotBlank() || reelSticker.isNotBlank()) {
+                            Column(Modifier.align(Alignment.Center).padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (reelOverlayText.isNotBlank()) Text(reelOverlayText, color = Color.White,
+                                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                                if (reelSticker.isNotBlank()) Text(reelSticker, style = MaterialTheme.typography.displayMedium)
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center) {
+                        IconButton(onClick = {
+                            editorPlaying = !editorPlaying
+                            if (editorPlaying) editorPlayer?.start() else editorPlayer?.pause()
+                        }) {
+                            Icon(if (editorPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play or pause", tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
+                        Text(if (editorDuration > 0) "00:" + (editorDuration / 1000).toString().padStart(2, '0') else "Video preview",
+                            color = Color.White)
+                    }
+                    Box(Modifier.fillMaxWidth().height(72.dp).padding(vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp)).background(Color(0xFF242424))) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            repeat(7) { index ->
+                                Box(Modifier.weight(1f).fillMaxHeight(0.78f).clip(RoundedCornerShape(4.dp))
+                                    .background(if (index % 2 == 0) Color(0xFF555555) else Color(0xFF383838)),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Movie, contentDescription = null, tint = Color.LightGray)
+                                }
+                            }
+                        }
+                    }
+                    Slider(
+                        value = editorProgress,
+                        onValueChange = {
+                            editorProgress = it
+                            if (editorDuration > 0) editorPlayer?.seekTo((editorDuration * it).toInt())
+                        },
+                        valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.DarkGray)
+                    )
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly) {
+                        listOf("Audio", "Edit", "Effects", "Text", "Stickers").forEach { tool ->
+                            Column(Modifier.width(62.dp).clickable { editorToolPanel = tool },
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(48.dp).clip(CircleShape)
+                                    .background(if (editorToolPanel == tool) Color(0xFF444444) else Color(0xFF1D1D1D)),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(when (tool) {
+                                        "Audio" -> Icons.Default.MusicNote
+                                        "Edit" -> Icons.Default.ContentCut
+                                        "Effects" -> Icons.Default.AutoAwesome
+                                        "Text" -> Icons.Default.TextFields
+                                        else -> Icons.Default.EmojiEmotions
+                                    }, contentDescription = tool, tint = Color.White, modifier = Modifier.size(26.dp))
+                                }
+                                Text(tool, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                    when (editorToolPanel) {
+                        "Audio" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = videoMuted, onCheckedChange = {
+                                videoMuted = it
+                                editorPlayer?.setVolume(if (it) 0f else 1f, if (it) 0f else 1f)
+                            })
+                            Text("Mute original audio", color = Color.White)
+                            Spacer(Modifier.weight(1f))
+                            Text("Music library coming soon", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                        }
+                        "Edit" -> Text("Drag the timeline to preview your clip. Advanced trim and speed tools are not yet enabled.",
+                            color = Color.LightGray, style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(vertical = 8.dp))
+                        "Effects" -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Original", "Warm", "Cool", "B&W", "Vivid").forEach { effect ->
+                                FilterChip(selected = reelEffect == effect, onClick = { reelEffect = effect },
+                                    label = { Text(effect) })
+                            }
+                        }
+                        "Text" -> OutlinedTextField(value = reelOverlayText, onValueChange = { reelOverlayText = it },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("Add text to video") })
+                        "Stickers" -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("❤️", "😂", "🔥", "😍", "👏", "🎉").forEach { sticker ->
+                                AssistChip(onClick = { reelSticker = sticker }, label = { Text(sticker) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (showReelCreator) {
         CreateStoryDialog(uid, displayName, onDismiss = { showReelCreator = false }, publishAsReel = true)
     }
