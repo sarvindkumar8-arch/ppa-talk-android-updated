@@ -10,7 +10,8 @@ const {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  serverTimestamp
 } = require("firebase/firestore");
 
 const PROJECT_ID = "ppa-talk-profile-security-test";
@@ -95,6 +96,13 @@ async function seedData() {
       storagePath: "stories/public-user/public-story.jpg",
       createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
     });
+
+    await setDoc(doc(db, "stories/expired-story"), {
+      uid: "public-user", authorName: "Public User",
+      mediaUrl: "https://example.test/expired.jpg", mediaType: "image",
+      storagePath: "stories/public-user/expired.jpg",
+      createdAt: new Date(Date.now() - 48 * 3600000), expiresAt: new Date(Date.now() - 3600000)
+    });
   });
 }
 
@@ -114,6 +122,40 @@ async function run() {
   await seedData();
 
   const tests = [
+    ["Owner can create a path-only story without a download token URL", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertSucceeds(setDoc(doc(db, "stories/path-only-story"), {
+        uid: "stranger-user", authorName: "Stranger", mediaUrl: "",
+        storagePath: "stories/stranger-user/story.jpg", mediaType: "image",
+        createdAt: serverTimestamp(), expiresAt: new Date(Date.now() + 3600000)
+      }));
+    }],
+    ["User cannot create a story using another user's storage path", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "stories/foreign-path-story"), {
+        uid: "stranger-user", authorName: "Stranger", mediaUrl: "",
+        storagePath: "stories/private-user/story.jpg", mediaType: "image",
+        createdAt: serverTimestamp(), expiresAt: new Date(Date.now() + 3600000)
+      }));
+    }],
+    ["Owner can create a path-only post without a download token URL", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertSucceeds(setDoc(doc(db, "posts/path-only-post"), {
+        uid: "stranger-user", authorName: "Stranger", text: "", mediaUrl: "",
+        storagePath: "post_photos/stranger-user/post.jpg", audience: "public"
+      }));
+    }],
+    ["User cannot create a post using another user's storage path", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "posts/foreign-path-post"), {
+        uid: "stranger-user", authorName: "Stranger", text: "", mediaUrl: "",
+        storagePath: "post_photos/private-user/post.jpg", audience: "public"
+      }));
+    }],
+    ["Expired story cannot be read even from a public profile", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "stories/expired-story")));
+    }],
     ["Non-friend cannot create a direct chat", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(setDoc(doc(db, "chats/stranger-chat"), {
