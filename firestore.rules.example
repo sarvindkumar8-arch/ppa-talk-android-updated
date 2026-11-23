@@ -4,6 +4,38 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function owns(userId) { return signedIn() && request.auth.uid == userId; }
 
+    function isAcceptedFriend(ownerUid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/friends/$(ownerUid)/list/$(request.auth.uid))
+        && (
+          (exists(/databases/$(database)/documents/friendRequests/$(ownerUid + '_' + request.auth.uid))
+            && get(/databases/$(database)/documents/friendRequests/$(ownerUid + '_' + request.auth.uid)).data.status == 'accepted')
+          || (exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + ownerUid))
+            && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + ownerUid)).data.status == 'accepted')
+        );
+    }
+
+    function profileIsPublic(ownerUid) {
+      return exists(/databases/$(database)/documents/publicProfiles/$(ownerUid))
+        && get(/databases/$(database)/documents/publicProfiles/$(ownerUid)).data.profileVisibility == 'public';
+    }
+
+    function canReadPost(post) {
+      return signedIn() && (
+        post.uid == request.auth.uid
+        || (profileIsPublic(post.uid) && post.get('audience', 'public') == 'public')
+        || (isAcceptedFriend(post.uid) && post.get('audience', 'public') == 'friends')
+      );
+    }
+
+    function canReadStory(story) {
+      return signedIn() && (
+        story.uid == request.auth.uid
+        || profileIsPublic(story.uid)
+        || isAcceptedFriend(story.uid)
+      );
+    }
+
     // Private account/profile data: only the account owner can access it.
     match /users/{userId} {
       allow read: if owns(userId);
@@ -130,11 +162,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Stories are readable by signed-in users for now; feed/story audience
-    // filtering is being migrated separately so existing listeners keep working.
-    // Enforce ownership, media type, and a maximum 24-hour lifetime at write time.
+    // Story media is visible only to its owner, accepted friends, or public-profile viewers.
     match /stories/{storyId} {
-      allow read: if signedIn();
+      allow read: if canReadStory(resource.data);
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'uid', 'authorName', 'mediaUrl', 'mediaType', 'createdAt', 'expiresAt'
@@ -156,8 +186,8 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      // Existing feed queries are migrated in a separate compatibility change.
-      allow read: if signedIn();
+      // Enforce each post's audience and the author's profile visibility.
+      allow read: if canReadPost(resource.data);
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.authorName is string
@@ -185,12 +215,16 @@ service cloud.firestore {
 
       match /likes/{likerId} {
         // Parent post access is required before reading or changing reactions.
-        allow read: if signedIn()
-          && exists(/databases/$(database)/documents/posts/$(postId));
+        allow read: if exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
         allow create: if owns(likerId)
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡'];
         allow update: if owns(likerId)
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reaction', 'createdAt']);
@@ -200,17 +234,24 @@ service cloud.firestore {
         allow read: if signedIn()
           && exists(/databases/$(database)/documents/posts/$(postId));
         allow create: if signedIn()
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
           && request.resource.data.parentId == postId;
         allow update: if signedIn()
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
           && resource.data.uid == request.auth.uid
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.parentId == resource.data.parentId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'updatedAt']);
-        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+        allow delete: if signedIn()
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
+          && resource.data.uid == request.auth.uid;
       }
     }
 
