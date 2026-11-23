@@ -61,6 +61,29 @@ async function seedData() {
       lastSeen: new Date(),
       updatedAt: new Date()
     });
+
+    await setDoc(doc(db, "posts/public-post"), {
+      uid: "public-user", authorName: "Public User", text: "Public post",
+      mediaUrl: "", mediaType: "", postType: "post", audience: "public"
+    });
+    await setDoc(doc(db, "posts/friends-post"), {
+      uid: "private-user", authorName: "Private User", text: "Friends post",
+      mediaUrl: "", mediaType: "", postType: "post", audience: "friends"
+    });
+    await setDoc(doc(db, "posts/private-post"), {
+      uid: "private-user", authorName: "Private User", text: "Private post",
+      mediaUrl: "", mediaType: "", postType: "post", audience: "private"
+    });
+    await setDoc(doc(db, "stories/private-story"), {
+      uid: "private-user", authorName: "Private User",
+      mediaUrl: "https://example.test/story.jpg", mediaType: "image",
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
+    });
+    await setDoc(doc(db, "stories/public-story"), {
+      uid: "public-user", authorName: "Public User",
+      mediaUrl: "https://example.test/story.jpg", mediaType: "image",
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
+    });
   });
 }
 
@@ -99,6 +122,38 @@ async function run() {
     ["Owner can read their own private profile", async () => {
       const db = testEnv.authenticatedContext("private-user").firestore();
       await assertSucceeds(getDoc(doc(db, "publicProfiles/private-user")));
+    }],
+    ["Signed-in user can read a public post", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "posts/public-post")));
+    }],
+    ["Non-friend cannot read a friends-only post", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "posts/friends-post")));
+    }],
+    ["Accepted friend can read a friends-only post", async () => {
+      const db = testEnv.authenticatedContext("friend-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "posts/friends-post")));
+    }],
+    ["Non-friend cannot read a private post", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "posts/private-post")));
+    }],
+    ["Post owner can read their private post", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "posts/private-post")));
+    }],
+    ["Non-friend cannot read a private-profile story", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "stories/private-story")));
+    }],
+    ["Accepted friend can read a private-profile story", async () => {
+      const db = testEnv.authenticatedContext("friend-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "stories/private-story")));
+    }],
+    ["Signed-in user can read a public-profile story", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "stories/public-story")));
     }],
     ["Non-friend cannot read profile presence", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
