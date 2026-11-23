@@ -731,8 +731,19 @@ exports.revokeLegacyContentMediaTokens = onCall({
             if (objectSegment) objectPath = decodeURIComponent(objectSegment);
           } catch (_) {}
         }
-        if (!/^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath)) continue;
-        if (objectPath.split("/")[1] !== uid) continue;
+        const isFirebaseStorageUrl = typeof record.mediaUrl === "string" &&
+          /https:\/\/firebasestorage\.googleapis\.com\//i.test(record.mediaUrl);
+        if (!/^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath)) {
+          if (isFirebaseStorageUrl) {
+            throw new HttpsError("failed-precondition",
+              "A legacy Firebase media URL could not be mapped safely. Migration stopped without marking this account secured.");
+          }
+          continue;
+        }
+        if (objectPath.split("/")[1] !== uid) {
+          throw new HttpsError("failed-precondition",
+            "A media object path does not belong to this account. Migration stopped without marking this account secured.");
+        }
         const folder = objectPath.split("/")[0];
         const validFolder = collection === "stories"
           ? ["stories", "reels"].includes(folder)
