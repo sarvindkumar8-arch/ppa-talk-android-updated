@@ -773,7 +773,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
                     "lastSeen" to com.google.firebase.firestore.FieldValue.delete()
                 ), com.google.firebase.firestore.SetOptions.merge())
-                val isPublicProfile = profile.getString("profileVisibility") == "public"
+                val isPublicProfile = (profile.getString("profileVisibility") ?: "public") == "public"
                 directoryRef.set(mapOf(
                     "uid" to uid,
                     "displayName" to (profile.getString("displayName") ?: displayName.ifBlank { "PPA Talk user" }),
