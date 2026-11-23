@@ -174,7 +174,7 @@ private fun rememberSecureMediaUrl(
                     "objectPath" to storagePath
                 ))
                 .addOnSuccessListener { result ->
-                    val data = result.data as? Map<*, *>
+                    val data = result.getData() as? Map<*, *>
                     val secureUrl = data?.get("url") as? String
                     if (!secureUrl.isNullOrBlank()) resolvedUrl = secureUrl
                 }
