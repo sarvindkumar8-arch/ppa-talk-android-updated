@@ -2981,6 +2981,14 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var reelTags by remember { mutableStateOf("") }
     val isReelComposer = initialPicker == "media" || initialPicker == "video"
     val context = LocalContext.current
+    var deviceGalleryItems by remember { mutableStateOf<List<DeviceGalleryMedia>>(emptyList()) }
+    var galleryPermissionGranted by remember { mutableStateOf(false) }
+    var gallerySelectMultiple by remember { mutableStateOf(false) }
+    var gallerySelectedUris by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        galleryPermissionGranted = result.values.any { it }
+        if (galleryPermissionGranted) deviceGalleryItems = runCatching { loadDeviceGallery(context) }.getOrDefault(emptyList())
+    }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedMedia = uri
         mediaType = if (uri == null) "" else "image"
@@ -3012,7 +3020,159 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         when (initialPicker) {
             "image" -> imagePicker.launch("image/*")
             "video" -> videoPicker.launch("video/*")
-            "media" -> mixedMediaPicker.launch("*/*")
+            "media" -> {
+                val permissions = when {
+                    Build.VERSION.SDK_INT >= 34 -> arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                    )
+                    Build.VERSION.SDK_INT >= 33 -> arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        Manifest.permission.READ_MEDIA_VIDEO
+                    )
+                    else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+                val alreadyAllowed = permissions.any { context.checkSelfPermission(it) == 0 }
+                if (alreadyAllowed) {
+                    galleryPermissionGranted = true
+                    deviceGalleryItems = runCatching { loadDeviceGallery(context) }.getOrDefault(emptyList())
+                } else mediaPermissionLauncher.launch(permissions)
+            }
+        }
+    }
+
+    if (initialPicker == "media" && selectedMedia == null) {
+        Dialog(
+            onDismissRequest = onClose,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close gallery") }
+                        Text("Create reel", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = { message = "Reel settings" }) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        listOf("Camera", "Music", "Templates", "Drafts", "Green screen").forEach { action ->
+                            Column(Modifier.width(76.dp).clickable {
+                                message = when (action) {
+                                    "Camera" -> "Camera capture will be available here soon."
+                                    "Music" -> "Choose music after selecting a video."
+                                    "Templates" -> "Reel templates are coming soon."
+                                    "Drafts" -> "No saved drafts yet."
+                                    else -> "Green screen tools are coming soon."
+                                }
+                            }, horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(54.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(when (action) {
+                                        "Camera" -> Icons.Default.CameraAlt
+                                        "Music" -> Icons.Default.MusicNote
+                                        "Templates" -> Icons.Default.LibraryAdd
+                                        "Drafts" -> Icons.Default.Drafts
+                                        else -> Icons.Default.Portrait
+                                    }, contentDescription = action, modifier = Modifier.size(26.dp))
+                                }
+                                Text(action, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("Gallery  ▾", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { gallerySelectMultiple = !gallerySelectMultiple }) {
+                            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Collections, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (gallerySelectMultiple) "Cancel multiple" else "Select multiple",
+                                    style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
+                    if (!galleryPermissionGranted) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Allow access to photos and videos to create a Reel.")
+                                Button(onClick = {
+                                    val permissions = if (Build.VERSION.SDK_INT >= 34) arrayOf(
+                                        Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO,
+                                        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                                    ) else if (Build.VERSION.SDK_INT >= 33) arrayOf(
+                                        Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO
+                                    ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                    mediaPermissionLauncher.launch(permissions)
+                                }) { Text("Allow gallery access") }
+                            }
+                        }
+                    } else if (deviceGalleryItems.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No photos or videos found on this device.")
+                        }
+                    } else {
+                        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(1.dp), verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            items(deviceGalleryItems.size) { index ->
+                                val item = deviceGalleryItems[index]
+                                val chosen = gallerySelectedUris.contains(item.uri.toString())
+                                Box(Modifier.fillMaxWidth().aspectRatio(0.78f).clickable {
+                                    if (gallerySelectMultiple) {
+                                        gallerySelectedUris = if (chosen) gallerySelectedUris - item.uri.toString()
+                                            else gallerySelectedUris + item.uri.toString()
+                                    } else {
+                                        selectedMedia = item.uri
+                                        mediaType = item.type
+                                        reelStage = "editor"
+                                    }
+                                }) {
+                                    AsyncImage(model = item.uri, contentDescription = "Gallery ${item.type}",
+                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                    if (item.type == "video") {
+                                        Row(Modifier.align(Alignment.BottomEnd).padding(5.dp)
+                                            .clip(RoundedCornerShape(5.dp)).background(Color.Black.copy(alpha = 0.65f))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White,
+                                                modifier = Modifier.size(14.dp))
+                                            Text(String.format("%d:%02d", item.durationMs / 60000, (item.durationMs / 1000) % 60),
+                                                color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                    if (gallerySelectMultiple) {
+                                        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(25.dp)
+                                            .clip(CircleShape).background(if (chosen) RoyalBlue else Color.Black.copy(alpha = 0.35f))
+                                            .border(1.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                                            if (chosen) Icon(Icons.Default.Check, contentDescription = "Selected",
+                                                tint = Color.White, modifier = Modifier.size(17.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (gallerySelectMultiple) {
+                            Button(onClick = {
+                                val first = deviceGalleryItems.firstOrNull { gallerySelectedUris.contains(it.uri.toString()) }
+                                if (first != null) {
+                                    selectedMedia = first.uri
+                                    mediaType = first.type
+                                    reelStage = "editor"
+                                }
+                            }, enabled = gallerySelectedUris.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text("Next (${gallerySelectedUris.size})")
+                            }
+                        }
+                    }
+                    if (message.isNotBlank()) Text(message, modifier = Modifier.padding(10.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
 
