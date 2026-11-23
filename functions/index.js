@@ -15,6 +15,36 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
 
+// Server-side abuse throttling. Documents are private to Admin SDK because no
+// client rule grants access to serverRateLimits.
+async function consumeRateLimit(scope, identity, limit, windowMs) {
+  const bucket = Math.floor(Date.now() / windowMs);
+  const id = createHash("sha256").update(scope + ":" + identity).digest("hex");
+  const ref = db.collection("serverRateLimits").doc(id);
+  const now = Date.now();
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const previous = snapshot.exists ? snapshot.data() : {};
+    const previousStart = Number(previous.windowStart || 0);
+    const count = previousStart === bucket ? Number(previous.count || 0) + 1 : 1;
+    if (count > limit) {
+      throw new HttpsError("resource-exhausted", "Too many requests. Please wait and try again.");
+    }
+    tx.set(ref, {
+      scope,
+      windowStart: bucket,
+      count,
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: new Date(now + Math.max(windowMs * 2, 60 * 60 * 1000))
+    });
+  });
+}
+
+function requestNetworkKey(request) {
+  const ip = request.rawRequest?.ip || "unknown";
+  return createHash("sha256").update(String(ip)).digest("hex");
+}
+
 function normalizePhone(value) {
   if (typeof value !== "string") throw new HttpsError("invalid-argument", "Enter a valid mobile number.");
   const phone = value.replace(/[^\d+]/g, "");
@@ -95,6 +125,7 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: fa
 exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
   const phone = normalizePhone(request.data?.phoneNumber);
   const password = validatePassword(request.data?.password);
+  await consumeRateLimit("phone-login", credentialId(phone) + ":" + requestNetworkKey(request), 20, 15 * 60 * 1000);
   const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
   const snapshot = await docRef.get();
   if (!snapshot.exists) throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
@@ -432,6 +463,7 @@ exports.createLiveKitToken = onCall({
 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in before joining a call.");
+  await consumeRateLimit("livekit-token", uid, 12, 60 * 1000);
 
   const callId = typeof request.data?.callId === "string" ? request.data.callId.trim() : "";
   if (!/^[A-Za-z0-9_-]{10,128}$/.test(callId)) {
@@ -535,6 +567,7 @@ exports.getSecureMediaUrl = onCall({
 }, async (request) => {
   const viewerUid = request.auth?.uid;
   if (!viewerUid) throw new HttpsError("unauthenticated", "Sign in to view this media.");
+  await consumeRateLimit("secure-media-url", viewerUid, 120, 60 * 1000);
 
   const mediaType = request.data?.mediaType;
   const collection = mediaType === "story" ? "stories" :
@@ -619,6 +652,7 @@ exports.getSecureProfileMediaUrl = onCall({
 }, async (request) => {
   const viewerUid = request.auth?.uid;
   if (!viewerUid) throw new HttpsError("unauthenticated", "Sign in to view this photo.");
+  await consumeRateLimit("secure-profile-media-url", viewerUid, 60, 60 * 1000);
 
   const profileUid = typeof request.data?.profileUid === "string" ? request.data.profileUid.trim() : "";
   const objectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
