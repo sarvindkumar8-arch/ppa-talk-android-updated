@@ -127,6 +127,20 @@ async function run() {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertSucceeds(getDoc(doc(db, "posts/public-post")));
     }],
+    ["Post owner cannot transfer ownership by editing UID", async () => {
+      const db = testEnv.authenticatedContext("public-user").firestore();
+      await assertFails(updateDoc(doc(db, "posts/public-post"), { uid: "stranger-user" }));
+    }],
+    ["Post owner cannot change audience to an unsupported value", async () => {
+      const db = testEnv.authenticatedContext("public-user").firestore();
+      await assertFails(updateDoc(doc(db, "posts/public-post"), { audience: "everyone" }));
+    }],
+    ["Comment cannot claim a different parent post", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "posts/public-post/comments/forged-comment"), {
+        uid: "stranger-user", text: "forged parent", parentId: "another-post"
+      }));
+    }],
     ["User cannot create a post for another UID", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(setDoc(doc(db, "posts/forged-post"), {
