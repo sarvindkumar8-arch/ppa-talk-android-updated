@@ -773,12 +773,17 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
                     "lastSeen" to com.google.firebase.firestore.FieldValue.delete()
                 ), com.google.firebase.firestore.SetOptions.merge())
+                val isPublicProfile = profile.getString("profileVisibility") == "public"
                 directoryRef.set(mapOf(
                     "uid" to uid,
                     "displayName" to (profile.getString("displayName") ?: displayName.ifBlank { "PPA Talk user" }),
                     "username" to profile.getString("username").orEmpty(),
-                    "photoUrl" to profile.getString("photoUrl").orEmpty(),
-                    "coverPhotoUrl" to profile.getString("coverPhotoUrl").orEmpty(),
+                    // Private profile media URLs are bearer links. Keep them out of
+                    // the directory, which is readable by every signed-in account.
+                    "photoUrl" to if (isPublicProfile) profile.getString("photoUrl").orEmpty()
+                        else com.google.firebase.firestore.FieldValue.delete(),
+                    "coverPhotoUrl" to if (isPublicProfile) profile.getString("coverPhotoUrl").orEmpty()
+                        else com.google.firebase.firestore.FieldValue.delete(),
                     "profileVisibility" to (profile.getString("profileVisibility") ?: "public"),
                     "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
                     "lastSeen" to com.google.firebase.firestore.FieldValue.delete(),
