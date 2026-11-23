@@ -86,11 +86,13 @@ async function seedData() {
     await setDoc(doc(db, "stories/private-story"), {
       uid: "private-user", authorName: "Private User",
       mediaUrl: "https://example.test/story.jpg", mediaType: "image",
+      storagePath: "stories/private-user/private-story.jpg",
       createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
     });
     await setDoc(doc(db, "stories/public-story"), {
       uid: "public-user", authorName: "Public User",
       mediaUrl: "https://example.test/story.jpg", mediaType: "image",
+      storagePath: "stories/public-user/public-story.jpg",
       createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
     });
   });
@@ -112,6 +114,32 @@ async function run() {
   await seedData();
 
   const tests = [
+    ["Non-friend cannot create a direct chat", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "chats/stranger-chat"), {
+        participantIds: ["stranger-user", "private-user"]
+      }));
+    }],
+    ["Accepted friends can create a direct chat", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(setDoc(doc(db, "chats/friends-chat"), {
+        participantIds: ["private-user", "friend-user"]
+      }));
+    }],
+    ["Non-friend cannot initiate a call", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "callSessions/stranger-call"), {
+        callerUid: "stranger-user", calleeUid: "private-user",
+        status: "ringing", callType: "audio"
+      }));
+    }],
+    ["Accepted friend can initiate a call", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(setDoc(doc(db, "callSessions/friends-call"), {
+        callerUid: "private-user", calleeUid: "friend-user",
+        status: "ringing", callType: "audio"
+      }));
+    }],
     ["Anonymous user cannot read a public profile", async () => {
       const db = testEnv.unauthenticatedContext().firestore();
       await assertFails(getDoc(doc(db, "publicProfiles/public-user")));
