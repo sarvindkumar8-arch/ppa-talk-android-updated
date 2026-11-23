@@ -2318,7 +2318,7 @@ Button(
                         val storyData = hashMapOf(
                             "uid" to authenticatedUid,
                             "authorName" to displayName,
-                            "mediaUrl" to url,
+                            "mediaUrl" to if (storagePath.isBlank()) url else "",
                             "storagePath" to storagePath,
                             "mediaType" to mediaType,
                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
@@ -3651,7 +3651,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                         "authorName" to displayName,
 
                         "text" to postText.trim(),
-                        "mediaUrl" to mediaUrl,
+                        "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "",
                         "storagePath" to storagePath,
                         "mediaType" to mediaType,
                         "postType" to if (mediaType == "video") "reel" else "post",
@@ -3824,7 +3824,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             fun saveReel(mediaUrl: String, storagePath: String) {
                                 val post = hashMapOf(
                                     "uid" to uid, "authorName" to displayName, "text" to postText.trim(),
-                                    "mediaUrl" to mediaUrl, "storagePath" to storagePath, "mediaType" to "video", "postType" to "reel",
+                                    "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "", "storagePath" to storagePath, "mediaType" to "video", "postType" to "reel",
                                     "audience" to reelAudience.lowercase(), "location" to reelLocation.trim(),
                                     "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
                                     "affiliateLink" to reelAffiliateLink.trim(), "playlist" to reelPlaylist,
