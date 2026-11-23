@@ -718,7 +718,7 @@ exports.revokeLegacyContentMediaTokens = onCall({
   let migratedCount = 0;
   let revokedCount = 0;
   for (const collection of ["posts", "stories"]) {
-    let query = db.collection(collection).where("uid", "==", uid).limit(200);
+    let query = db.collection(collection).where("uid", "==", uid).orderBy("__name__").limit(200);
     while (true) {
       const page = await query.get();
       if (page.empty) break;
