@@ -793,7 +793,11 @@ exports.revokeLegacyProfileMediaTokens = onCall({
 
   const markerRef = db.collection("users").doc(uid);
   const marker = await markerRef.get();
-  if (marker.get("profileMediaTokensRevokedAt")) return { alreadySecured: true };
+  const legacyMediaAlreadySecured = !!marker.get("profileMediaTokensRevokedAt");
+  const directoryPrivacyAlreadySecured = !!marker.get("profileDirectoryPrivacyV2At");
+  if (legacyMediaAlreadySecured && directoryPrivacyAlreadySecured) {
+    return { alreadySecured: true, directoryPrivacySecured: true };
+  }
 
   const bucket = getStorage().bucket();
   let revokedCount = 0;
@@ -857,6 +861,30 @@ exports.revokeLegacyProfileMediaTokens = onCall({
     migratedPostCount += 1;
   }
 
-  await markerRef.set({ profileMediaTokensRevokedAt: FieldValue.serverTimestamp() }, { merge: true });
-  return { alreadySecured: false, revokedCount, migratedPostCount };
+  // Remove bearer photo URLs from the signed-in-readable directory for private
+  // profiles. Name and username remain discoverable; media URLs do not.
+  const currentProfile = await db.collection("publicProfiles").doc(uid).get();
+  const visibility = currentProfile.get("profileVisibility") || "private";
+  if (visibility !== "public") {
+    await db.collection("profileDirectory").doc(uid).set({
+      photoUrl: FieldValue.delete(),
+      coverPhotoUrl: FieldValue.delete(),
+      profileVisibility: visibility,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+
+  const markerUpdates = {
+    profileDirectoryPrivacyV2At: FieldValue.serverTimestamp()
+  };
+  if (!legacyMediaAlreadySecured) {
+    markerUpdates.profileMediaTokensRevokedAt = FieldValue.serverTimestamp();
+  }
+  await markerRef.set(markerUpdates, { merge: true });
+  return {
+    alreadySecured: false,
+    directoryPrivacySecured: true,
+    revokedCount,
+    migratedPostCount
+  };
 });
