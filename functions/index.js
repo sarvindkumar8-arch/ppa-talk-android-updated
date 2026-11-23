@@ -867,6 +867,9 @@ exports.revokeLegacyProfileMediaTokens = onCall({
   const visibility = currentProfile.get("profileVisibility") || "private";
   if (visibility !== "public") {
     await db.collection("profileDirectory").doc(uid).set({
+      uid,
+      displayName: currentProfile.get("displayName") || "PPA Talk user",
+      username: currentProfile.get("username") || "",
       photoUrl: FieldValue.delete(),
       coverPhotoUrl: FieldValue.delete(),
       profileVisibility: visibility,
