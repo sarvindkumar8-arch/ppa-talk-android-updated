@@ -2990,11 +2990,13 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 Icon(Icons.Default.PlayCircle, contentDescription = "Create Reel", tint = RoyalBlue)
                 Text("Reel", color = RoyalBlue)
             }
-            TextButton(enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
-                onClick = {
-                    if (mediaType == "video") reelStage = "settings"
-                    else message = "Add media or caption, then Share."
-                }) { Text(if (mediaType == "video" && reelStage == "editor") "Next" else "Share", color = RoyalBlue) }
+            if (!(mediaType == "video" && reelStage == "settings")) {
+                TextButton(enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
+                    onClick = {
+                        if (mediaType == "video") reelStage = "settings"
+                        else message = "Add media or caption, then Share."
+                    }) { Text("Next", color = RoyalBlue) }
+            }
         }
         HorizontalDivider()
         Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3268,7 +3270,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
             AssistChip(onClick = { message = "Threads sharing option coming soon." }, label = { Text("@ Threads Off") })
         }
         Button(
-            enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
+            enabled = !busy && (postText.isNotBlank() || selectedMedia != null) &&
+                postText.trim().length <= 5000 && (mediaType != "video" || reelStage == "settings"),
             onClick = {
                 busy = true
                 message = ""
@@ -3335,7 +3338,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
-        ) { Text(if (busy) "Uploading..." else "Share") }
+        ) { Text(if (busy) "Uploading..." else if (mediaType == "video") "Share now" else "Share") }
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
     }
