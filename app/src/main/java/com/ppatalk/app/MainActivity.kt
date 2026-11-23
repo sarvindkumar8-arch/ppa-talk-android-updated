@@ -1336,7 +1336,7 @@ private fun ReelFullscreenViewer(
                 }
                 IconButton(onClick = {
                     val send = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"; putExtra(Intent.EXTRA_TEXT, reel.mediaUrl)
+                        type = "text/plain"; putExtra(Intent.EXTRA_TEXT, secureMediaUrl.ifBlank { "PPA Talk Reel" })
                     }
                     context.startActivity(Intent.createChooser(send, "Share reel"))
                 }) { Icon(Icons.Default.Share, contentDescription = "Share reel", tint = Color.White, modifier = Modifier.size(32.dp)) }
@@ -1839,7 +1839,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                                     showStoryMenu = false
                                     val send = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, story["mediaUrl"] as? String ?: "")
+                                        putExtra(Intent.EXTRA_TEXT, secureStoryUrl.ifBlank { "PPA Talk Story" })
                                     }
                                     shareContext.startActivity(Intent.createChooser(send, "Share story"))
                                 })
@@ -2811,7 +2811,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.width(22.dp))
                 val context = LocalContext.current
                 IconButton(onClick = {
-                    val shareText = if (post.mediaUrl.isBlank()) post.text else post.text + "\\n" + post.mediaUrl
+                    val shareText = if (secureMediaUrl.isBlank()) post.text else post.text + "\\n" + secureMediaUrl
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_TEXT, shareText)
