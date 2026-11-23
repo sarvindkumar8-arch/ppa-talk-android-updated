@@ -38,6 +38,13 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            check(hasCustomSigning) {
+                "Persistent debug signing is required. Check the keystore file and GitHub Actions signing secrets."
+            }
+            signingConfig = signingConfigs.getByName("custom")
+        }
+
         getByName("release") {
             isMinifyEnabled = false
             if (hasCustomSigning) {
