@@ -3618,7 +3618,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             if (mediaType == "video" && reelShareToStory) {
                                 val story = hashMapOf(
                                     "uid" to uid, "authorName" to displayName,
-                                    "mediaUrl" to mediaUrl, "mediaType" to "video",
+                                    "mediaUrl" to mediaUrl, "storagePath" to storagePath, "mediaType" to "video",
                                     "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                     "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
                                 )
@@ -3787,7 +3787,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                     if (reelShareToStory) {
                                         val story = hashMapOf(
                                             "uid" to uid, "authorName" to displayName, "mediaUrl" to mediaUrl,
-                                            "mediaType" to "video",
+                                            "mediaType" to "video", "storagePath" to storagePath,
                                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
                                         )
