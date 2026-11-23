@@ -156,14 +156,20 @@ private fun rememberSecureMediaUrl(
     storagePath: String,
     legacyUrl: String
 ): String {
-    var resolvedUrl by remember(mediaType, documentId, storagePath, legacyUrl) {
-        mutableStateOf(if (storagePath.isBlank()) legacyUrl else "")
+    val legacyObjectPath = remember(legacyUrl) { firebaseStorageObjectPath(legacyUrl).orEmpty() }
+    val legacyProtectedMedia = remember(legacyObjectPath) {
+        legacyObjectPath.startsWith("post_photos/") ||
+            legacyObjectPath.startsWith("stories/") ||
+            legacyObjectPath.startsWith("reels/")
     }
-    LaunchedEffect(mediaType, documentId, storagePath) {
+    var resolvedUrl by remember(mediaType, documentId, storagePath, legacyUrl) {
+        mutableStateOf(if (storagePath.isBlank() && !legacyProtectedMedia) legacyUrl else "")
+    }
+    LaunchedEffect(mediaType, documentId, storagePath, legacyUrl, legacyProtectedMedia) {
         if (documentId.isBlank() || storagePath.isBlank()) {
-            // Legacy records without a storagePath remain on their existing URL until
-            // the controlled backfill and token-revocation migration is completed.
-            resolvedUrl = legacyUrl
+            // Never expose legacy Firebase content download-token URLs. The owner migration
+            // must backfill storagePath before this media can be loaded through a signed URL.
+            resolvedUrl = if (legacyProtectedMedia) "" else legacyUrl
         } else {
             // Never fall back to a token URL when authorization fails for a path-backed record.
             resolvedUrl = "";
