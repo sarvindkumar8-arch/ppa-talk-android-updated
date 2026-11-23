@@ -1222,6 +1222,7 @@ fun ReelsScreen(
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(visibleReels, key = { it.id }) { reel ->
+                    val secureMediaUrl = rememberSecureMediaUrl("reel", reel.id, reel.storagePath, reel.mediaUrl)
                     Card(onClick = { selectedReelIndex = visibleReels.indexOfFirst { it.id == reel.id } },
                         modifier = Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 10.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF171717))) {
@@ -1264,6 +1265,7 @@ private fun ReelFullscreenViewer(
     val context = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
     val reel = reels.getOrNull(index) ?: return
+    val secureMediaUrl = rememberSecureMediaUrl("reel", reel.id, reel.storagePath, reel.mediaUrl)
 
     DisposableEffect(reel.id, currentUid) {
         val likeListener = db.collection("posts").document(reel.id).collection("likes")
@@ -2534,6 +2536,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     var showLikesDialog by remember(post.id) { mutableStateOf(false) }
     var feedNotice by remember(post.id) { mutableStateOf("") }
     val db = remember { FirebaseFirestore.getInstance() }
+    val secureMediaUrl = rememberSecureMediaUrl(
+        if (post.postType == "reel") "reel" else "post", post.id, post.storagePath, post.mediaUrl
+    )
 
     DisposableEffect(post.uid, currentUid) {
         if (post.uid == currentUid) return@DisposableEffect onDispose { }
@@ -2684,7 +2689,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
                 AsyncImage(
-                    model = post.mediaUrl,
+                    model = secureMediaUrl,
                     contentDescription = "Open post photo full screen",
                     modifier = Modifier.fillMaxWidth().wrapContentHeight()
                         .clickable { showPhotoViewer = true },
@@ -2700,7 +2705,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                     AndroidView(
                         factory = { context ->
                             VideoView(context).apply {
-                                setVideoURI(Uri.parse(post.mediaUrl))
+                                setVideoURI(Uri.parse(secureMediaUrl))
                                 setOnPreparedListener { player ->
                                     player.isLooping = true
                                     player.setVolume(0f, 0f)
@@ -2832,7 +2837,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
         ) {
             Box(Modifier.fillMaxSize().background(Color.Black)) {
                 AsyncImage(
-                    model = post.mediaUrl,
+                    model = secureMediaUrl,
                     contentDescription = "Full-screen post photo",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
