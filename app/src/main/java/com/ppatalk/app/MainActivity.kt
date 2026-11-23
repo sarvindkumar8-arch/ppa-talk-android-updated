@@ -2980,6 +2980,14 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var reelAudience by remember { mutableStateOf("Public") }
     var reelLocation by remember { mutableStateOf("") }
     var reelTags by remember { mutableStateOf("") }
+    var reelShareToGroups by remember { mutableStateOf(true) }
+    var reelAiLabel by remember { mutableStateOf(false) }
+    var reelBoost by remember { mutableStateOf(false) }
+    var reelAffiliateLink by remember { mutableStateOf("") }
+    var reelPlaylist by remember { mutableStateOf("") }
+    var reelClosedCaptions by remember { mutableStateOf(true) }
+    var reelSettingsExpanded by remember { mutableStateOf(false) }
+    var reelSettingsNotice by remember { mutableStateOf("") }
     val isReelComposer = initialPicker == "media" || initialPicker == "video"
     val context = LocalContext.current
     var deviceGalleryItems by remember { mutableStateOf<List<DeviceGalleryMedia>>(emptyList()) }
@@ -3546,6 +3554,203 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
     }
+    if (mediaType == "video" && reelStage == "settings") {
+        Dialog(
+            onDismissRequest = { reelStage = "editor" },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { reelStage = "editor" }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back to editor")
+                        }
+                        Text("Reel Settings", modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(48.dp))
+                    }
+                    HorizontalDivider()
+                    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Box(Modifier.size(112.dp, 168.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black),
+                                contentAlignment = Alignment.Center) {
+                                AsyncImage(model = selectedMedia, contentDescription = "Reel thumbnail",
+                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                Icon(Icons.Default.PlayCircleFilled, contentDescription = null, tint = Color.White,
+                                    modifier = Modifier.size(36.dp))
+                            }
+                            OutlinedTextField(value = postText, onValueChange = { postText = it },
+                                modifier = Modifier.weight(1f).heightIn(min = 130.dp),
+                                placeholder = { Text("Describe your reel. You can also add hashtags here.") },
+                                minLines = 4, maxLines = 7)
+                        }
+                        HorizontalDivider()
+                        @Composable
+                        fun SettingRow(emoji: String, title: String, subtitle: String = "", trailing: String = "›", onClick: () -> Unit) {
+                            Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                                    if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(trailing, style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        SettingRow("➦", "Share to groups", if (reelShareToGroups) "On · Relevant suggestions" else "Off",
+                            if (reelShareToGroups) "✓" else "›") { reelShareToGroups = !reelShareToGroups }
+                        SettingRow("⌖", "Location", reelLocation.ifBlank { "Add a location" }) { reelSettingsNotice = "location" }
+                        Row(Modifier.fillMaxWidth().clickable { reelAiLabel = !reelAiLabel }
+                            .padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center) { Text("✧", style = MaterialTheme.typography.titleLarge) }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Add AI Label", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                                Text("Label realistic content made with AI.", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = reelAiLabel, onCheckedChange = { reelAiLabel = it })
+                        }
+                        Row(Modifier.fillMaxWidth().clickable { reelBoost = !reelBoost }
+                            .padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center) { Text("📣", style = MaterialTheme.typography.titleLarge) }
+                            Spacer(Modifier.width(14.dp))
+                            Text("Boost reel", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            Switch(checked = reelBoost, onCheckedChange = { reelBoost = it })
+                        }
+                        SettingRow("▤", "Add to playlist", reelPlaylist.ifBlank { "Choose a playlist" }) { reelSettingsNotice = "playlist" }
+                        SettingRow("▣", "Share to your story", if (reelShareToStory) "On · Story privacy is set to Public" else "Off · Story privacy is set to Public",
+                            if (reelShareToStory) "✓" else "›") { reelShareToStory = !reelShareToStory }
+                        SettingRow("◎", "Instagram", "Sharing as " + displayName + " · Audience is " + reelAudience + ".") { reelSettingsNotice = "instagram" }
+                        SettingRow("文", "Translate your voice with AI", "Reach viewers in more languages.") { reelSettingsNotice = "translate" }
+                        SettingRow("♟", "Tag people", "This also includes Pages · " + reelTags.ifBlank { "Add people" }) { reelSettingsNotice = "tags" }
+                        SettingRow("🛍", "Add affiliate link", reelAffiliateLink.ifBlank { "Add a product link to earn commissions" }) { reelSettingsNotice = "affiliate" }
+                        SettingRow("①", "Add a link + more features", "Some features may require eligibility", "🔒") { reelSettingsNotice = "link" }
+                        SettingRow("⚗", "A/B tests", "Compare different Reel versions") { reelSettingsNotice = "ab" }
+                        SettingRow("▤", "Monetization", "Your profile can earn") { reelSettingsNotice = "monetization" }
+                        HorizontalDivider()
+                        SettingRow("🌐", "Who can see this?", reelAudience) {
+                            reelAudience = when (reelAudience) { "Public" -> "Friends"; "Friends" -> "Private"; else -> "Public" }
+                        }
+                        SettingRow("◷", "Scheduling options", "Post now. You can not schedule this post.") { reelSettingsNotice = "schedule" }
+                        SettingRow("©", "Copyright check", "Check your Reel for potential copyright issues") { reelSettingsNotice = "copyright" }
+                        SettingRow("CC", "Closed captions", if (reelClosedCaptions) "On" else "Off",
+                            if (reelClosedCaptions) "✓" else "›") { reelClosedCaptions = !reelClosedCaptions }
+                        SettingRow("⌄", "See more settings", if (reelSettingsExpanded) "Hide additional settings" else "More publishing options",
+                            if (reelSettingsExpanded) "⌃" else "⌄") { reelSettingsExpanded = !reelSettingsExpanded }
+                        if (reelSettingsExpanded) {
+                            SettingRow("🔒", "Allow remixing", "Other people can remix your Reel") { reelSettingsNotice = "remix" }
+                            SettingRow("💬", "Allow comments", "Comments are enabled") { reelSettingsNotice = "comments" }
+                            SettingRow("⬇", "Allow downloads", "Control whether viewers can download") { reelSettingsNotice = "downloads" }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+                    HorizontalDivider()
+                    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IconButton(onClick = { reelSettingsNotice = "draft" },
+                            modifier = Modifier.size(54.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))) {
+                            Icon(Icons.Default.SaveAlt, contentDescription = "Save draft")
+                        }
+                        Button(onClick = {
+                            busy = true
+                            reelSettingsNotice = ""
+                            val db = FirebaseFirestore.getInstance()
+                            fun saveReel(mediaUrl: String) {
+                                val post = hashMapOf(
+                                    "uid" to uid, "authorName" to displayName, "text" to postText.trim(),
+                                    "mediaUrl" to mediaUrl, "mediaType" to "video", "postType" to "reel",
+                                    "audience" to reelAudience.lowercase(), "location" to reelLocation.trim(),
+                                    "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
+                                    "affiliateLink" to reelAffiliateLink.trim(), "playlist" to reelPlaylist,
+                                    "shareToGroups" to reelShareToGroups, "aiLabel" to reelAiLabel,
+                                    "boostRequested" to reelBoost, "closedCaptions" to reelClosedCaptions,
+                                    "overlayText" to reelOverlayText, "sticker" to reelSticker, "effect" to reelEffect,
+                                    "originalAudioMuted" to videoMuted,
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )
+                                db.collection("posts").add(post).addOnSuccessListener {
+                                    if (reelShareToStory) {
+                                        val story = hashMapOf(
+                                            "uid" to uid, "authorName" to displayName, "mediaUrl" to mediaUrl,
+                                            "mediaType" to "video",
+                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                            "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
+                                        )
+                                        db.collection("stories").add(story)
+                                    }
+                                    busy = false
+                                    success = true
+                                    message = "Your Reel was published!"
+                                    selectedMedia = null
+                                    mediaType = ""
+                                    postText = ""
+                                    onPublished()
+                                    if (initialPicker == "media" || initialPicker == "video") onClose()
+                                }.addOnFailureListener { ex ->
+                                    busy = false
+                                    reelSettingsNotice = ex.localizedMessage ?: "Reel publish failed."
+                                }
+                            }
+                            val uri = selectedMedia
+                            if (uri == null) {
+                                busy = false
+                                reelSettingsNotice = "Select a video before publishing."
+                            } else {
+                                val mediaRef = FirebaseStorage.getInstance().reference
+                                    .child("reels/" + uid + "/" + System.currentTimeMillis() + ".mp4")
+                                mediaRef.putFile(uri).addOnSuccessListener {
+                                    mediaRef.downloadUrl.addOnSuccessListener { url -> saveReel(url.toString()) }
+                                        .addOnFailureListener { ex ->
+                                            busy = false
+                                            reelSettingsNotice = ex.localizedMessage ?: "Could not get video URL."
+                                        }
+                                }.addOnFailureListener { ex ->
+                                    busy = false
+                                    reelSettingsNotice = ex.localizedMessage ?: "Video upload failed."
+                                }
+                            }
+                        }, enabled = !busy && selectedMedia != null && postText.trim().length <= 5000,
+                            modifier = Modifier.weight(1f).height(54.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0866FF)),
+                            shape = RoundedCornerShape(14.dp)) {
+                            Text(if (busy) "Uploading..." else "Share now", color = Color.White,
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (reelSettingsNotice.isNotBlank()) {
+                        AlertDialog(
+                            onDismissRequest = { reelSettingsNotice = "" },
+                            title = { Text(when (reelSettingsNotice) {
+                                "location" -> "Add location"; "tags" -> "Tag people"; "affiliate" -> "Add affiliate link"
+                                "playlist" -> "Add to playlist"; "draft" -> "Draft saved"; else -> "Reel setting"
+                            }) },
+                            text = {
+                                when (reelSettingsNotice) {
+                                    "location" -> OutlinedTextField(value = reelLocation, onValueChange = { reelLocation = it }, label = { Text("Location") })
+                                    "tags" -> OutlinedTextField(value = reelTags, onValueChange = { reelTags = it }, label = { Text("Usernames, comma separated") })
+                                    "affiliate" -> OutlinedTextField(value = reelAffiliateLink, onValueChange = { reelAffiliateLink = it }, label = { Text("Product URL") })
+                                    "playlist" -> OutlinedTextField(value = reelPlaylist, onValueChange = { reelPlaylist = it }, label = { Text("Playlist name") })
+                                    "draft" -> Text("Your Reel draft details are retained while this screen remains open.")
+                                    else -> Text("This option is shown in the settings UI. Its external service or eligibility workflow is not connected yet.")
+                                }
+                            },
+                            confirmButton = { TextButton(onClick = { reelSettingsNotice = "" }) { Text("Done") } }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     if (selectedMedia != null && mediaType == "video" && reelStage == "editor") {
         var editorPlayer by remember(selectedMedia) { mutableStateOf<MediaPlayer?>(null) }
         var editorPlaying by remember(selectedMedia) { mutableStateOf(true) }
