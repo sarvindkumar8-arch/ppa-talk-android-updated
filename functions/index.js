@@ -560,21 +560,27 @@ exports.getSecureMediaUrl = onCall({
   if (collection === "posts") {
     const audience = typeof record.audience === "string" ? record.audience.toLowerCase() : "public";
     canView = canView || (audience === "public" && visibility === "public");
-    if (!canView && audience === "friends") {
-      const [friendEntry, reverseFriendEntry] = await Promise.all([
+    if (!canView && ["public", "friends"].includes(audience)) {
+      const pairIds = [ownerUid + "_" + viewerUid, viewerUid + "_" + ownerUid];
+      const [friendEntry, requestSnapshots] = await Promise.all([
         db.collection("friends").doc(ownerUid).collection("list").doc(viewerUid).get(),
-        db.collection("friends").doc(viewerUid).collection("list").doc(ownerUid).get()
+        Promise.all(pairIds.map((id) => db.collection("friendRequests").doc(id).get()))
       ]);
-      canView = friendEntry.exists && reverseFriendEntry.exists;
+      canView = friendEntry.exists && requestSnapshots.some((snapshot) =>
+        snapshot.exists && snapshot.get("status") === "accepted"
+      );
     }
   } else {
     canView = canView || visibility === "public";
     if (!canView) {
-      const [friendEntry, reverseFriendEntry] = await Promise.all([
+      const pairIds = [ownerUid + "_" + viewerUid, viewerUid + "_" + ownerUid];
+      const [friendEntry, requestSnapshots] = await Promise.all([
         db.collection("friends").doc(ownerUid).collection("list").doc(viewerUid).get(),
-        db.collection("friends").doc(viewerUid).collection("list").doc(ownerUid).get()
+        Promise.all(pairIds.map((id) => db.collection("friendRequests").doc(id).get()))
       ]);
-      canView = friendEntry.exists && reverseFriendEntry.exists;
+      canView = friendEntry.exists && requestSnapshots.some((snapshot) =>
+        snapshot.exists && snapshot.get("status") === "accepted"
+      );
     }
     const expiresAt = record.expiresAt?.toMillis ? record.expiresAt.toMillis() : 0;
     if (expiresAt && expiresAt <= Date.now()) {
