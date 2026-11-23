@@ -1118,13 +1118,20 @@ fun ReelsScreen(
     DisposableEffect(currentUid) {
         val db = FirebaseFirestore.getInstance()
         val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
+        val ownerAccessModes = mutableMapOf<String, String>()
         val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerAccess ->
             (ownerRegistrations.keys - ownerAccess.keys).forEach { ownerUid ->
                 ownerRegistrations.remove(ownerUid)?.remove()
+                ownerAccessModes.remove(ownerUid)
                 reels = reels.filterNot { it.uid == ownerUid }
             }
             ownerAccess.forEach { (ownerUid, accessMode) ->
+                if (ownerAccessModes[ownerUid] != null && ownerAccessModes[ownerUid] != accessMode) {
+                    ownerRegistrations.remove(ownerUid)?.remove()
+                    reels = reels.filterNot { it.uid == ownerUid }
+                }
                 if (ownerUid !in ownerRegistrations) {
+                    ownerAccessModes[ownerUid] = accessMode;
                     val ownerQuery = db.collection("posts").whereEqualTo("uid", ownerUid)
                     val scopedQuery = when (accessMode) {
                         "owner" -> ownerQuery
@@ -1350,13 +1357,20 @@ fun HomeFeed(
     DisposableEffect(currentUid) {
         val db = FirebaseFirestore.getInstance()
         val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
+        val ownerAccessModes = mutableMapOf<String, String>()
         val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerAccess ->
             (ownerRegistrations.keys - ownerAccess.keys).forEach { ownerUid ->
                 ownerRegistrations.remove(ownerUid)?.remove()
+                ownerAccessModes.remove(ownerUid)
                 posts = posts.filterNot { it.uid == ownerUid }
             }
             ownerAccess.forEach { (ownerUid, accessMode) ->
+                if (ownerAccessModes[ownerUid] != null && ownerAccessModes[ownerUid] != accessMode) {
+                    ownerRegistrations.remove(ownerUid)?.remove()
+                    posts = posts.filterNot { it.uid == ownerUid }
+                }
                 if (ownerUid !in ownerRegistrations) {
+                    ownerAccessModes[ownerUid] = accessMode;
                     val ownerQuery = db.collection("posts").whereEqualTo("uid", ownerUid)
                     val scopedQuery = when (accessMode) {
                         "owner" -> ownerQuery
@@ -1526,6 +1540,8 @@ fun StoriesStrip(uid: String, displayName: String) {
                 storyOwnerRegistrations.remove(ownerUid)?.remove()
                 storyResults.remove(ownerUid)
             }
+            stories = storyResults.values.flatten()
+                .sortedByDescending { (it["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L }
             ownerAccess.keys.forEach { ownerUid ->
                 if (ownerUid !in storyOwnerRegistrations) {
                     storyOwnerRegistrations[ownerUid] = db.collection("stories")
