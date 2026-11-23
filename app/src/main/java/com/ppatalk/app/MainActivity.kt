@@ -3552,6 +3552,19 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         var editorProgress by remember(selectedMedia) { mutableFloatStateOf(0f) }
         var editorDuration by remember(selectedMedia) { mutableIntStateOf(0) }
         var editorToolPanel by remember { mutableStateOf("Edit") }
+        var selectedMusicUri by remember(selectedMedia) { mutableStateOf<Uri?>(null) }
+        var selectedMusicName by remember(selectedMedia) { mutableStateOf("") }
+        var trimStart by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var trimEnd by remember(selectedMedia) { mutableFloatStateOf(1f) }
+        var reelSpeed by remember(selectedMedia) { mutableFloatStateOf(1f) }
+        var textColor by remember(selectedMedia) { mutableStateOf(Color.White) }
+        var textStyleIndex by remember(selectedMedia) { mutableIntStateOf(0) }
+        var stickerCategory by remember { mutableStateOf("Emoji") }
+        val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            selectedMusicUri = uri
+            selectedMusicName = uri?.lastPathSegment?.substringAfterLast('/') ?: ""
+            if (uri != null) runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        }
         Dialog(
             onDismissRequest = {
                 selectedMedia = null
@@ -3570,9 +3583,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             if (initialPicker == "media") onClose()
                         }) { Text("Cancel", color = Color.White, style = MaterialTheme.typography.titleMedium) }
                         Text("Edit Reel", color = Color.White, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { reelStage = "settings" }) {
-                            Text("Done", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        }
+                        Spacer(Modifier.width(64.dp))
                     }
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         AndroidView(
@@ -3598,8 +3609,10 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                         if (reelOverlayText.isNotBlank() || reelSticker.isNotBlank()) {
                             Column(Modifier.align(Alignment.Center).padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally) {
-                                if (reelOverlayText.isNotBlank()) Text(reelOverlayText, color = Color.White,
-                                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                                if (reelOverlayText.isNotBlank()) Text(reelOverlayText, color = textColor,
+                                    fontWeight = if (textStyleIndex == 0) FontWeight.Bold else FontWeight.Medium,
+                                    fontStyle = if (textStyleIndex == 1) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+                                    style = MaterialTheme.typography.headlineSmall)
                                 if (reelSticker.isNotBlank()) Text(reelSticker, style = MaterialTheme.typography.displayMedium)
                             }
                         }
@@ -3659,33 +3672,113 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             }
                         }
                     }
-                    when (editorToolPanel) {
-                        "Audio" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = videoMuted, onCheckedChange = {
-                                videoMuted = it
-                                editorPlayer?.setVolume(if (it) 0f else 1f, if (it) 0f else 1f)
-                            })
-                            Text("Mute original audio", color = Color.White)
-                            Spacer(Modifier.weight(1f))
-                            Text("Music library coming soon", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
-                        }
-                        "Edit" -> Text("Drag the timeline to preview your clip. Advanced trim and speed tools are not yet enabled.",
-                            color = Color.LightGray, style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(vertical = 8.dp))
-                        "Effects" -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("Original", "Warm", "Cool", "B&W", "Vivid").forEach { effect ->
-                                FilterChip(selected = reelEffect == effect, onClick = { reelEffect = effect },
-                                    label = { Text(effect) })
+                    Surface(Modifier.fillMaxWidth().weight(0.62f, fill = false), color = Color(0xFF151515),
+                        shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (editorToolPanel) {
+                                "Audio" -> {
+                                    Text("Audio", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Default.MusicNote, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(if (selectedMusicUri == null) "Add audio from device" else "Change audio")
+                                    }
+                                    if (selectedMusicName.isNotBlank()) Text("Selected: $selectedMusicName", color = Color.White)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(checked = videoMuted, onCheckedChange = {
+                                            videoMuted = it
+                                            editorPlayer?.setVolume(if (it) 0f else 1f, if (it) 0f else 1f)
+                                        })
+                                        Text("Mute original video audio", color = Color.White)
+                                    }
+                                    Text("Music selection is saved as an edit choice; audio mixing into the exported video is not yet enabled.",
+                                        color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                "Edit" -> {
+                                    Text("Trim clip", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Start " + (trimStart * 100).toInt() + "%  •  End " + (trimEnd * 100).toInt() + "%",
+                                        color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                    Text("Start point", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                    Slider(value = trimStart, onValueChange = { trimStart = it.coerceAtMost(trimEnd - 0.05f) },
+                                        valueRange = 0f..0.95f)
+                                    Text("End point", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                    Slider(value = trimEnd, onValueChange = { trimEnd = it.coerceAtLeast(trimStart + 0.05f) },
+                                        valueRange = 0.05f..1f)
+                                    Text("Speed", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf(0.5f, 1f, 1.5f, 2f).forEach { speed ->
+                                            FilterChip(selected = reelSpeed == speed, onClick = { reelSpeed = speed },
+                                                label = { Text(speed.toString() + "x") })
+                                        }
+                                    }
+                                    Text("Trim and speed controls are selection previews; final video rendering is not connected yet.",
+                                        color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                "Effects" -> {
+                                    Text("Choose an effect", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf("Original", "Warm", "Cool", "B&W", "Vivid", "Vintage", "Fade", "Glow").forEach { effect ->
+                                            FilterChip(selected = reelEffect == effect, onClick = { reelEffect = effect },
+                                                label = { Text(effect) })
+                                        }
+                                    }
+                                    Text("Selected: $reelEffect", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                "Text" -> {
+                                    Text("Add text", color = Color.White, fontWeight = FontWeight.Bold)
+                                    OutlinedTextField(value = reelOverlayText, onValueChange = { reelOverlayText = it },
+                                        modifier = Modifier.fillMaxWidth(), label = { Text("Type something...") },
+                                        colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                            focusedLabelColor = Color.LightGray, unfocusedLabelColor = Color.LightGray))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf(Color.White, Color.Yellow, Color.Cyan, Color(0xFFFF6B6B)).forEach { color ->
+                                            Box(Modifier.size(30.dp).clip(CircleShape).background(color)
+                                                .border(if (textColor == color) 3.dp else 1.dp, Color.White, CircleShape)
+                                                .clickable { textColor = color })
+                                        }
+                                        listOf("Bold", "Italic", "Outline").forEachIndexed { index, style ->
+                                            FilterChip(selected = textStyleIndex == index, onClick = { textStyleIndex = index },
+                                                label = { Text(style) })
+                                        }
+                                    }
+                                }
+                                "Stickers" -> {
+                                    Text("Stickers", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf("Emoji", "Reactions", "Love", "Celebration", "Objects").forEach { category ->
+                                            FilterChip(selected = stickerCategory == category,
+                                                onClick = { stickerCategory = category }, label = { Text(category) })
+                                        }
+                                    }
+                                    val stickers = when (stickerCategory) {
+                                        "Reactions" -> listOf("👍","👏","🙏","😂","😍","😮","😢","🔥","💯","❤️")
+                                        "Love" -> listOf("❤️","💕","💖","💘","💝","💞","💗","💓")
+                                        "Celebration" -> listOf("🎉","🎂","🎊","🥳","🎈","✨","🏆","🌟")
+                                        "Objects" -> listOf("🎧","🎸","⚽","📱","🚗","☕","🌹","🎁")
+                                        else -> listOf("😀","😂","🥰","😍","😎","🤔","😜","😭","🔥","👏","🙏","💯")
+                                    }
+                                    LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.height(112.dp)) {
+                                        items(stickers.size) { index ->
+                                            Text(stickers[index], modifier = Modifier.fillMaxWidth().clickable {
+                                                reelSticker = stickers[index]
+                                            }.padding(6.dp), style = MaterialTheme.typography.headlineSmall,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                        }
+                                    }
+                                    if (reelSticker.isNotBlank()) Text("Selected: $reelSticker", color = Color.White)
+                                }
                             }
                         }
-                        "Text" -> OutlinedTextField(value = reelOverlayText, onValueChange = { reelOverlayText = it },
-                            modifier = Modifier.fillMaxWidth(), label = { Text("Add text to video") })
-                        "Stickers" -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("❤️", "😂", "🔥", "😍", "👏", "🎉").forEach { sticker ->
-                                AssistChip(onClick = { reelSticker = sticker }, label = { Text(sticker) })
-                            }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = { reelStage = "settings" },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1685FF)),
+                            shape = CircleShape, contentPadding = PaddingValues(horizontal = 22.dp, vertical = 14.dp)) {
+                            Text("Next", color = Color.White, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.ArrowForward, contentDescription = "Next to post settings", tint = Color.White)
                         }
                     }
                 }
