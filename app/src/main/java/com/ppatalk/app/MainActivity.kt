@@ -1074,6 +1074,29 @@ private fun acceptFriendRequestSafely(
 
 data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
+
+private fun observeVisibleContentOwners(
+    db: FirebaseFirestore,
+    currentUid: String,
+    onOwnersChanged: (Set<String>) -> Unit
+): List<com.google.firebase.firestore.ListenerRegistration> {
+    var friendUids: Set<String> = setOf(currentUid)
+    var publicUids: Set<String> = emptySet()
+    fun publish() = onOwnersChanged(friendUids + publicUids)
+    val friendsRegistration = db.collection("friends").document(currentUid)
+        .collection("list").addSnapshotListener { snapshot, _ ->
+            friendUids = setOf(currentUid) + snapshot?.documents.orEmpty().map { it.id }
+            publish()
+        }
+    val publicRegistration = db.collection("profileDirectory")
+        .whereEqualTo("profileVisibility", "public")
+        .addSnapshotListener { snapshot, _ ->
+            publicUids = snapshot?.documents.orEmpty().map { it.id }.toSet()
+            publish()
+        }
+    publish()
+    return listOf(friendsRegistration, publicRegistration)
+}
 @Composable
 fun ReelsScreen(
     currentUid: String,
@@ -1086,28 +1109,45 @@ fun ReelsScreen(
     var selectedReelIndex by remember { mutableIntStateOf(-1) }
     var hiddenReelIds by remember { mutableStateOf(setOf<String>()) }
 
-    DisposableEffect(Unit) {
-        val registration = FirebaseFirestore.getInstance().collection("posts")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, exception ->
-                if (exception != null) {
-                    error = exception.localizedMessage ?: "Reels load nahi ho paayi."
-                    loading = false
-                } else if (snapshot != null) {
-                    reels = snapshot.documents.mapNotNull { doc ->
-                        val mediaType = doc.getString("mediaType").orEmpty()
-                        val postType = doc.getString("postType").orEmpty()
-                        if (mediaType != "video" && postType != "reel") return@mapNotNull null
-                        FeedPost(doc.id, doc.getString("uid").orEmpty(),
-                            doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("text").orEmpty(), doc.getTimestamp("createdAt")?.toDate(),
-                            doc.getString("mediaUrl").orEmpty(), mediaType, postType)
-                    }
-                    loading = false
-                    error = ""
+    DisposableEffect(currentUid) {
+        val db = FirebaseFirestore.getInstance()
+        val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
+        val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerUids ->
+            (ownerRegistrations.keys - ownerUids).forEach { ownerUid ->
+                ownerRegistrations.remove(ownerUid)?.remove()
+                reels = reels.filterNot { it.uid == ownerUid }
+            }
+            ownerUids.forEach { ownerUid ->
+                if (ownerUid !in ownerRegistrations) {
+                    ownerRegistrations[ownerUid] = db.collection("posts")
+                        .whereEqualTo("uid", ownerUid)
+                        .addSnapshotListener { snapshot, exception ->
+                            if (exception != null) {
+                                error = exception.localizedMessage ?: "Reels load nahi ho paayi."
+                            } else if (snapshot != null) {
+                                val updated = snapshot.documents.mapNotNull { doc ->
+                                    val mediaType = doc.getString("mediaType").orEmpty()
+                                    val postType = doc.getString("postType").orEmpty()
+                                    if (mediaType != "video" && postType != "reel") return@mapNotNull null
+                                    FeedPost(doc.id, doc.getString("uid").orEmpty(),
+                                        doc.getString("authorName") ?: "PPA Talk user",
+                                        doc.getString("text").orEmpty(), doc.getTimestamp("createdAt")?.toDate(),
+                                        doc.getString("mediaUrl").orEmpty(), mediaType, postType)
+                                }
+                                reels = (reels.filterNot { it.uid == ownerUid } + updated)
+                                    .sortedByDescending { it.createdAt?.time ?: 0L }
+                                loading = false
+                                error = ""
+                            }
+                        }
                 }
             }
-        onDispose { registration.remove() }
+            loading = ownerRegistrations.isEmpty()
+        }
+        onDispose {
+            audienceRegistrations.forEach { it.remove() }
+            ownerRegistrations.values.forEach { it.remove() }
+        }
     }
 
     val visibleReels = reels.filterNot { it.id in hiddenReelIds }
@@ -1297,26 +1337,43 @@ fun HomeFeed(
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
     var hiddenPostIds by remember { mutableStateOf(setOf<String>()) }
-    DisposableEffect(Unit) {
-        val registration = FirebaseFirestore.getInstance().collection("posts")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, exception ->
-                if (exception != null) {
-                    error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
-                    loading = false
-                } else if (snapshot != null) {
-                    posts = snapshot.documents.map { doc ->
-                        FeedPost(doc.id, doc.getString("uid") ?: "",
-                            doc.getString("authorName") ?: "PPA Talk user",
-                            doc.getString("text") ?: "",
-                            doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
-                            doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
-                    }
-                    loading = false
-                    error = ""
+    DisposableEffect(currentUid) {
+        val db = FirebaseFirestore.getInstance()
+        val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
+        val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerUids ->
+            (ownerRegistrations.keys - ownerUids).forEach { ownerUid ->
+                ownerRegistrations.remove(ownerUid)?.remove()
+                posts = posts.filterNot { it.uid == ownerUid }
+            }
+            ownerUids.forEach { ownerUid ->
+                if (ownerUid !in ownerRegistrations) {
+                    ownerRegistrations[ownerUid] = db.collection("posts")
+                        .whereEqualTo("uid", ownerUid)
+                        .addSnapshotListener { snapshot, exception ->
+                            if (exception != null) {
+                                error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
+                            } else if (snapshot != null) {
+                                val updated = snapshot.documents.map { doc ->
+                                    FeedPost(doc.id, doc.getString("uid") ?: "",
+                                        doc.getString("authorName") ?: "PPA Talk user",
+                                        doc.getString("text") ?: "",
+                                        doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
+                                        doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
+                                }
+                                posts = (posts.filterNot { it.uid == ownerUid } + updated)
+                                    .sortedByDescending { it.createdAt?.time ?: 0L }
+                                loading = false
+                                error = ""
+                            }
+                        }
                 }
             }
-        onDispose { registration.remove() }
+            loading = ownerRegistrations.isEmpty()
+        }
+        onDispose {
+            audienceRegistrations.forEach { it.remove() }
+            ownerRegistrations.values.forEach { it.remove() }
+        }
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         item {
