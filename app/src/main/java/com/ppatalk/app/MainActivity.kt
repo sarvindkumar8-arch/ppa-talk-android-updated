@@ -2927,6 +2927,16 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
     var showReelCreator by remember { mutableStateOf(false) }
     var videoMuted by remember { mutableStateOf(false) }
     var videoPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var reelStage by remember { mutableStateOf("editor") }
+    var reelTool by remember { mutableStateOf("Edit") }
+    var reelEffect by remember { mutableStateOf("Original") }
+    var reelOverlayText by remember { mutableStateOf("") }
+    var reelSticker by remember { mutableStateOf("") }
+    var reelShareToStory by remember { mutableStateOf(false) }
+    var reelAudience by remember { mutableStateOf("Public") }
+    var reelLocation by remember { mutableStateOf("") }
+    var reelTags by remember { mutableStateOf("") }
+    val isReelComposer = initialPicker == "media" || initialPicker == "video"
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedMedia = uri
@@ -2971,13 +2981,20 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
             }) {
                 Icon(Icons.Default.Close, contentDescription = "Close")
             }
-            Text("New post", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            TextButton(onClick = { showReelCreator = true }, enabled = !busy) {
+            Text(if (mediaType == "video" || isReelComposer) {
+                if (reelStage == "settings") "Reel Settings" else "Create Reel"
+            } else "New post", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            if (mediaType == "video" && reelStage == "settings") {
+                TextButton(onClick = { reelStage = "editor" }) { Text("Back") }
+            } else TextButton(onClick = { showReelCreator = true }, enabled = !busy) {
                 Icon(Icons.Default.PlayCircle, contentDescription = "Create Reel", tint = RoyalBlue)
                 Text("Reel", color = RoyalBlue)
             }
             TextButton(enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
-                onClick = { /* Publish using the existing button below. */ }) { Text("Next", color = if (postText.isNotBlank() || selectedMedia != null) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant) }
+                onClick = {
+                    if (mediaType == "video") reelStage = "settings"
+                    else message = "Add media or caption, then Share."
+                }) { Text(if (mediaType == "video" && reelStage == "editor") "Next" else "Share", color = RoyalBlue) }
         }
         HorizontalDivider()
         Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2998,7 +3015,46 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
             placeholder = { Text("What's on your mind?", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             maxLines = 12, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color.Transparent, focusedBorderColor = Color.Transparent)
         )
-        selectedMedia?.let { uri ->
+        if (mediaType == "video" && reelStage == "settings") {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Describe your reel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                OutlinedTextField(value = postText, onValueChange = { postText = it },
+                    modifier = Modifier.fillMaxWidth(), placeholder = { Text("Write a caption and add hashtags...") },
+                    minLines = 3, maxLines = 6)
+                Text("Cover", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(width = 76.dp, height = 112.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black),
+                        contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.PlayCircleFilled, contentDescription = "Reel cover preview", tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("First video frame will be used as the cover.")
+                        Text("Custom cover editing can be added in a later update.", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                HorizontalDivider()
+                Text("Audience", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Public", "Friends", "Private").forEach { audience ->
+                        FilterChip(selected = reelAudience == audience, onClick = { reelAudience = audience },
+                            label = { Text(audience) })
+                    }
+                }
+                OutlinedTextField(value = reelLocation, onValueChange = { reelLocation = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Location (optional)") })
+                OutlinedTextField(value = reelTags, onValueChange = { reelTags = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Tag people (usernames, optional)") })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = reelShareToStory, onCheckedChange = { reelShareToStory = it })
+                    Text("Also share to my Story")
+                }
+                Text("More settings", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Your Reel will appear in your profile and the Reels feed.", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else selectedMedia?.let { uri ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(if (mediaType == "video") "Video selected" else "Photo preview", color = RoyalBlue,
@@ -3108,7 +3164,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Text("Video editing", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                Text("Video editor", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(9f / 16f)
                     .clip(RoundedCornerShape(16.dp)).background(Color.Black)) {
@@ -3131,20 +3187,66 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        videoMuted = !videoMuted
-                        videoPlayer?.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
-                    }) {
-                        Icon(if (videoMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (videoMuted) "Unmute" else "Mute")
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly) {
+                    listOf("Audio", "Edit", "Effects", "Text", "Stickers").forEach { tool ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(64.dp).clickable { reelTool = tool }) {
+                            Icon(when (tool) {
+                                "Audio" -> Icons.Default.MusicNote
+                                "Edit" -> Icons.Default.ContentCut
+                                "Effects" -> Icons.Default.AutoAwesome
+                                "Text" -> Icons.Default.TextFields
+                                else -> Icons.Default.EmojiEmotions
+                            }, contentDescription = tool,
+                                tint = if (reelTool == tool) RoyalBlue else MaterialTheme.colorScheme.onSurface)
+                            Text(tool, style = MaterialTheme.typography.labelSmall,
+                                color = if (reelTool == tool) RoyalBlue else MaterialTheme.colorScheme.onSurface)
+                        }
                     }
-                    Text("Preview your video and add a caption above.", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("Video selected. Add a caption, preview the clip, then share it as a Reel.",
+                when (reelTool) {
+                    "Audio" -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Audio", fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = videoMuted, onCheckedChange = {
+                                videoMuted = it
+                                videoPlayer?.setVolume(if (it) 0f else 1f, if (it) 0f else 1f)
+                            })
+                            Text("Mute original video audio")
+                        }
+                        Text("Music library and licensed tracks are not connected yet.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    "Edit" -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Video preview and original clip", fontWeight = FontWeight.SemiBold)
+                        Text("The selected video is kept intact in this version. Clip trimming and speed controls are not yet available.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    "Effects" -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Choose an effect style", fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Original", "Warm", "Cool", "B&W", "Vivid").forEach { effect ->
+                                FilterChip(selected = reelEffect == effect, onClick = { reelEffect = effect }, label = { Text(effect) })
+                            }
+                        }
+                        Text("Effect selection is a preview preference; export processing is not enabled yet.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    "Text" -> OutlinedTextField(value = reelOverlayText, onValueChange = { reelOverlayText = it },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        label = { Text("Text overlay") }, placeholder = { Text("Add text to your Reel") })
+                    "Stickers" -> Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("❤️", "😂", "🔥", "😍", "👏", "🎉").forEach { sticker ->
+                            AssistChip(onClick = { reelSticker = sticker }, label = { Text(sticker) })
+                        }
+                    }
+                }
+                if (reelOverlayText.isNotBlank() || reelSticker.isNotBlank()) {
+                    Text("Overlay preview: $reelOverlayText $reelSticker", modifier = Modifier.padding(horizontal = 16.dp),
+                        color = RoyalBlue, fontWeight = FontWeight.SemiBold)
+                }
+                Text("Tap Next to add caption, cover and sharing settings.",
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -3181,10 +3283,26 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                         "mediaUrl" to mediaUrl,
                         "mediaType" to mediaType,
                         "postType" to if (mediaType == "video") "reel" else "post",
+                        "audience" to if (mediaType == "video") reelAudience.lowercase() else "public",
+                        "location" to reelLocation.trim(),
+                        "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
+                        "overlayText" to reelOverlayText,
+                        "sticker" to reelSticker,
+                        "effect" to reelEffect,
+                        "originalAudioMuted" to videoMuted,
                         "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                     )
                     db.collection("posts").add(post)
                         .addOnSuccessListener {
+                            if (mediaType == "video" && reelShareToStory) {
+                                val story = hashMapOf(
+                                    "uid" to uid, "authorName" to displayName,
+                                    "mediaUrl" to mediaUrl, "mediaType" to "video",
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                    "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
+                                )
+                                db.collection("stories").add(story)
+                            }
                             busy = false
                             postText = ""
                             selectedMedia = null
