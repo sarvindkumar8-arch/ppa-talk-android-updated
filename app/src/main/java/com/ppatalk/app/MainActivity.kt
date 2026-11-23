@@ -148,6 +148,41 @@ private fun firebaseStorageObjectPath(value: String): String? {
     return runCatching { Uri.decode(segments[objectIndex + 1]) }.getOrNull()
 }
 
+@Composable
+private fun rememberSecureMediaUrl(
+    mediaType: String,
+    documentId: String,
+    storagePath: String,
+    legacyUrl: String
+): String {
+    var resolvedUrl by remember(mediaType, documentId, storagePath, legacyUrl) {
+        mutableStateOf(legacyUrl)
+    }
+    LaunchedEffect(mediaType, documentId, storagePath) {
+        if (documentId.isBlank() || storagePath.isBlank()) {
+            resolvedUrl = legacyUrl
+        } else {
+            FirebaseFunctions.getInstance("asia-south1")
+                .getHttpsCallable("getSecureMediaUrl")
+                .call(mapOf(
+                    "mediaType" to mediaType,
+                    "documentId" to documentId,
+                    "objectPath" to storagePath
+                ))
+                .addOnSuccessListener { result ->
+                    val data = result.data as? Map<*, *>
+                    val secureUrl = data?.get("url") as? String
+                    if (!secureUrl.isNullOrBlank()) resolvedUrl = secureUrl
+                }
+                .addOnFailureListener {
+                    // Keep the existing URL during the staged migration; direct reads
+                    // are not disabled until every media surface uses this callable.
+                }
+        }
+    }
+    return resolvedUrl
+}
+
 class MainActivity : ComponentActivity() {
     private fun createIncomingCallNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1072,7 +1107,7 @@ private fun acceptFriendRequestSafely(
     }.addOnFailureListener { onResult(false, it.localizedMessage ?: "Could not load your directory entry.") }
 }
 
-data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post")
+data class FeedPost(val id: String, val uid: String, val authorName: String, val text: String, val createdAt: Date?, val mediaUrl: String = "", val mediaType: String = "", val postType: String = "post", val storagePath: String = "")
 data class FeedComment(val id: String, val uid: String, val authorName: String, val text: String, val parentId: String, val createdAt: Date?)
 
 private fun observeVisibleContentOwners(
@@ -1149,7 +1184,7 @@ fun ReelsScreen(
                                     FeedPost(doc.id, doc.getString("uid").orEmpty(),
                                         doc.getString("authorName") ?: "PPA Talk user",
                                         doc.getString("text").orEmpty(), doc.getTimestamp("createdAt")?.toDate(),
-                                        doc.getString("mediaUrl").orEmpty(), mediaType, postType)
+                                        doc.getString("mediaUrl").orEmpty(), mediaType, postType, doc.getString("storagePath").orEmpty())
                                 }
                                 reels = (reels.filterNot { it.uid == ownerUid } + updated)
                                     .sortedByDescending { it.createdAt?.time ?: 0L }
@@ -1386,7 +1421,7 @@ fun HomeFeed(
                                         doc.getString("authorName") ?: "PPA Talk user",
                                         doc.getString("text") ?: "",
                                         doc.getTimestamp("createdAt")?.toDate(), doc.getString("mediaUrl") ?: "",
-                                        doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post")
+                                        doc.getString("mediaType") ?: "", doc.getString("postType") ?: "post", doc.getString("storagePath").orEmpty())
                                 }
                                 posts = (posts.filterNot { it.uid == ownerUid } + updated)
                                     .sortedByDescending { it.createdAt?.time ?: 0L }
