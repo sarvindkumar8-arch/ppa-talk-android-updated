@@ -74,6 +74,15 @@ async function seedData() {
       uid: "private-user", authorName: "Private User", text: "Private post",
       mediaUrl: "", mediaType: "", postType: "post", audience: "private"
     });
+    await setDoc(doc(db, "posts/private-post/comments/private-comment"), {
+      uid: "private-user", text: "Private comment", parentId: "private-post"
+    });
+    await setDoc(doc(db, "posts/friends-post/comments/friends-comment"), {
+      uid: "private-user", text: "Friends comment", parentId: "friends-post"
+    });
+    await setDoc(doc(db, "posts/private-post/likes/stranger-user"), {
+      uid: "stranger-user", reaction: "❤️"
+    });
     await setDoc(doc(db, "stories/private-story"), {
       uid: "private-user", authorName: "Private User",
       mediaUrl: "https://example.test/story.jpg", mediaType: "image",
@@ -134,6 +143,22 @@ async function run() {
     ["Post owner cannot change audience to an unsupported value", async () => {
       const db = testEnv.authenticatedContext("public-user").firestore();
       await assertFails(updateDoc(doc(db, "posts/public-post"), { audience: "everyone" }));
+    }],
+    ["Non-friend cannot read comments on a private post", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "posts/private-post/comments/private-comment")));
+    }],
+    ["Private post owner can read their comments", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "posts/private-post/comments/private-comment")));
+    }],
+    ["Accepted friend can read comments on a friends-only post", async () => {
+      const db = testEnv.authenticatedContext("friend-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "posts/friends-post/comments/friends-comment")));
+    }],
+    ["Non-friend cannot delete a reaction under a private post", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(deleteDoc(doc(db, "posts/private-post/likes/stranger-user")));
     }],
     ["Comment cannot claim a different parent post", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
