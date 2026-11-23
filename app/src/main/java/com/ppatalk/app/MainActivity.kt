@@ -3559,6 +3559,9 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
         var reelSpeed by remember(selectedMedia) { mutableFloatStateOf(1f) }
         var textColor by remember(selectedMedia) { mutableStateOf(Color.White) }
         var textStyleIndex by remember(selectedMedia) { mutableIntStateOf(0) }
+        var textOffsetX by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var textOffsetY by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var textScale by remember(selectedMedia) { mutableFloatStateOf(1f) }
         var stickerCategory by remember { mutableStateOf("Emoji") }
         val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             selectedMusicUri = uri
@@ -3606,14 +3609,53 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             },
                             modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f)
                         )
-                        if (reelOverlayText.isNotBlank() || reelSticker.isNotBlank()) {
-                            Column(Modifier.align(Alignment.Center).padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally) {
-                                if (reelOverlayText.isNotBlank()) Text(reelOverlayText, color = textColor,
-                                    fontWeight = if (textStyleIndex == 0) FontWeight.Bold else FontWeight.Medium,
-                                    fontStyle = if (textStyleIndex == 1) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
-                                    style = MaterialTheme.typography.headlineSmall)
-                                if (reelSticker.isNotBlank()) Text(reelSticker, style = MaterialTheme.typography.displayMedium)
+                        if (reelOverlayText.isNotBlank()) {
+                            Text(
+                                reelOverlayText,
+                                color = textColor,
+                                fontWeight = if (textStyleIndex == 0) FontWeight.Bold else FontWeight.Medium,
+                                fontStyle = if (textStyleIndex == 1) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+                                style = MaterialTheme.typography.headlineSmall.copy(fontSize = (28f * textScale).sp),
+                                modifier = Modifier.align(Alignment.Center)
+                                    .graphicsLayer {
+                                        translationX = textOffsetX
+                                        translationY = textOffsetY
+                                    }
+                                    .pointerInput(reelOverlayText) {
+                                        detectTransformGestures { _, pan, zoomChange, _ ->
+                                            textOffsetX += pan.x
+                                            textOffsetY += pan.y
+                                            textScale = (textScale * zoomChange).coerceIn(0.45f, 3.5f)
+                                        }
+                                    }
+                                    .border(1.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+                                    .padding(8.dp)
+                            )
+                        }
+                        if (reelSticker.isNotBlank()) {
+                            Text(reelSticker, style = MaterialTheme.typography.displayMedium,
+                                modifier = Modifier.align(Alignment.Center).graphicsLayer {
+                                    translationX = textOffsetX
+                                    translationY = textOffsetY + 72f
+                                })
+                        }
+                        if (editorToolPanel == "Text") {
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.92f).padding(10.dp),
+                                color = Color.Black.copy(alpha = 0.78f), shape = RoundedCornerShape(14.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = reelOverlayText,
+                                    onValueChange = { reelOverlayText = it },
+                                    modifier = Modifier.fillMaxWidth().padding(6.dp),
+                                    placeholder = { Text("Write text on your Reel...", color = Color.LightGray) },
+                                    singleLine = false,
+                                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.White, unfocusedIndicatorColor = Color.LightGray
+                                    )
+                                )
                             }
                         }
                     }
@@ -3725,12 +3767,8 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                     Text("Selected: $reelEffect", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                                 }
                                 "Text" -> {
-                                    Text("Add text", color = Color.White, fontWeight = FontWeight.Bold)
-                                    OutlinedTextField(value = reelOverlayText, onValueChange = { reelOverlayText = it },
-                                        modifier = Modifier.fillMaxWidth(), label = { Text("Type something...") },
-                                        colors = androidx.compose.material3.TextFieldDefaults.colors(
-                                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                                            focusedLabelColor = Color.LightGray, unfocusedLabelColor = Color.LightGray))
+                                    Text("Type in the box on the Reel, then drag the text or pinch to resize it.",
+                                        color = Color.White, fontWeight = FontWeight.Bold)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         listOf(Color.White, Color.Yellow, Color.Cyan, Color(0xFFFF6B6B)).forEach { color ->
                                             Box(Modifier.size(30.dp).clip(CircleShape).background(color)
