@@ -8,11 +8,9 @@ plugins {
 val customKeystoreFile = file("ppa-talk-debug-new.jks")
 val customStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val customKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
-val customKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
 val hasCustomSigning = customKeystoreFile.exists() &&
     !customStorePassword.isNullOrBlank() &&
-    !customKeyAlias.isNullOrBlank() &&
-    !customKeyPassword.isNullOrBlank()
+    !customKeyAlias.isNullOrBlank()
 
 android {
     namespace = "com.ppatalk.app"
@@ -32,7 +30,7 @@ android {
                 storeFile = customKeystoreFile
                 storePassword = customStorePassword
                 keyAlias = customKeyAlias
-                keyPassword = customKeyPassword
+                keyPassword = customStorePassword
             }
         }
     }
