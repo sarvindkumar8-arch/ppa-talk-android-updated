@@ -227,7 +227,12 @@ service cloud.firestore {
           || (request.resource.data.mediaUrl is string && request.resource.data.mediaUrl.size() <= 4096))
         && (!('storagePath' in request.resource.data)
           || (request.resource.data.storagePath is string
-            && (request.resource.data.storagePath.matches('^post_photos/' + request.auth.uid + '/[A-Za-z0-9_.-]+
+            && (request.resource.data.storagePath == ''
+              || request.resource.data.storagePath.matches('^post_photos/' + request.auth.uid + '/[A-Za-z0-9_.-]{1,180}')
+              || request.resource.data.storagePath.matches('^reels/' + request.auth.uid + '/[A-Za-z0-9_.-]{1,180}'))))
+        && ((('text' in request.resource.data) && request.resource.data.text.size() > 0)
+          || (('mediaUrl' in request.resource.data) && request.resource.data.mediaUrl.size() > 0)
+          || (('storagePath' in request.resource.data) && request.resource.data.storagePath is string && request.resource.data.storagePath.size() > 0));
       // A post's owner identity and audience cannot be changed by editing it.
       allow update: if owns(resource.data.uid)
         && request.resource.data.uid == resource.data.uid
