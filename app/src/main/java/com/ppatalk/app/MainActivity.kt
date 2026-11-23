@@ -2255,13 +2255,14 @@ Button(
                         message = "Session expire ho gaya hai. Dobara login karke story share karein."
                         return@Button
                     }
-                    fun saveStory(url: String) {
+                    fun saveStory(url: String, storagePath: String) {
                         val now = System.currentTimeMillis()
                         val reelData = hashMapOf(
                             "uid" to authenticatedUid,
                             "authorName" to displayName,
                             "text" to "",
                             "mediaUrl" to url,
+                            "storagePath" to storagePath,
                             "mediaType" to mediaType,
                             "postType" to "reel",
                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
@@ -2270,6 +2271,7 @@ Button(
                             "uid" to authenticatedUid,
                             "authorName" to displayName,
                             "mediaUrl" to url,
+                            "storagePath" to storagePath,
                             "mediaType" to mediaType,
                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                             "expiresAt" to com.google.firebase.Timestamp(Date(now + 24L * 60L * 60L * 1000L))
@@ -2312,7 +2314,7 @@ Button(
                         uploadTask.addOnSuccessListener {
                                 message = "Media uploaded. Saving story details..."
                                 storageRef.downloadUrl.addOnSuccessListener { download ->
-                                    saveStory(download.toString())
+                                    saveStory(download.toString(), storageRef.path)
                                 }.addOnFailureListener { e ->
                                     busy = false
                                     message = e.localizedMessage ?: "Could not get media URL."
@@ -3592,13 +3594,14 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                 message = ""
                 success = false
                 val db = FirebaseFirestore.getInstance()
-                fun savePost(mediaUrl: String) {
+                fun savePost(mediaUrl: String, storagePath: String = "") {
                     val post = hashMapOf(
                         "uid" to uid,
                         "authorName" to displayName,
 
                         "text" to postText.trim(),
                         "mediaUrl" to mediaUrl,
+                        "storagePath" to storagePath,
                         "mediaType" to mediaType,
                         "postType" to if (mediaType == "video") "reel" else "post",
                         "audience" to if (mediaType == "video") reelAudience.lowercase() else "public",
@@ -3646,7 +3649,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                     } else uri
                     mediaRef.putFile(uploadUri)
                         .addOnSuccessListener {
-                            mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString()) }
+                            mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString(), mediaRef.path) }
                                 .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media URL could not be loaded." }
                         }
                         .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media upload failed. Check Firebase Storage rules." }
@@ -3767,10 +3770,10 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             busy = true
                             reelSettingsNotice = ""
                             val db = FirebaseFirestore.getInstance()
-                            fun saveReel(mediaUrl: String) {
+                            fun saveReel(mediaUrl: String, storagePath: String) {
                                 val post = hashMapOf(
                                     "uid" to uid, "authorName" to displayName, "text" to postText.trim(),
-                                    "mediaUrl" to mediaUrl, "mediaType" to "video", "postType" to "reel",
+                                    "mediaUrl" to mediaUrl, "storagePath" to storagePath, "mediaType" to "video", "postType" to "reel",
                                     "audience" to reelAudience.lowercase(), "location" to reelLocation.trim(),
                                     "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
                                     "affiliateLink" to reelAffiliateLink.trim(), "playlist" to reelPlaylist,
@@ -3811,7 +3814,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                 val mediaRef = FirebaseStorage.getInstance().reference
                                     .child("reels/" + uid + "/" + System.currentTimeMillis() + ".mp4")
                                 mediaRef.putFile(uri).addOnSuccessListener {
-                                    mediaRef.downloadUrl.addOnSuccessListener { url -> saveReel(url.toString()) }
+                                    mediaRef.downloadUrl.addOnSuccessListener { url -> saveReel(url.toString(), mediaRef.path) }
                                         .addOnFailureListener { ex ->
                                             busy = false
                                             reelSettingsNotice = ex.localizedMessage ?: "Could not get video URL."
