@@ -629,6 +629,11 @@ exports.getSecureProfileMediaUrl = onCall({
 
   const profileSnapshot = await db.collection("publicProfiles").doc(profileUid).get();
   if (!profileSnapshot.exists) throw new HttpsError("not-found", "Profile was not found.");
+  const expectedPathField = objectPath.startsWith("profile_photos/") ? "photoOriginalPath" : "coverPhotoOriginalPath";
+  const storedPath = profileSnapshot.get(expectedPathField);
+  if (storedPath !== objectPath) {
+    throw new HttpsError("permission-denied", "The requested original photo is not the profile's current stored media.");
+  }
   const visibility = profileSnapshot.get("profileVisibility");
   let canView = viewerUid === profileUid || visibility === "public";
   if (!canView) {
