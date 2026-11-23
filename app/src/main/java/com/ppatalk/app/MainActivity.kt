@@ -1350,16 +1350,20 @@ fun HomeFeed(
     DisposableEffect(currentUid) {
         val db = FirebaseFirestore.getInstance()
         val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
-        val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerUids ->
-            (ownerRegistrations.keys - ownerUids).forEach { ownerUid ->
+        val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerAccess ->
+            (ownerRegistrations.keys - ownerAccess.keys).forEach { ownerUid ->
                 ownerRegistrations.remove(ownerUid)?.remove()
                 posts = posts.filterNot { it.uid == ownerUid }
             }
-            ownerUids.forEach { ownerUid ->
+            ownerAccess.forEach { (ownerUid, accessMode) ->
                 if (ownerUid !in ownerRegistrations) {
-                    ownerRegistrations[ownerUid] = db.collection("posts")
-                        .whereEqualTo("uid", ownerUid)
-                        .addSnapshotListener { snapshot, exception ->
+                    val ownerQuery = db.collection("posts").whereEqualTo("uid", ownerUid)
+                    val scopedQuery = when (accessMode) {
+                        "owner" -> ownerQuery
+                        "friend" -> ownerQuery.whereIn("audience", listOf("public", "friends"))
+                        else -> ownerQuery.whereEqualTo("audience", "public")
+                    }
+                    ownerRegistrations[ownerUid] = scopedQuery.addSnapshotListener { snapshot, exception ->
                             if (exception != null) {
                                 error = exception.localizedMessage ?: "Could not load posts. Check Firestore rules."
                             } else if (snapshot != null) {
@@ -1515,14 +1519,29 @@ fun StoriesStrip(uid: String, displayName: String) {
     var viewingStory by remember { mutableStateOf<Map<String, Any>?>(null) }
 
     DisposableEffect(uid) {
-        val storyListener = db.collection("stories").orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, _ ->
-                val now = System.currentTimeMillis()
-                stories = snapshot?.documents.orEmpty().mapNotNull { doc ->
-                    val expires = doc.getTimestamp("expiresAt")?.toDate()?.time ?: 0L
-                    if (expires > now) doc.data?.plus("id" to doc.id) else null
+        val storyOwnerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
+        val storyResults = mutableMapOf<String, List<Map<String, Any>>>()
+        val audienceRegistrations = observeVisibleContentOwners(db, uid) { ownerAccess ->
+            (storyOwnerRegistrations.keys - ownerAccess.keys).forEach { ownerUid ->
+                storyOwnerRegistrations.remove(ownerUid)?.remove()
+                storyResults.remove(ownerUid)
+            }
+            ownerAccess.keys.forEach { ownerUid ->
+                if (ownerUid !in storyOwnerRegistrations) {
+                    storyOwnerRegistrations[ownerUid] = db.collection("stories")
+                        .whereEqualTo("uid", ownerUid)
+                        .addSnapshotListener { snapshot, _ ->
+                            val now = System.currentTimeMillis()
+                            storyResults[ownerUid] = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                                val expires = doc.getTimestamp("expiresAt")?.toDate()?.time ?: 0L
+                                if (expires > now) doc.data?.plus("id" to doc.id) else null
+                            }
+                            stories = storyResults.values.flatten()
+                                .sortedByDescending { (it["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L }
+                        }
                 }
             }
+        }
         val directoryListener = db.collection("profileDirectory").document(uid)
             .addSnapshotListener { snap, _ -> snap?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it } }
         val publicProfileListener = db.collection("publicProfiles").document(uid)
@@ -1530,7 +1549,8 @@ fun StoriesStrip(uid: String, displayName: String) {
         val userListener = db.collection("users").document(uid)
             .addSnapshotListener { snap, _ -> snap?.getString("photoUrl")?.takeIf { it.isNotBlank() }?.let { profilePhotoUrl = it } }
         onDispose {
-            storyListener.remove()
+            audienceRegistrations.forEach { it.remove() }
+            storyOwnerRegistrations.values.forEach { it.remove() }
             directoryListener.remove()
             publicProfileListener.remove()
             userListener.remove()
