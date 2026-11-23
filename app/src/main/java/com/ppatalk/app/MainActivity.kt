@@ -23,6 +23,9 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.app.Activity
 import android.net.Uri
+import android.content.ContentUris
+import android.provider.MediaStore
+import android.Manifest
 import android.media.MediaPlayer
 import android.content.Intent
 import android.widget.VideoView
@@ -46,6 +49,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -95,6 +100,44 @@ private data class ProfileGalleryItem(
     val type: String, val category: String, val caption: String,
     val securePath: String? = null
 )
+
+private data class DeviceGalleryMedia(
+    val uri: Uri,
+    val type: String,
+    val dateAdded: Long,
+    val durationMs: Long = 0L
+)
+
+private fun loadDeviceGallery(context: android.content.Context): List<DeviceGalleryMedia> {
+    val result = mutableListOf<DeviceGalleryMedia>()
+    val collection = MediaStore.Files.getContentUri("external")
+    val projection = arrayOf(
+        MediaStore.Files.FileColumns._ID,
+        MediaStore.Files.FileColumns.MEDIA_TYPE,
+        MediaStore.Files.FileColumns.DATE_ADDED,
+        MediaStore.Video.VideoColumns.DURATION
+    )
+    val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE}=? OR ${MediaStore.Files.FileColumns.MEDIA_TYPE}=?"
+    val args = arrayOf(
+        MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+        MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
+    )
+    context.contentResolver.query(collection, projection, selection, args,
+        "${MediaStore.Files.FileColumns.DATE_ADDED} DESC")?.use { cursor ->
+        val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+        val typeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+        val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+        val durationCol = cursor.getColumnIndex(MediaStore.Video.VideoColumns.DURATION)
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idCol)
+            val kind = if (cursor.getInt(typeCol) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) "video" else "image"
+            val uri = ContentUris.withAppendedId(collection, id)
+            val duration = if (kind == "video" && durationCol >= 0 && !cursor.isNull(durationCol)) cursor.getLong(durationCol) else 0L
+            result.add(DeviceGalleryMedia(uri, kind, cursor.getLong(dateCol), duration))
+        }
+    }
+    return result
+}
 
 private fun firebaseStorageObjectPath(value: String): String? {
     if (value.startsWith("profile_photos/") || value.startsWith("cover_photos/")) return value
