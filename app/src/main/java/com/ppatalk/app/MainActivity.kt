@@ -4454,6 +4454,12 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                 .addOnFailureListener { error ->
                     android.util.Log.w("PpaProfileMedia", "Legacy profile media token migration did not finish", error)
                 }
+            FirebaseFunctions.getInstance("asia-south1")
+                .getHttpsCallable("revokeLegacyContentMediaTokens")
+                .call(mapOf("ownerUid" to uid))
+                .addOnFailureListener { error ->
+                    android.util.Log.w("PpaContentMedia", "Legacy post/story/reel media migration did not finish", error)
+                }
         }
     }
 
