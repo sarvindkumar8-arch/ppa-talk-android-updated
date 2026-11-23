@@ -3837,7 +3837,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                 db.collection("posts").add(post).addOnSuccessListener {
                                     if (reelShareToStory) {
                                         val story = hashMapOf(
-                                            "uid" to uid, "authorName" to displayName, "mediaUrl" to mediaUrl,
+                                            "uid" to uid, "authorName" to displayName, "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "",
                                             "mediaType" to "video", "storagePath" to storagePath,
                                             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
