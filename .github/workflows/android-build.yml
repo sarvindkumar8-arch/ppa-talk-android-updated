@@ -58,8 +58,23 @@ jobs:
           test -s app/ppa-talk-debug-new.jks
           test -n "${ANDROID_KEYSTORE_PASSWORD:-}" || { echo "Missing ANDROID_KEYSTORE_PASSWORD" >&2; exit 1; }
           test -n "${ANDROID_KEY_ALIAS:-}" || { echo "Missing ANDROID_KEY_ALIAS" >&2; exit 1; }
-          keytool -list -keystore app/ppa-talk-debug-new.jks -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
-          echo "PKCS12 keystore and password verified."
+
+          echo "=== Keystore file diagnostics (no secrets printed) ==="
+          stat -c 'Keystore size: %s bytes' app/ppa-talk-debug-new.jks
+          sha256sum app/ppa-talk-debug-new.jks
+
+          echo "=== Checking PKCS12 password and listing aliases ==="
+          if ! keytool -list -keystore app/ppa-talk-debug-new.jks -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD"; then
+            echo "DIAGNOSIS: PKCS12 could not be opened with ANDROID_KEYSTORE_PASSWORD. Check the password secret and uploaded file."
+            exit 1
+          fi
+
+          echo "=== Checking requested alias and certificate fingerprint ==="
+          if ! keytool -list -v -keystore app/ppa-talk-debug-new.jks -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"; then
+            echo "DIAGNOSIS: Keystore opened, but ANDROID_KEY_ALIAS was not found or its entry could not be read."
+            exit 1
+          fi
+          echo "PKCS12 keystore, password, alias, and certificate verified."
 
       - name: Build debug APK with persistent signing
         env:
