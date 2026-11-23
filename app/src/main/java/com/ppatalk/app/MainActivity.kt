@@ -4674,7 +4674,12 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                             "uid" to uid,
                                             "displayName" to displayName.ifBlank { "PPA Talk user" },
                                             "username" to username,
-                                            displayField to displayDownload.toString(),
+                                            "photoUrl" to if (profileVisibility == "public")
+                                                (if (isCover) photoUrl else displayDownload.toString())
+                                                else com.google.firebase.firestore.FieldValue.delete(),
+                                            "coverPhotoUrl" to if (profileVisibility == "public")
+                                                (if (isCover) displayDownload.toString() else coverPhotoUrl)
+                                                else com.google.firebase.firestore.FieldValue.delete(),
                                             "profileVisibility" to profileVisibility,
                                             "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                         ), com.google.firebase.firestore.SetOptions.merge())
@@ -5119,7 +5124,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                             transaction.set(profileRef, publicUpdates, com.google.firebase.firestore.SetOptions.merge())
                             transaction.set(directoryRef, mapOf(
                                 "uid" to uid, "displayName" to cleanName, "username" to cleanUsername,
-                                "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                                "photoUrl" to if (profileVisibility == "public") photoUrl
+                                    else com.google.firebase.firestore.FieldValue.delete(),
+                                "coverPhotoUrl" to if (profileVisibility == "public") coverPhotoUrl
+                                    else com.google.firebase.firestore.FieldValue.delete(),
                                 "profileVisibility" to profileVisibility, "updatedAt" to timestamp
                             ), com.google.firebase.firestore.SetOptions.merge())
                             null
