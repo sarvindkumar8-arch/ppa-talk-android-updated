@@ -43,12 +43,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: profile-security-tests/package.json
 
       - name: Install security test dependencies
         working-directory: profile-security-tests
         run: npm install --no-audit --no-fund
+
+      - name: Check Cloud Functions JavaScript syntax
+        run: node --check functions/index.js
 
       - name: Run Firestore and Storage Emulator tests
         working-directory: profile-security-tests
