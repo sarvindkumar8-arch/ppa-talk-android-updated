@@ -49,6 +49,14 @@ async function run() {
 
   await assertSucceeds(uploadBytes(ref(publicOwner, publicThumb), tinyImage, imageMetadata));
   const tests = [
+    ["Owner can upload a post image", async () => assertSucceeds(uploadBytes(ref(owner, "post_photos/profile-owner/post.jpg"), tinyImage, imageMetadata))],
+    ["Signed-in stranger cannot directly read a post image", async () => assertFails(getBytes(ref(stranger, "post_photos/profile-owner/post.jpg")))],
+    ["Owner can upload a story image", async () => assertSucceeds(uploadBytes(ref(owner, "stories/profile-owner/story.jpg"), tinyImage, imageMetadata))],
+    ["Signed-in stranger cannot directly read a story image", async () => assertFails(getBytes(ref(stranger, "stories/profile-owner/story.jpg")))],
+    ["Owner can upload a reel video", async () => assertSucceeds(uploadBytes(ref(owner, "reels/profile-owner/reel.mp4"), tinyImage, { contentType: "video/mp4" }))],
+    ["Signed-in stranger cannot directly read a reel video", async () => assertFails(getBytes(ref(stranger, "reels/profile-owner/reel.mp4")))],
+    ["Non-owner cannot delete a post image", async () => assertFails(deleteObject(ref(stranger, "post_photos/profile-owner/post.jpg")))],
+    ["Owner can delete a post image", async () => assertSucceeds(deleteObject(ref(owner, "post_photos/profile-owner/post.jpg")))],
     ["Owner can upload profile thumbnail", async () => assertSucceeds(uploadBytes(ref(owner, profileThumb), tinyImage, imageMetadata))],
     ["Owner can upload original profile image", async () => assertSucceeds(uploadBytes(ref(owner, profileOriginal), tinyImage, imageMetadata))],
     ["Owner can read own private profile thumbnail", async () => assertSucceeds(getBytes(ref(owner, profileThumb)))],
