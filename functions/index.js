@@ -525,6 +525,74 @@ exports.createLiveKitToken = onCall({
 });
 
 
+// Authorize and mint a short-lived URL for media attached to a Firestore post or story.
+// This endpoint intentionally accepts a Firestore document ID and verifies the stored
+// object path; clients cannot request arbitrary objects from another user's folder.
+exports.getSecureMediaUrl = onCall({
+  region: REGION,
+  enforceAppCheck: false,
+  maxInstances: 30
+}, async (request) => {
+  const viewerUid = request.auth?.uid;
+  if (!viewerUid) throw new HttpsError("unauthenticated", "Sign in to view this media.");
+
+  const collection = request.data?.mediaType === "story" ? "stories" :
+    request.data?.mediaType === "post" ? "posts" : "";
+  const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
+  const objectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
+  if (!collection || !/^[A-Za-z0-9_-]{1,150}$/.test(documentId) ||
+      !/^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath)) {
+    throw new HttpsError("invalid-argument", "Invalid media reference.");
+  }
+
+  const docSnapshot = await db.collection(collection).doc(documentId).get();
+  if (!docSnapshot.exists) throw new HttpsError("not-found", "Media record was not found.");
+  const record = docSnapshot.data();
+  const ownerUid = record.uid;
+  if (typeof ownerUid !== "string" || objectPath.split("/")[1] !== ownerUid ||
+      record.storagePath !== objectPath) {
+    throw new HttpsError("permission-denied", "Media reference does not match its owner or record.");
+  }
+
+  let canView = viewerUid === ownerUid;
+  const profileSnapshot = await db.collection("publicProfiles").doc(ownerUid).get();
+  const visibility = profileSnapshot.get("profileVisibility") || "private";
+  if (collection === "posts") {
+    const audience = typeof record.audience === "string" ? record.audience.toLowerCase() : "public";
+    canView = canView || (audience === "public" && visibility === "public");
+    if (!canView && audience === "friends") {
+      const [friendEntry, reverseFriendEntry] = await Promise.all([
+        db.collection("friends").doc(ownerUid).collection("list").doc(viewerUid).get(),
+        db.collection("friends").doc(viewerUid).collection("list").doc(ownerUid).get()
+      ]);
+      canView = friendEntry.exists && reverseFriendEntry.exists;
+    }
+  } else {
+    canView = canView || visibility === "public";
+    if (!canView) {
+      const [friendEntry, reverseFriendEntry] = await Promise.all([
+        db.collection("friends").doc(ownerUid).collection("list").doc(viewerUid).get(),
+        db.collection("friends").doc(viewerUid).collection("list").doc(ownerUid).get()
+      ]);
+      canView = friendEntry.exists && reverseFriendEntry.exists;
+    }
+    const expiresAt = record.expiresAt?.toMillis ? record.expiresAt.toMillis() : 0;
+    if (expiresAt && expiresAt <= Date.now()) {
+      throw new HttpsError("not-found", "This story has expired.");
+    }
+  }
+  if (!canView) throw new HttpsError("permission-denied", "You cannot view this media.");
+
+  const file = getStorage().bucket().file(objectPath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError("not-found", "Media file was not found.");
+  const [signedUrl] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + 5 * 60 * 1000
+  });
+  return { url: signedUrl, expiresInSeconds: 300 };
+});
+
 exports.getSecureProfileMediaUrl = onCall({
   region: REGION,
   enforceAppCheck: false,
