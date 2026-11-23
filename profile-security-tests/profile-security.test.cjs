@@ -127,6 +127,32 @@ async function run() {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertSucceeds(getDoc(doc(db, "posts/public-post")));
     }],
+    ["User cannot create a post for another UID", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "posts/forged-post"), {
+        uid: "private-user", authorName: "Forged", text: "forged", audience: "public"
+      }));
+    }],
+    ["User cannot create a post with an unsupported audience", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "posts/bad-audience"), {
+        uid: "stranger-user", authorName: "Stranger", text: "bad audience", audience: "everyone"
+      }));
+    }],
+    ["User cannot create a post with oversized text", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "posts/oversized-post"), {
+        uid: "stranger-user", authorName: "Stranger", text: "x".repeat(5001), audience: "public"
+      }));
+    }],
+    ["User cannot create a story that expires after more than 24 hours", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "stories/long-story"), {
+        uid: "stranger-user", authorName: "Stranger",
+        mediaUrl: "https://example.test/story.jpg", mediaType: "image",
+        createdAt: new Date(), expiresAt: new Date(Date.now() + 25 * 60 * 60 * 1000)
+      }));
+    }],
     ["Non-friend cannot read a friends-only post", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(getDoc(doc(db, "posts/friends-post")));
