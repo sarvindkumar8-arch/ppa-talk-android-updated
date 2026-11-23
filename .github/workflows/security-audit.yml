@@ -33,11 +33,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17 for Firebase emulators
+      - name: Set up Java 21 for Firebase emulators
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
