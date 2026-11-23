@@ -28,6 +28,7 @@ android {
         if (hasCustomSigning) {
             create("custom") {
                 storeFile = customKeystoreFile
+                storeType = "PKCS12"
                 storePassword = customStorePassword
                 keyAlias = customKeyAlias
                 keyPassword = customStorePassword
