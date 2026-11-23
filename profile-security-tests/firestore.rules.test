@@ -228,11 +228,13 @@ service cloud.firestore {
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reaction', 'createdAt']);
-        allow delete: if owns(likerId);
+        allow delete: if owns(likerId)
+        && exists(/databases/$(database)/documents/posts/$(postId))
+        && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
       }
       match /comments/{commentId} {
-        allow read: if signedIn()
-          && exists(/databases/$(database)/documents/posts/$(postId));
+        allow read: if exists(/databases/$(database)/documents/posts/$(postId))
+          && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
         allow create: if signedIn()
           && exists(/databases/$(database)/documents/posts/$(postId))
           && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
