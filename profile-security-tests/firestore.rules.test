@@ -5,14 +5,18 @@ service cloud.firestore {
     function owns(userId) { return signedIn() && request.auth.uid == userId; }
 
     function areAcceptedFriends(uidA, uidB) {
-      return uidA is string && uidB is string && uidA != uidB
-        && exists(/databases/$(database)/documents/friends/$(uidA)/list/$(uidB))
-        && exists(/databases/$(database)/documents/friendRequests/$(uidA + '_' + uidB))
-        && get(/databases/$(database)/documents/friendRequests/$(uidA + '_' + uidB)).data.status == 'accepted'
-        || uidA is string && uidB is string && uidA != uidB
-        && exists(/databases/$(database)/documents/friends/$(uidA)/list/$(uidB))
-        && exists(/databases/$(database)/documents/friendRequests/$(uidB + '_' + uidA))
-        && get(/databases/$(database)/documents/friendRequests/$(uidB + '_' + uidA)).data.status == 'accepted';
+      return signedIn()
+        && uidA is string && uidB is string && uidA != uidB
+        && (
+          exists(/databases/$(database)/documents/friends/$(uidA)/list/$(uidB))
+          || exists(/databases/$(database)/documents/friends/$(uidB)/list/$(uidA))
+        )
+        && (
+          (exists(/databases/$(database)/documents/friendRequests/$(uidA + '_' + uidB))
+            && get(/databases/$(database)/documents/friendRequests/$(uidA + '_' + uidB)).data.status == 'accepted')
+          || (exists(/databases/$(database)/documents/friendRequests/$(uidB + '_' + uidA))
+            && get(/databases/$(database)/documents/friendRequests/$(uidB + '_' + uidA)).data.status == 'accepted')
+        );
     }
 
     function isAcceptedFriend(ownerUid) {
