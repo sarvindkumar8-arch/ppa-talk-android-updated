@@ -156,12 +156,16 @@ private fun rememberSecureMediaUrl(
     legacyUrl: String
 ): String {
     var resolvedUrl by remember(mediaType, documentId, storagePath, legacyUrl) {
-        mutableStateOf(legacyUrl)
+        mutableStateOf(if (storagePath.isBlank()) legacyUrl else "")
     }
     LaunchedEffect(mediaType, documentId, storagePath) {
         if (documentId.isBlank() || storagePath.isBlank()) {
+            // Legacy records without a storagePath remain on their existing URL until
+            // the controlled backfill and token-revocation migration is completed.
             resolvedUrl = legacyUrl
         } else {
+            // Never fall back to a token URL when authorization fails for a path-backed record.
+            resolvedUrl = "";
             FirebaseFunctions.getInstance("asia-south1")
                 .getHttpsCallable("getSecureMediaUrl")
                 .call(mapOf(
