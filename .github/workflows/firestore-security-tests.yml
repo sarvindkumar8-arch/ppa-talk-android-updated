@@ -1,0 +1,49 @@
+name: Firestore Security Rules Tests
+
+on:
+  push:
+    branches:
+      - feature/chat-voice-video-calling
+    paths:
+      - 'firestore.rules.example'
+      - 'profile-security-tests/**'
+      - '.github/workflows/firestore-security-tests.yml'
+  pull_request:
+    paths:
+      - 'firestore.rules.example'
+      - 'profile-security-tests/**'
+      - '.github/workflows/firestore-security-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    name: Firestore emulator security tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: profile-security-tests/package.json
+
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install test dependencies
+        working-directory: profile-security-tests
+        run: npm install --no-audit --no-fund
+
+      - name: Run Firestore security tests
+        working-directory: profile-security-tests
+        run: npx --yes firebase-tools emulators:exec --only firestore --project ppa-talk-profile-security-test --config ../firebase.json "npm test"
