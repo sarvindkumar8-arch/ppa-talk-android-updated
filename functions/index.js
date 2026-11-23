@@ -536,8 +536,9 @@ exports.getSecureMediaUrl = onCall({
   const viewerUid = request.auth?.uid;
   if (!viewerUid) throw new HttpsError("unauthenticated", "Sign in to view this media.");
 
-  const collection = request.data?.mediaType === "story" ? "stories" :
-    request.data?.mediaType === "post" ? "posts" : "";
+  const mediaType = request.data?.mediaType;
+  const collection = mediaType === "story" ? "stories" :
+    (mediaType === "post" || mediaType === "reel") ? "posts" : "";
   const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
   const objectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
   if (!collection || !/^[A-Za-z0-9_-]{1,150}$/.test(documentId) ||
@@ -549,9 +550,22 @@ exports.getSecureMediaUrl = onCall({
   if (!docSnapshot.exists) throw new HttpsError("not-found", "Media record was not found.");
   const record = docSnapshot.data();
   const ownerUid = record.uid;
+  const objectFolder = objectPath.split("/")[0];
+  const folderMatchesType = mediaType === "story"
+    ? ["stories", "reels"].includes(objectFolder)
+    : mediaType === "reel"
+      ? objectFolder === "reels" && record.postType === "reel"
+      : objectFolder === "post_photos" || (objectFolder === "reels" && record.postType === "reel");
   if (typeof ownerUid !== "string" || objectPath.split("/")[1] !== ownerUid ||
-      record.storagePath !== objectPath) {
-    throw new HttpsError("permission-denied", "Media reference does not match its owner or record.");
+      record.storagePath !== objectPath || !folderMatchesType) {
+    throw new HttpsError("permission-denied", "Media reference does not match its owner, type, or record.");
+  }
+
+  if (mediaType === "story") {
+    const expiresAt = record.expiresAt?.toMillis ? record.expiresAt.toMillis() : 0;
+    if (!expiresAt || expiresAt <= Date.now()) {
+      throw new HttpsError("not-found", "This story has expired or has no valid expiry.");
+    }
   }
 
   let canView = viewerUid === ownerUid;
@@ -559,8 +573,11 @@ exports.getSecureMediaUrl = onCall({
   const visibility = profileSnapshot.get("profileVisibility") || "private";
   if (collection === "posts") {
     const audience = typeof record.audience === "string" ? record.audience.toLowerCase() : "public";
+    if (!["public", "friends", "private"].includes(audience)) {
+      throw new HttpsError("permission-denied", "This post has an invalid audience setting.");
+    }
     canView = canView || (audience === "public" && visibility === "public");
-    if (!canView && ["public", "friends"].includes(audience)) {
+    if (!canView && audience !== "private") {
       const pairIds = [ownerUid + "_" + viewerUid, viewerUid + "_" + ownerUid];
       const [friendEntry, requestSnapshots] = await Promise.all([
         db.collection("friends").doc(ownerUid).collection("list").doc(viewerUid).get(),
@@ -581,10 +598,6 @@ exports.getSecureMediaUrl = onCall({
       canView = friendEntry.exists && requestSnapshots.some((snapshot) =>
         snapshot.exists && snapshot.get("status") === "accepted"
       );
-    }
-    const expiresAt = record.expiresAt?.toMillis ? record.expiresAt.toMillis() : 0;
-    if (expiresAt && expiresAt <= Date.now()) {
-      throw new HttpsError("not-found", "This story has expired.");
     }
   }
   if (!canView) throw new HttpsError("permission-denied", "You cannot view this media.");
