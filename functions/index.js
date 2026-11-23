@@ -1,7 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getStorage } = require("firebase-admin/storage");
 const { scrypt: scryptCallback, randomBytes, timingSafeEqual, createHash } = require("node:crypto");
@@ -717,7 +717,7 @@ exports.revokeLegacyContentMediaTokens = onCall({
   let migratedCount = 0;
   let revokedCount = 0;
   for (const collection of ["posts", "stories"]) {
-    let query = db.collection(collection).where("uid", "==", uid).orderBy("__name__").limit(200);
+    let query = db.collection(collection).where("uid", "==", uid).orderBy(FieldPath.documentId()).limit(200);
     while (true) {
       const page = await query.get();
       if (page.empty) break;
@@ -753,7 +753,7 @@ exports.revokeLegacyContentMediaTokens = onCall({
         }
       }
       if (page.size < 200) break;
-      query = db.collection(collection).where("uid", "==", uid).orderBy("__name__").startAfter(page.docs[page.docs.length - 1]).limit(200);
+      query = db.collection(collection).where("uid", "==", uid).orderBy(FieldPath.documentId()).startAfter(page.docs[page.docs.length - 1]).limit(200);
     }
   }
   await markerRef.set({ contentMediaTokensRevokedAt: FieldValue.serverTimestamp() }, { merge: true });
