@@ -1229,7 +1229,7 @@ fun ReelsScreen(
                         Box(Modifier.fillMaxSize()) {
                             AndroidView(factory = { context ->
                                 VideoView(context).apply {
-                                    setVideoURI(Uri.parse(reel.mediaUrl))
+                                    setVideoURI(Uri.parse(secureMediaUrl))
                                     setOnPreparedListener { player -> player.isLooping = true; start() }
                                 }
                             }, modifier = Modifier.fillMaxSize())
@@ -1296,7 +1296,7 @@ private fun ReelFullscreenViewer(
             }) {
             AndroidView(factory = { viewContext ->
                 VideoView(viewContext).apply {
-                    setVideoURI(Uri.parse(reel.mediaUrl))
+                    setVideoURI(Uri.parse(secureMediaUrl))
                     setOnPreparedListener { player -> player.isLooping = true; start() }
                 }
             }, update = { view -> if (!view.isPlaying) view.start() },
@@ -1670,6 +1670,9 @@ fun StoriesStrip(uid: String, displayName: String) {
         var actionMessage by remember(story["id"]) { mutableStateOf("") }
         val storyOwnerUid = story["uid"] as? String ?: ""
         val storyId = story["id"] as? String ?: ""
+        val secureStoryUrl = rememberSecureMediaUrl(
+            "story", storyId, story["storagePath"] as? String ?: "", story["mediaUrl"] as? String ?: ""
+        )
         val storyProgress = remember(storyId) { androidx.compose.animation.core.Animatable(0f) }
         val orderedStories = remember(stories) {
             stories.groupBy { it["uid"] as? String ?: "" }.values.flatten()
@@ -1752,7 +1755,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                     AndroidView(
                         factory = { viewContext ->
                             VideoView(viewContext).apply {
-                                setVideoURI(Uri.parse(story["mediaUrl"] as? String ?: ""))
+                                setVideoURI(Uri.parse(secureStoryUrl))
                                 setOnPreparedListener { player -> player.isLooping = true; start() }
                             }
                         },
@@ -1760,7 +1763,7 @@ fun StoriesStrip(uid: String, displayName: String) {
                     )
                 } else {
                     AsyncImage(
-                        model = story["mediaUrl"] as? String,
+                        model = secureStoryUrl,
                         contentDescription = "Full-screen story photo",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
@@ -1921,6 +1924,10 @@ fun StoriesStrip(uid: String, displayName: String) {
 
 @Composable
 fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
+    val secureStoryUrl = rememberSecureMediaUrl(
+        "story", story["id"] as? String ?: "", story["storagePath"] as? String ?: "",
+        story["mediaUrl"] as? String ?: ""
+    )
     var profilePhotoUrl by remember(story["uid"]) { mutableStateOf("") }
     val storyUid = story["uid"] as? String ?: ""
     DisposableEffect(storyUid) {
@@ -1943,7 +1950,7 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
     }
     Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight()) {
         Box(Modifier.fillMaxSize()) {
-            AsyncImage(model = story["mediaUrl"] as? String, contentDescription = "Story",
+            AsyncImage(model = secureStoryUrl, contentDescription = "Story",
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(42.dp),
