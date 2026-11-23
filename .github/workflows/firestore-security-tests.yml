@@ -1,4 +1,4 @@
-name: Firestore Security Rules Tests
+name: Firestore and Storage Security Rules Tests
 
 on:
   push:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   firestore-rules:
-    name: Firestore emulator security tests
+    name: Firestore and Storage emulator security tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -44,6 +44,6 @@ jobs:
         working-directory: profile-security-tests
         run: npm install --no-audit --no-fund
 
-      - name: Run Firestore security tests
+      - name: Run Firestore and Storage security tests
         working-directory: profile-security-tests
-        run: npx --yes firebase-tools emulators:exec --only firestore --project ppa-talk-profile-security-test --config ../firebase.json "npm test"
+        run: npx --yes firebase-tools emulators:exec --only firestore,storage --project ppa-talk-profile-security-test --config firebase.json "npm run test:all"
