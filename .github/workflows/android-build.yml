@@ -91,10 +91,45 @@ jobs:
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
 
+      - name: Build signed Release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_KEYSTORE_PASSWORD:-}"
+          test -n "${ANDROID_KEY_ALIAS:-}"
+          gradle --no-daemon :app:assembleRelease --stacktrace
+
+      - name: Verify Release APK and Firebase certificate fingerprint
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          EXPECTED_SHA256="89AFF37248125DFFDA453E162A60E72AD40AAD3E18E463BD060A248AC5E33FB1"
+
+          test -s "$APK"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/release-signature.txt
+
+          ACTUAL_SHA256="$(awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' /tmp/release-signature.txt | tr -d ':\r\n ' | tr '[:lower:]' '[:upper:]')"
+
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "ERROR: Release APK certificate does not match Firebase registered fingerprint."
+            echo "Expected: $EXPECTED_SHA256"
+            echo "Actual:   ${ACTUAL_SHA256:-NOT_FOUND}"
+            exit 1
+          fi
+
+          echo "PASS: Release APK signature is valid."
+          echo "PASS: Release certificate matches Firebase registered SHA-256."
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ppa-talk-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ppa-talk-debug-and-release-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
