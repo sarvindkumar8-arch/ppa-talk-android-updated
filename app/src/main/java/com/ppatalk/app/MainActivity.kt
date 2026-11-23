@@ -2255,7 +2255,7 @@ Button(
                         message = "Session expire ho gaya hai. Dobara login karke story share karein."
                         return@Button
                     }
-                    fun saveStory(url: String, storagePath: String) {
+                    fun saveStory(url: String, storagePath: String = "") {
                         val now = System.currentTimeMillis()
                         val reelData = hashMapOf(
                             "uid" to authenticatedUid,
