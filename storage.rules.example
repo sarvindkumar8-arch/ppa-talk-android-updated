@@ -1,44 +1,52 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function signedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function owns(uid) { return signedIn() && request.auth.uid == uid; }
+    function profileDocPath(uid) {
+      return /databases/(default)/documents/publicProfiles/$(uid);
     }
-    function owns(uid) {
-      return signedIn() && request.auth.uid == uid;
+    function isPublicProfile(uid) {
+      return firestore.exists(profileDocPath(uid))
+        && firestore.get(profileDocPath(uid)).data.profileVisibility == "public";
     }
-
+    function isAcceptedFriend(uid) {
+      let friendPath = /databases/(default)/documents/friends/$(uid)/list/$(request.auth.uid);
+      let forwardRequest = /databases/(default)/documents/friendRequests/$(uid + '_' + request.auth.uid);
+      let reverseRequest = /databases/(default)/documents/friendRequests/$(request.auth.uid + '_' + uid);
+      return signedIn() && firestore.exists(friendPath)
+        && ((firestore.exists(forwardRequest) && firestore.get(forwardRequest).data.status == "accepted")
+          || (firestore.exists(reverseRequest) && firestore.get(reverseRequest).data.status == "accepted"));
+    }
+    function canReadProfileMedia(uid) {
+      return signedIn() && (owns(uid) || isPublicProfile(uid) || isAcceptedFriend(uid));
+    }
     match /profile_photos/{uid}/{fileName} {
-      allow read: if signedIn() && !fileName.matches('^original_.*');
-      allow create, update: if owns(uid)
-                            && request.resource.size < 10 * 1024 * 1024
-                            && request.resource.contentType.matches('image/.*');
+      allow read: if canReadProfileMedia(uid) && !fileName.matches('^original_.*');
+      allow create, update: if owns(uid) && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
       allow delete: if owns(uid);
     }
     match /cover_photos/{uid}/{fileName} {
-      allow read: if signedIn() && !fileName.matches('^original_.*');
-      allow create, update: if owns(uid)
-                            && request.resource.size < 15 * 1024 * 1024
-                            && request.resource.contentType.matches('image/.*');
+      allow read: if canReadProfileMedia(uid) && !fileName.matches('^original_.*');
+      allow create, update: if owns(uid) && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
       allow delete: if owns(uid);
     }
     match /post_photos/{uid}/{fileName} {
       allow read: if signedIn();
-      allow write: if owns(uid)
-                    && request.resource.size < 25 * 1024 * 1024
-                    && request.resource.contentType.matches('image/.*');
+      allow write: if owns(uid) && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
     match /stories/{uid}/{fileName} {
       allow read: if signedIn();
-      allow write: if owns(uid)
-                    && request.resource.size < 100 * 1024 * 1024
-                    && request.resource.contentType.matches('(image|video)/.*');
+      allow write: if owns(uid) && request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType.matches('(image|video)/.*');
     }
     match /reels/{uid}/{fileName} {
       allow read: if signedIn();
-      allow write: if owns(uid)
-                    && request.resource.size < 100 * 1024 * 1024
-                    && request.resource.contentType.matches('video/.*');
+      allow write: if owns(uid) && request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
     }
   }
 }
