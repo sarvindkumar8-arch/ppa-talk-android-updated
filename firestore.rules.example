@@ -171,10 +171,22 @@ service cloud.firestore {
           || (request.resource.data.mediaUrl is string && request.resource.data.mediaUrl.size() <= 4096))
         && ((('text' in request.resource.data) && request.resource.data.text.size() > 0)
           || (('mediaUrl' in request.resource.data) && request.resource.data.mediaUrl.size() > 0));
-      allow update, delete: if owns(resource.data.uid);
+      // A post's owner identity and audience cannot be changed by editing it.
+      allow update: if owns(resource.data.uid)
+        && request.resource.data.uid == resource.data.uid
+        && (!('audience' in request.resource.data)
+          || request.resource.data.audience in ['public', 'friends', 'private'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'authorName', 'text', 'mediaUrl', 'mediaType', 'postType', 'audience',
+          'location', 'taggedUsers', 'overlayText', 'sticker', 'effect',
+          'originalAudioMuted', 'updatedAt'
+        ]);
+      allow delete: if owns(resource.data.uid);
 
       match /likes/{likerId} {
-        allow read: if signedIn();
+        // Parent post access is required before reading or changing reactions.
+        allow read: if signedIn()
+          && exists(/databases/$(database)/documents/posts/$(postId));
         allow create: if owns(likerId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.reaction in ['👍', '❤️', '😂', '😢', '😡'];
@@ -185,13 +197,20 @@ service cloud.firestore {
         allow delete: if owns(likerId);
       }
       match /comments/{commentId} {
-        allow read: if signedIn();
-        allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+        allow read: if signedIn()
+          && exists(/databases/$(database)/documents/posts/$(postId));
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
-          && request.resource.data.parentId is string;
-        allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+          && request.resource.data.parentId == postId;
+        allow update: if signedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.parentId == resource.data.parentId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'updatedAt']);
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
       }
     }
 
