@@ -12,6 +12,7 @@ import android.graphics.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -868,6 +869,31 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     }
 
     Scaffold(
+        modifier = Modifier.pointerInput(selected, activeChatUid) {
+            if (activeChatUid == null) {
+                val mainTabs = listOf("Home", "Friends", "Reels", "Marketplace", "Notifications", "Menu")
+                var horizontalDrag = 0f
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        horizontalDrag += dragAmount
+                    },
+                    onDragEnd = {
+                        val currentIndex = mainTabs.indexOf(selected)
+                        if (currentIndex >= 0 && kotlin.math.abs(horizontalDrag) > 80f) {
+                            val nextIndex = if (horizontalDrag < 0f) {
+                                (currentIndex + 1).coerceAtMost(mainTabs.lastIndex)
+                            } else {
+                                (currentIndex - 1).coerceAtLeast(0)
+                            }
+                            if (nextIndex != currentIndex) navigateTo(mainTabs[nextIndex])
+                        }
+                        horizontalDrag = 0f
+                    },
+                    onDragCancel = { horizontalDrag = 0f }
+                )
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (activeChatUid == null) {
