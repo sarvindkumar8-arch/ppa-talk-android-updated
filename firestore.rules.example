@@ -61,9 +61,33 @@ service cloud.firestore {
 
     // Private account/profile data: only the account owner can access it.
     match /users/{userId} {
+      // Private account/profile data: clients may edit only app-owned profile fields.
+      // Server migration markers and other server-managed fields must never be client-writable.
+      function allowedUserFields() {
+        return [
+          'uid', 'email', 'phoneNumber', 'createdAt', 'updatedAt',
+          'dateOfBirth', 'gender', 'hobby', 'school', 'favoritePlace',
+          'hometown', 'currentCity', 'work', 'education',
+          'relationshipStatus', 'interests', 'photoUrl', 'coverPhotoUrl',
+          'photoOriginalUrl', 'coverPhotoOriginalUrl',
+          'photoOriginalPath', 'coverPhotoOriginalPath'
+        ];
+      }
       allow read: if owns(userId);
-      allow create: if owns(userId) && request.resource.data.uid == userId;
-      allow update: if owns(userId) && request.resource.data.uid == userId;
+      allow create: if owns(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly(allowedUserFields());
+      allow update: if owns(userId)
+        && resource.data.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'email', 'phoneNumber', 'updatedAt', 'dateOfBirth', 'gender',
+          'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity',
+          'work', 'education', 'relationshipStatus', 'interests',
+          'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl',
+          'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath'
+        ])
+        && request.resource.data.keys().hasOnly(allowedUserFields());
       allow delete: if owns(userId);
 
       // Each signed-in user can manage only their own device push tokens.
