@@ -192,8 +192,11 @@ service cloud.firestore {
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
         && request.resource.data.expiresAt <= request.time + duration.value(24, 'h') + duration.value(5, 'm')
-        && request.resource.data.storagePath is string
-        && (request.resource.data.storagePath.matches('^stories/' + request.auth.uid + '/[^/]+
+        && (!('storagePath' in request.resource.data)
+          || (request.resource.data.storagePath is string
+            && (request.resource.data.storagePath == ''
+              || request.resource.data.storagePath.matches('^stories/' + request.auth.uid + '/[A-Za-z0-9_.-]+$')
+              || request.resource.data.storagePath.matches('^reels/' + request.auth.uid + '/[A-Za-z0-9_.-]+$'))));
       allow update: if false;
       allow delete: if owns(resource.data.uid);
     }
