@@ -733,10 +733,13 @@ exports.revokeLegacyContentMediaTokens = onCall({
         }
         const isFirebaseStorageUrl = typeof record.mediaUrl === "string" &&
           /https:\/\/firebasestorage\.googleapis\.com\//i.test(record.mediaUrl);
-        if (!/^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath)) {
-          if (isFirebaseStorageUrl) {
+        const validObjectPath = /^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath);
+        if (!validObjectPath) {
+          // External media URLs are not managed by this Firebase migration.
+          // A malformed stored path or legacy Firebase URL must fail closed.
+          if (objectPath || isFirebaseStorageUrl) {
             throw new HttpsError("failed-precondition",
-              "A legacy Firebase media URL could not be mapped safely. Migration stopped without marking this account secured.");
+              "A legacy Firebase media reference could not be mapped safely. Migration stopped without marking this account secured.");
           }
           continue;
         }
@@ -748,11 +751,17 @@ exports.revokeLegacyContentMediaTokens = onCall({
         const validFolder = collection === "stories"
           ? ["stories", "reels"].includes(folder)
           : ["post_photos", "reels"].includes(folder);
-        if (!validFolder) continue;
+        if (!validFolder) {
+          throw new HttpsError("failed-precondition",
+            "A media object is stored in an unexpected folder. Migration stopped without marking this account secured.");
+        }
 
         const file = bucket.file(objectPath);
         const [exists] = await file.exists();
-        if (!exists) continue;
+        if (!exists) {
+          throw new HttpsError("failed-precondition",
+            "A referenced media object is missing from Storage. Migration stopped without marking this account secured.");
+        }
         const [metadata] = await file.getMetadata();
         if (metadata.metadata?.firebaseStorageDownloadTokens) {
           await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: null } });
@@ -768,6 +777,7 @@ exports.revokeLegacyContentMediaTokens = onCall({
     }
   }
   await markerRef.set({ contentMediaTokensRevokedAt: FieldValue.serverTimestamp() }, { merge: true });
+  console.info("Legacy content media migration completed", { uid, migratedCount, revokedCount });
   return { alreadySecured: false, migratedCount, revokedCount };
 });
 
