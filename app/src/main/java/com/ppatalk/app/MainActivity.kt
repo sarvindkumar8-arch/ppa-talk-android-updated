@@ -2309,7 +2309,7 @@ Button(
                             "uid" to authenticatedUid,
                             "authorName" to displayName,
                             "text" to "",
-                            "mediaUrl" to url,
+                            "mediaUrl" to if (storagePath.isBlank()) url else "",
                             "storagePath" to storagePath,
                             "mediaType" to mediaType,
                             "postType" to "reel",
@@ -3669,7 +3669,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             if (mediaType == "video" && reelShareToStory) {
                                 val story = hashMapOf(
                                     "uid" to uid, "authorName" to displayName,
-                                    "mediaUrl" to mediaUrl, "storagePath" to storagePath, "mediaType" to "video",
+                                    "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "", "storagePath" to storagePath, "mediaType" to "video",
                                     "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                     "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
                                 )
