@@ -78,6 +78,9 @@ dependencies {
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-functions")
     implementation("com.google.firebase:firebase-messaging")
+    // App Check: Play Integrity in release builds; debug provider for local/debug APKs.
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
     // Restore the previously used WebRTC media engine for voice and video calls.
     implementation("io.github.webrtc-sdk:android:150.7871.04")
     implementation("io.coil-kt:coil-compose:2.7.0")
