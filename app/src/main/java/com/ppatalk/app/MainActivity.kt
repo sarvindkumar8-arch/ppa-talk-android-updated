@@ -1078,14 +1078,20 @@ data class FeedComment(val id: String, val uid: String, val authorName: String, 
 private fun observeVisibleContentOwners(
     db: FirebaseFirestore,
     currentUid: String,
-    onOwnersChanged: (Set<String>) -> Unit
+    onOwnersChanged: (Map<String, String>) -> Unit
 ): List<com.google.firebase.firestore.ListenerRegistration> {
-    var friendUids: Set<String> = setOf(currentUid)
+    var friendUids: Set<String> = emptySet()
     var publicUids: Set<String> = emptySet()
-    fun publish() = onOwnersChanged(friendUids + publicUids)
+    fun publish() {
+        val access = mutableMapOf<String, String>()
+        publicUids.forEach { access[it] = "public" }
+        friendUids.forEach { access[it] = "friend" }
+        access[currentUid] = "owner"
+        onOwnersChanged(access)
+    }
     val friendsRegistration = db.collection("friends").document(currentUid)
         .collection("list").addSnapshotListener { snapshot, _ ->
-            friendUids = setOf(currentUid) + snapshot?.documents.orEmpty().map { it.id }
+            friendUids = snapshot?.documents.orEmpty().map { it.id }.toSet()
             publish()
         }
     val publicRegistration = db.collection("profileDirectory")
@@ -1112,16 +1118,20 @@ fun ReelsScreen(
     DisposableEffect(currentUid) {
         val db = FirebaseFirestore.getInstance()
         val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
-        val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerUids ->
-            (ownerRegistrations.keys - ownerUids).forEach { ownerUid ->
+        val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerAccess ->
+            (ownerRegistrations.keys - ownerAccess.keys).forEach { ownerUid ->
                 ownerRegistrations.remove(ownerUid)?.remove()
                 reels = reels.filterNot { it.uid == ownerUid }
             }
-            ownerUids.forEach { ownerUid ->
+            ownerAccess.forEach { (ownerUid, accessMode) ->
                 if (ownerUid !in ownerRegistrations) {
-                    ownerRegistrations[ownerUid] = db.collection("posts")
-                        .whereEqualTo("uid", ownerUid)
-                        .addSnapshotListener { snapshot, exception ->
+                    val ownerQuery = db.collection("posts").whereEqualTo("uid", ownerUid)
+                    val scopedQuery = when (accessMode) {
+                        "owner" -> ownerQuery
+                        "friend" -> ownerQuery.whereIn("audience", listOf("public", "friends"))
+                        else -> ownerQuery.whereEqualTo("audience", "public")
+                    }
+                    ownerRegistrations[ownerUid] = scopedQuery.addSnapshotListener { snapshot, exception ->
                             if (exception != null) {
                                 error = exception.localizedMessage ?: "Reels load nahi ho paayi."
                             } else if (snapshot != null) {
