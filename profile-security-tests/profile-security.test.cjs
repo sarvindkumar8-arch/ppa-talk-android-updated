@@ -120,6 +120,12 @@ async function run() {
         participantIds: ["stranger-user", "private-user"]
       }));
     }],
+    ["Non-friend can start a chat with a public profile", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertSucceeds(setDoc(doc(db, "chats/public-profile-chat"), {
+        participantIds: ["stranger-user", "public-user"]
+      }));
+    }],
     ["Accepted friends can create a direct chat", async () => {
       const db = testEnv.authenticatedContext("private-user").firestore();
       await assertSucceeds(setDoc(doc(db, "chats/friends-chat"), {
