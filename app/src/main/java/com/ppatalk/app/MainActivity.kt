@@ -926,7 +926,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 Modifier.padding(padding),
                 onCreatePost = { navigateTo("Create") },
                 onCreatePhoto = { navigateTo("CreatePhoto") },
-                onCreateVideo = { navigateTo("CreateVideo") },
+                onCreateVideo = { navigateTo("CreateReel") },
                 onOpenProfile = { viewedProfileUid = uid; navigateTo("Profile") },
                 onOpenUserProfile = { profileUid -> viewedProfileUid = profileUid; navigateTo("Profile") },
                 displayName = displayName
@@ -961,6 +961,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             "CreatePhoto" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "image")
             "CreateVideo" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "video")
+            "CreateReel" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "media")
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
             "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
                 activeChatUid = friendUid
