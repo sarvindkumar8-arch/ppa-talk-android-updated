@@ -175,6 +175,10 @@ async function run() {
       const db = testEnv.authenticatedContext("friend-user").firestore();
       await assertSucceeds(getDoc(doc(db, "posts/friends-post")));
     }],
+    ["Accepted friend cannot read an explicitly private post", async () => {
+      const db = testEnv.authenticatedContext("friend-user").firestore();
+      await assertFails(getDoc(doc(db, "posts/private-post")));
+    }],
     ["Non-friend cannot read a private post", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(getDoc(doc(db, "posts/private-post")));
