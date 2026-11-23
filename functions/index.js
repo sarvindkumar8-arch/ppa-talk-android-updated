@@ -638,6 +638,10 @@ exports.getSecureMediaUrl = onCall({
   const file = getStorage().bucket().file(objectPath);
   const [exists] = await file.exists();
   if (!exists) throw new HttpsError("not-found", "Media file was not found.");
+  const [metadata] = await file.getMetadata();
+  if (metadata.metadata?.firebaseStorageDownloadTokens) {
+    await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: null } });
+  }
   const [signedUrl] = await file.getSignedUrl({
     action: "read",
     expires: Date.now() + 5 * 60 * 1000
@@ -691,6 +695,70 @@ exports.getSecureProfileMediaUrl = onCall({
   }
   const [signedUrl] = await file.getSignedUrl({ action: "read", expires: Date.now() + 5 * 60 * 1000 });
   return { url: signedUrl, expiresInSeconds: 300 };
+});
+
+// One-time owner-triggered migration for legacy post, story and reel media.
+// Backfills trusted object paths and revokes bearer download tokens.
+exports.revokeLegacyContentMediaTokens = onCall({
+  region: REGION,
+  enforceAppCheck: false,
+  maxInstances: 5
+}, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to secure your media.");
+  const requestedUid = typeof request.data?.ownerUid === "string" ? request.data.ownerUid.trim() : "";
+  if (requestedUid !== uid) throw new HttpsError("permission-denied", "Only the media owner can migrate their media.");
+  await consumeRateLimit("content-media-migration", uid, 1, 60 * 60 * 1000);
+
+  const markerRef = db.collection("users").doc(uid);
+  const marker = await markerRef.get();
+  if (marker.get("contentMediaTokensRevokedAt")) return { alreadySecured: true, migratedCount: 0, revokedCount: 0 };
+
+  const bucket = getStorage().bucket();
+  let migratedCount = 0;
+  let revokedCount = 0;
+  for (const collection of ["posts", "stories"]) {
+    let query = db.collection(collection).where("uid", "==", uid).limit(200);
+    while (true) {
+      const page = await query.get();
+      if (page.empty) break;
+      for (const doc of page.docs) {
+        const record = doc.data();
+        let objectPath = typeof record.storagePath === "string" ? record.storagePath : "";
+        if (!objectPath && typeof record.mediaUrl === "string") {
+          try {
+            const parsed = new URL(record.mediaUrl);
+            const objectSegment = parsed.pathname.split("/o/")[1];
+            if (objectSegment) objectPath = decodeURIComponent(objectSegment);
+          } catch (_) {}
+        }
+        if (!/^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath)) continue;
+        if (objectPath.split("/")[1] !== uid) continue;
+        const folder = objectPath.split("/")[0];
+        const validFolder = collection === "stories"
+          ? ["stories", "reels"].includes(folder)
+          : ["post_photos", "reels"].includes(folder);
+        if (!validFolder) continue;
+
+        const file = bucket.file(objectPath);
+        const [exists] = await file.exists();
+        if (!exists) continue;
+        const [metadata] = await file.getMetadata();
+        if (metadata.metadata?.firebaseStorageDownloadTokens) {
+          await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: null } });
+          revokedCount += 1;
+        }
+        if (record.storagePath !== objectPath) {
+          await doc.ref.update({ storagePath: objectPath });
+          migratedCount += 1;
+        }
+      }
+      if (page.size < 200) break;
+      query = db.collection(collection).where("uid", "==", uid).orderBy("__name__").startAfter(page.docs[page.docs.length - 1]).limit(200);
+    }
+  }
+  await markerRef.set({ contentMediaTokensRevokedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { alreadySecured: false, migratedCount, revokedCount };
 });
 
 exports.revokeLegacyProfileMediaTokens = onCall({
