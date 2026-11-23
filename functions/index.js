@@ -708,11 +708,10 @@ exports.revokeLegacyContentMediaTokens = onCall({
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to secure your media.");
   const requestedUid = typeof request.data?.ownerUid === "string" ? request.data.ownerUid.trim() : "";
   if (requestedUid !== uid) throw new HttpsError("permission-denied", "Only the media owner can migrate their media.");
-  await consumeRateLimit("content-media-migration", uid, 1, 60 * 60 * 1000);
-
   const markerRef = db.collection("users").doc(uid);
   const marker = await markerRef.get();
   if (marker.get("contentMediaTokensRevokedAt")) return { alreadySecured: true, migratedCount: 0, revokedCount: 0 };
+  await consumeRateLimit("content-media-migration", uid, 1, 60 * 60 * 1000);
 
   const bucket = getStorage().bucket();
   let migratedCount = 0;
