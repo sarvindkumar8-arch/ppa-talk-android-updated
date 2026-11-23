@@ -122,6 +122,22 @@ async function run() {
   await seedData();
 
   const tests = [
+    ["Client cannot read server-side rate-limit records", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "serverRateLimits/any-key")));
+    }],
+    ["Client cannot write server-side rate-limit records", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "serverRateLimits/forged-key"), { count: 999 }));
+    }],
+    ["Client cannot read phone password credentials", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "phoneAuthCredentials/credential-hash")));
+    }],
+    ["Client cannot create phone password credentials", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(setDoc(doc(db, "phoneAuthCredentials/forged-hash"), { passwordHash: "nope" }));
+    }],
     ["Owner can create a path-only story without a download token URL", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertSucceeds(setDoc(doc(db, "stories/path-only-story"), {
