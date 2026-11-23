@@ -1,0 +1,55 @@
+name: Firebase Security Emulator Tests
+
+on:
+  push:
+    branches:
+      - feature/chat-voice-video-calling
+    paths:
+      - 'firestore.rules.example'
+      - 'storage.rules.example'
+      - 'functions/**'
+      - 'profile-security-tests/**'
+      - '.github/workflows/security-audit.yml'
+  pull_request:
+    branches:
+      - feature/chat-voice-video-calling
+    paths:
+      - 'firestore.rules.example'
+      - 'storage.rules.example'
+      - 'functions/**'
+      - 'profile-security-tests/**'
+      - '.github/workflows/security-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firebase-security-tests:
+    name: Firestore and Storage rules tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: profile-security-tests/package.json
+
+      - name: Install security test dependencies
+        working-directory: profile-security-tests
+        run: npm install --no-audit --no-fund
+
+      - name: Run Firestore and Storage Emulator tests
+        working-directory: profile-security-tests
+        run: npx --yes firebase-tools emulators:exec --config firebase.json --only firestore,storage --project ppa-talk-profile-security-test "npm run test:all"
