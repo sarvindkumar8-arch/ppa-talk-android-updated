@@ -230,7 +230,36 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
   if (loginFinalization.upgradedLegacyHash) {
     console.info("Legacy phone password hash upgraded to version 2");
   }
-  const authUser = await getAuth().getUser(record.uid);
+  if (typeof record.uid !== "string" || !record.uid.trim()) {
+    throw new HttpsError("failed-precondition", "This mobile account is missing its authentication identifier. Please contact support.");
+  }
+
+  // Repair legacy phone credentials whose Firebase Auth user was removed,
+  // while preserving the UID already stored in the server-only credential.
+  let authUser;
+  try {
+    authUser = await getAuth().getUser(record.uid);
+  } catch (error) {
+    if (error?.code !== "auth/user-not-found") throw error;
+    try {
+      authUser = await getAuth().createUser({
+        uid: record.uid,
+        phoneNumber: phone
+      });
+      console.warn("Recreated missing Firebase Auth user for an existing phone credential", {
+        uid: record.uid
+      });
+    } catch (createError) {
+      if (createError?.code === "auth/phone-number-already-exists") {
+        throw new HttpsError(
+          "failed-precondition",
+          "This mobile number is linked to a different authentication account. Support is required to safely recover it."
+        );
+      }
+      throw createError;
+    }
+  }
+
   const profileRef = db.collection("publicProfiles").doc(record.uid);
   const profileSnapshot = await profileRef.get();
   const savedName = profileSnapshot.get("displayName");
