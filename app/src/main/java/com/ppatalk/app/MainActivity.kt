@@ -1195,7 +1195,11 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 onOpenUserProfile = { profileUid -> viewedProfileUid = profileUid; navigateTo("Profile") },
                 displayName = displayName,
                 reelUploadStatus = reelUploadStatus,
-                reelUploadProgress = reelUploadProgress
+                reelUploadProgress = reelUploadProgress,
+                onDismissReelUploadStatus = {
+                    reelUploadStatus = ""
+                    reelUploadProgress = 0
+                }
             )
             "Profile" -> if (viewedProfileUid == uid) {
                 ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
@@ -1639,7 +1643,8 @@ fun HomeFeed(
     onOpenUserProfile: (String) -> Unit = {},
     displayName: String = "PPA Talk user",
     reelUploadStatus: String = "",
-    reelUploadProgress: Int = 0
+    reelUploadProgress: Int = 0,
+    onDismissReelUploadStatus: () -> Unit = {}
 ) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -1710,20 +1715,37 @@ fun HomeFeed(
         }
         if (reelUploadStatus.isNotBlank()) {
             item {
+                val uploadFailed = reelUploadStatus.contains("failed", ignoreCase = true) ||
+                    reelUploadStatus.contains("could not", ignoreCase = true)
                 Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            progress = { reelUploadProgress / 100f },
-                            modifier = Modifier.size(22.dp),
-                            strokeWidth = 2.5.dp
-                        )
+                        if (uploadFailed) {
+                            Icon(Icons.Default.ErrorOutline, contentDescription = "Reel upload failed",
+                                tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(22.dp))
+                        } else {
+                            CircularProgressIndicator(
+                                progress = { reelUploadProgress / 100f },
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.5.dp
+                            )
+                        }
                         Spacer(Modifier.width(10.dp))
                         Text(reelUploadStatus, modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("$reelUploadProgress%", style = MaterialTheme.typography.labelMedium, color = RoyalBlue)
+                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                            color = if (uploadFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                        if (uploadFailed) {
+                            IconButton(onClick = onDismissReelUploadStatus, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss upload error",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            Text("$reelUploadProgress%", style = MaterialTheme.typography.labelMedium, color = RoyalBlue)
+                        }
                     }
-                    Spacer(Modifier.height(7.dp))
-                    LinearProgressIndicator(progress = { reelUploadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                    if (!uploadFailed) {
+                        Spacer(Modifier.height(7.dp))
+                        LinearProgressIndicator(progress = { reelUploadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             }
         }
@@ -4159,12 +4181,9 @@ fun CreatePostScreen(
                                     }
                                     .addOnSuccessListener {
                                         onReelUploadProgress("Saving Reel to Feed", 100)
-                                        mediaRef.downloadUrl.addOnSuccessListener { url -> saveReel(url.toString(), mediaRef.path) }
-                                            .addOnFailureListener { ex ->
-                                                busy = false
-                                                onReelUploadProgress("Could not finish Reel upload", 0)
-                                                reelSettingsNotice = ex.localizedMessage ?: "Could not get video URL."
-                                            }
+                                        // Path-based secure media uses getSecureMediaUrl when rendering.
+                                        // A public download-token URL is not needed to publish the Reel.
+                                        saveReel("", mediaRef.path)
                                     }.addOnFailureListener { ex ->
                                         busy = false
                                         onReelUploadProgress("Reel upload failed", 0)
