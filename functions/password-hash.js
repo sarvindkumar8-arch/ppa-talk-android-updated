@@ -60,4 +60,30 @@ async function verifyPassword(password, record) {
   };
 }
 
-module.exports = { makePasswordHash, verifyPassword };
+async function finalizeSuccessfulLogin(db, docRef, originalRecord, verification, upgradedHash, FieldValue) {
+  let upgradedLegacyHash = false;
+  await db.runTransaction(async (tx) => {
+    const latest = await tx.get(docRef);
+    if (!latest.exists) throw new Error("Phone credential disappeared during login.");
+
+    const latestRecord = latest.data();
+    const stillSameCredential = latestRecord.salt === originalRecord.salt &&
+      latestRecord.passwordHash === originalRecord.passwordHash &&
+      latestRecord.hashVersion === originalRecord.hashVersion;
+    const update = {
+      failedAttempts: 0,
+      lockUntil: FieldValue.delete(),
+      lastLoginAt: FieldValue.serverTimestamp()
+    };
+    if (verification.needsUpgrade && stillSameCredential && upgradedHash) {
+      update.hashVersion = upgradedHash.hashVersion;
+      update.salt = upgradedHash.salt;
+      update.passwordHash = upgradedHash.passwordHash;
+      upgradedLegacyHash = true;
+    }
+    tx.update(docRef, update);
+  });
+  return upgradedLegacyHash;
+}
+
+module.exports = { makePasswordHash, verifyPassword, finalizeSuccessfulLogin };
