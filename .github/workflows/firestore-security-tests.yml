@@ -45,3 +45,11 @@ jobs:
       - name: Run Firestore and Storage security tests
         working-directory: profile-security-tests
         run: npx --yes firebase-tools emulators:exec --only firestore,storage --project ppa-talk-profile-security-test --config firebase.json "npm run test:all"
+
+  legacy-firestore-rules-check:
+    name: Firestore and Storage emulator security tests
+    needs: firestore-rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm security test job passed
+        run: echo "The Firestore and Storage emulator security tests completed successfully."
