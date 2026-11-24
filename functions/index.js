@@ -200,10 +200,15 @@ exports.resetPhonePassword = onCall({ region: REGION, enforceAppCheck: true, max
 });
 
 exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
+  let diagnosticStage = "validate-input";
+  console.info("Phone login diagnostic started");
+  try {
   const phone = normalizePhone(request.data?.phoneNumber);
   const password = validateLoginPassword(request.data?.password);
+  diagnosticStage = "rate-limit";
   await consumeRateLimit("phone-login", credentialId(phone) + ":" + requestNetworkKey(request), 20, 15 * 60 * 1000);
   const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
+  diagnosticStage = "credential-lookup";
   const snapshot = await docRef.get();
   if (!snapshot.exists) throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
 
@@ -212,6 +217,7 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
   }
 
+  diagnosticStage = "password-verification";
   const verification = await verifyPassword(password, record);
   if (!verification.matches) {
     await recordFailedLoginAttempt(
@@ -220,6 +226,7 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
   }
 
+  diagnosticStage = "credential-finalization";
   const upgradedHash = verification.needsUpgrade ? await makePasswordHash(password) : null;
   const loginFinalization = await finalizeSuccessfulLogin(
     db, docRef, record, verification, upgradedHash, FieldValue
@@ -236,6 +243,7 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
 
   // Repair legacy phone credentials whose Firebase Auth user was removed,
   // while preserving the UID already stored in the server-only credential.
+  diagnosticStage = "firebase-auth-user-lookup-or-repair";
   let authUser;
   try {
     authUser = await getAuth().getUser(record.uid);
@@ -260,6 +268,7 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     }
   }
 
+  diagnosticStage = "profile-sync";
   const profileRef = db.collection("publicProfiles").doc(record.uid);
   const profileSnapshot = await profileRef.get();
   const savedName = profileSnapshot.get("displayName");
@@ -280,8 +289,18 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     displayName,
     updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
+  diagnosticStage = "custom-token-creation";
   const token = await getAuth().createCustomToken(record.uid);
+  console.info("Phone login diagnostic completed", { stage: diagnosticStage });
   return { token };
+  } catch (error) {
+    console.error("Phone login diagnostic failed", {
+      stage: diagnosticStage,
+      code: error?.code || "unknown",
+      name: error?.name || "Error"
+    });
+    throw error;
+  }
 });
 
 
