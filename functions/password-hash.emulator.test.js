@@ -26,7 +26,8 @@ test("successful legacy login transaction replaces Base64 hash with version 2 he
     const upgraded = await finalizeSuccessfulLogin(
       db, ref, originalRecord, { matches: true, needsUpgrade: true }, upgradedHash, FieldValue
     );
-    assert.equal(upgraded, true);
+    assert.equal(upgraded.credentialUnchanged, true);
+    assert.equal(upgraded.upgradedLegacyHash, true);
 
     const saved = (await ref.get()).data();
     assert.equal(saved.hashVersion, 2);
@@ -53,20 +54,27 @@ test("transaction does not overwrite a credential changed after verification", a
     hashVersion: 1,
     salt: "AAAAAAAAAAAAAAAAAAAAAA==",
     passwordHash: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-    failedAttempts: 2
+    failedAttempts: 2,
+    lockUntil: new Date("2030-01-01T00:00:00.000Z"),
+    lastLoginAt: new Date("2025-01-01T00:00:00.000Z")
   };
-  await ref.set({ ...originalRecord, salt: "BBBBBBBBBBBBBBBBBBBBBB==" });
+  const changedRecord = { ...originalRecord, salt: "BBBBBBBBBBBBBBBBBBBBBB==" };
+  await ref.set(changedRecord);
 
   try {
     const upgradedHash = await makePasswordHash("PpaTalk-Test-123");
     const upgraded = await finalizeSuccessfulLogin(
       db, ref, originalRecord, { matches: true, needsUpgrade: true }, upgradedHash, FieldValue
     );
-    assert.equal(upgraded, false);
+    assert.equal(upgraded.credentialUnchanged, false);
+    assert.equal(upgraded.upgradedLegacyHash, false);
     const saved = (await ref.get()).data();
     assert.equal(saved.hashVersion, 1);
     assert.equal(saved.salt, "BBBBBBBBBBBBBBBBBBBBBB==");
-    assert.equal(saved.failedAttempts, 0);
+    assert.equal(saved.passwordHash, changedRecord.passwordHash);
+    assert.equal(saved.failedAttempts, 2);
+    assert.equal(saved.lockUntil.toMillis(), changedRecord.lockUntil.getTime());
+    assert.equal(saved.lastLoginAt.toMillis(), changedRecord.lastLoginAt.getTime());
   } finally {
     await ref.delete();
     await deleteApp(app);

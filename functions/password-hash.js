@@ -61,29 +61,40 @@ async function verifyPassword(password, record) {
 }
 
 async function finalizeSuccessfulLogin(db, docRef, originalRecord, verification, upgradedHash, FieldValue) {
+  let credentialUnchanged = false;
   let upgradedLegacyHash = false;
+
   await db.runTransaction(async (tx) => {
     const latest = await tx.get(docRef);
-    if (!latest.exists) throw new Error("Phone credential disappeared during login.");
+    if (!latest.exists) return;
 
     const latestRecord = latest.data();
-    const stillSameCredential = latestRecord.salt === originalRecord.salt &&
+    credentialUnchanged =
+      latestRecord.salt === originalRecord.salt &&
       latestRecord.passwordHash === originalRecord.passwordHash &&
       latestRecord.hashVersion === originalRecord.hashVersion;
+
+    // If credentials changed after verification, do not modify any login
+    // metadata and do not allow the caller to issue an authentication token.
+    if (!credentialUnchanged) return;
+
     const update = {
       failedAttempts: 0,
       lockUntil: FieldValue.delete(),
       lastLoginAt: FieldValue.serverTimestamp()
     };
-    if (verification.needsUpgrade && stillSameCredential && upgradedHash) {
+
+    if (verification.needsUpgrade && upgradedHash) {
       update.hashVersion = upgradedHash.hashVersion;
       update.salt = upgradedHash.salt;
       update.passwordHash = upgradedHash.passwordHash;
       upgradedLegacyHash = true;
     }
+
     tx.update(docRef, update);
   });
-  return upgradedLegacyHash;
+
+  return { credentialUnchanged, upgradedLegacyHash };
 }
 
 module.exports = { makePasswordHash, verifyPassword, finalizeSuccessfulLogin };

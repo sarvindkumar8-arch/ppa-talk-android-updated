@@ -141,10 +141,13 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
   }
 
   const upgradedHash = verification.needsUpgrade ? await makePasswordHash(password) : null;
-  const upgradedLegacyHash = await finalizeSuccessfulLogin(
+  const loginFinalization = await finalizeSuccessfulLogin(
     db, docRef, record, verification, upgradedHash, FieldValue
   );
-  if (upgradedLegacyHash) {
+  if (!loginFinalization.credentialUnchanged) {
+    throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
+  }
+  if (loginFinalization.upgradedLegacyHash) {
     console.info("Legacy phone password hash upgraded to version 2");
   }
   const authUser = await getAuth().getUser(record.uid);
