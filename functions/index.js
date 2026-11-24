@@ -5,7 +5,15 @@ const { getFirestore, FieldValue, FieldPath } = require("firebase-admin/firestor
 const { getMessaging } = require("firebase-admin/messaging");
 const { getStorage } = require("firebase-admin/storage");
 const { createHash } = require("node:crypto");
-const { makePasswordHash, verifyPassword, finalizeSuccessfulLogin } = require("./password-hash");
+const {
+  makePasswordHash,
+  verifyPassword,
+  finalizeSuccessfulLogin,
+  recordFailedLoginAttempt,
+  resetPasswordCredentials,
+  isAccountLocked
+} = require("./password-hash");
+const { isStrongPassword, isValidLoginPassword } = require("./password-policy");
 
 initializeApp();
 const db = getFirestore();
@@ -54,7 +62,17 @@ function normalizePhone(value) {
 }
 
 function validatePassword(value) {
-  if (typeof value !== "string" || value.length < MIN_PASSWORD_LENGTH || value.length > 128) {
+  if (!isStrongPassword(value)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Password must be 8 to 128 characters and include uppercase, lowercase, number and special character."
+    );
+  }
+  return value;
+}
+
+function validateLoginPassword(value) {
+  if (!isValidLoginPassword(value)) {
     throw new HttpsError("invalid-argument", "Password must be 8 to 128 characters long.");
   }
   return value;
@@ -116,7 +134,7 @@ exports.changePhonePassword = onCall({ region: REGION, enforceAppCheck: true, ma
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in before changing your password.");
   const phone = normalizePhone(request.data?.phoneNumber);
-  const currentPassword = validatePassword(request.data?.currentPassword);
+  const currentPassword = validateLoginPassword(request.data?.currentPassword);
   const newPassword = validatePassword(request.data?.newPassword);
   if (currentPassword === newPassword) {
     throw new HttpsError("invalid-argument", "Choose a password different from your current password.");
@@ -134,41 +152,24 @@ exports.changePhonePassword = onCall({ region: REGION, enforceAppCheck: true, ma
     throw new HttpsError("not-found", "Phone account was not found.");
   }
   const record = snapshot.data();
-  const lockUntil = record.lockUntil?.toMillis ? record.lockUntil.toMillis() : 0;
-  if (lockUntil > Date.now()) {
+  if (isAccountLocked(record)) {
     throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
   }
   const verification = await verifyPassword(currentPassword, record);
   if (!verification.matches) {
-    await db.runTransaction(async (tx) => {
-      const latest = await tx.get(docRef);
-      if (!latest.exists || latest.get("uid") !== uid) return;
-      const attempts = Number(latest.get("failedAttempts") || 0) + 1;
-      tx.update(docRef, attempts >= MAX_FAILED_ATTEMPTS
-        ? { failedAttempts: 0, lockUntil: new Date(Date.now() + LOCK_MINUTES * 60 * 1000) }
-        : { failedAttempts: attempts });
-    });
+    await recordFailedLoginAttempt(
+      db, docRef, record, MAX_FAILED_ATTEMPTS, LOCK_MINUTES * 60 * 1000
+    );
     throw new HttpsError("unauthenticated", "Current password is incorrect.");
   }
 
   const replacement = await makePasswordHash(newPassword);
-  const upgradedHash = verification.needsUpgrade ? await makePasswordHash(currentPassword) : null;
-  await db.runTransaction(async (tx) => {
-    const latest = await tx.get(docRef);
-    if (!latest.exists || latest.get("uid") !== uid ||
-        latest.get("salt") !== record.salt || latest.get("passwordHash") !== record.passwordHash ||
-        latest.get("hashVersion") !== record.hashVersion) {
-      throw new HttpsError("aborted", "Password changed during this request. Please try again.");
-    }
-    tx.update(docRef, {
-      hashVersion: replacement.hashVersion,
-      salt: replacement.salt,
-      passwordHash: replacement.passwordHash,
-      failedAttempts: 0,
-      lockUntil: FieldValue.delete(),
-      passwordUpdatedAt: FieldValue.serverTimestamp()
-    });
-  });
+  const updated = await resetPasswordCredentials(
+    db, docRef, uid, phone, replacement, FieldValue, record
+  );
+  if (!updated) {
+    throw new HttpsError("aborted", "Password changed during this request. Please try again.");
+  }
   return { success: true };
 });
 
@@ -186,50 +187,34 @@ exports.resetPhonePassword = onCall({ region: REGION, enforceAppCheck: true, max
 
   const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
   const hash = await makePasswordHash(newPassword);
-  await db.runTransaction(async (tx) => {
-    const snapshot = await tx.get(docRef);
-    if (!snapshot.exists || snapshot.get("uid") !== uid || snapshot.get("phoneNumber") !== phone) {
-      throw new HttpsError("not-found", "Phone account was not found.");
-    }
-    tx.update(docRef, {
-      hashVersion: hash.hashVersion,
-      salt: hash.salt,
-      passwordHash: hash.passwordHash,
-      failedAttempts: 0,
-      lockUntil: FieldValue.delete(),
-      passwordUpdatedAt: FieldValue.serverTimestamp()
-    });
-  });
+  const updated = await resetPasswordCredentials(
+    db, docRef, uid, phone, hash, FieldValue
+  );
+  if (!updated) {
+    throw new HttpsError("not-found", "Phone account was not found.");
+  }
 
   return { success: true };
 });
 
 exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   const phone = normalizePhone(request.data?.phoneNumber);
-  const password = validatePassword(request.data?.password);
+  const password = validateLoginPassword(request.data?.password);
   await consumeRateLimit("phone-login", credentialId(phone) + ":" + requestNetworkKey(request), 20, 15 * 60 * 1000);
   const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
   const snapshot = await docRef.get();
   if (!snapshot.exists) throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
 
   const record = snapshot.data();
-  const now = Date.now();
-  const lockUntil = record.lockUntil?.toMillis ? record.lockUntil.toMillis() : 0;
-  if (lockUntil > now) throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
+  if (isAccountLocked(record)) {
+    throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
+  }
 
   const verification = await verifyPassword(password, record);
   if (!verification.matches) {
-    await db.runTransaction(async (tx) => {
-      const latest = await tx.get(docRef);
-      if (!latest.exists) return;
-      const attempts = (latest.get("failedAttempts") || 0) + 1;
-      const update = { failedAttempts: attempts };
-      if (attempts >= MAX_FAILED_ATTEMPTS) {
-        update.failedAttempts = 0;
-        update.lockUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
-      }
-      tx.update(docRef, update);
-    });
+    await recordFailedLoginAttempt(
+      db, docRef, record, MAX_FAILED_ATTEMPTS, LOCK_MINUTES * 60 * 1000
+    );
     throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
   }
 
