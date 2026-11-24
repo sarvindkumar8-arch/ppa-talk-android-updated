@@ -9,7 +9,6 @@ const { makePasswordHash, verifyPassword } = require("./password-hash");
 
 initializeApp();
 const db = getFirestore();
-const scrypt = promisify(scryptCallback);
 const REGION = "asia-south1";
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_FAILED_ATTEMPTS = 5;
