@@ -112,6 +112,66 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: tr
 });
 
 // Reset a phone password only after Firebase Phone Auth has verified the same number.
+exports.changePhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in before changing your password.");
+  const phone = normalizePhone(request.data?.phoneNumber);
+  const currentPassword = validatePassword(request.data?.currentPassword);
+  const newPassword = validatePassword(request.data?.newPassword);
+  if (currentPassword === newPassword) {
+    throw new HttpsError("invalid-argument", "Choose a password different from your current password.");
+  }
+  await consumeRateLimit("phone-password-change", uid + ":" + credentialId(phone), 5, 15 * 60 * 1000);
+
+  const verifiedUser = await getAuth().getUser(uid);
+  if (!verifiedUser.phoneNumber || verifiedUser.phoneNumber !== phone) {
+    throw new HttpsError("permission-denied", "The signed-in mobile number does not match this account.");
+  }
+
+  const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
+  const snapshot = await docRef.get();
+  if (!snapshot.exists || snapshot.get("uid") !== uid || snapshot.get("phoneNumber") !== phone) {
+    throw new HttpsError("not-found", "Phone account was not found.");
+  }
+  const record = snapshot.data();
+  const lockUntil = record.lockUntil?.toMillis ? record.lockUntil.toMillis() : 0;
+  if (lockUntil > Date.now()) {
+    throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
+  }
+  const verification = await verifyPassword(currentPassword, record);
+  if (!verification.matches) {
+    await db.runTransaction(async (tx) => {
+      const latest = await tx.get(docRef);
+      if (!latest.exists || latest.get("uid") !== uid) return;
+      const attempts = Number(latest.get("failedAttempts") || 0) + 1;
+      tx.update(docRef, attempts >= MAX_FAILED_ATTEMPTS
+        ? { failedAttempts: 0, lockUntil: new Date(Date.now() + LOCK_MINUTES * 60 * 1000) }
+        : { failedAttempts: attempts });
+    });
+    throw new HttpsError("unauthenticated", "Current password is incorrect.");
+  }
+
+  const replacement = await makePasswordHash(newPassword);
+  const upgradedHash = verification.needsUpgrade ? await makePasswordHash(currentPassword) : null;
+  await db.runTransaction(async (tx) => {
+    const latest = await tx.get(docRef);
+    if (!latest.exists || latest.get("uid") !== uid ||
+        latest.get("salt") !== record.salt || latest.get("passwordHash") !== record.passwordHash ||
+        latest.get("hashVersion") !== record.hashVersion) {
+      throw new HttpsError("aborted", "Password changed during this request. Please try again.");
+    }
+    tx.update(docRef, {
+      hashVersion: replacement.hashVersion,
+      salt: replacement.salt,
+      passwordHash: replacement.passwordHash,
+      failedAttempts: 0,
+      lockUntil: FieldValue.delete(),
+      passwordUpdatedAt: FieldValue.serverTimestamp()
+    });
+  });
+  return { success: true };
+});
+
 exports.resetPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Verify your mobile number with SMS OTP first.");
