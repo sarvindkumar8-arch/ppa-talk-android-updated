@@ -4,8 +4,8 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getStorage } = require("firebase-admin/storage");
-const { scrypt: scryptCallback, randomBytes, timingSafeEqual, createHash } = require("node:crypto");
-const { promisify } = require("node:util");
+const { createHash } = require("node:crypto");
+const { makePasswordHash, verifyPassword } = require("./password-hash");
 
 initializeApp();
 const db = getFirestore();
@@ -65,18 +65,7 @@ function credentialId(phone) {
   return createHash("sha256").update(phone).digest("hex");
 }
 
-async function makePasswordHash(password, saltHex) {
-  const salt = saltHex ? Buffer.from(saltHex, "hex") : randomBytes(16);
-  const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  return { salt: salt.toString("hex"), passwordHash: Buffer.from(derived).toString("hex") };
-}
 
-async function verifyPassword(password, saltHex, expectedHex) {
-  const { passwordHash } = await makePasswordHash(password, saltHex);
-  const actual = Buffer.from(passwordHash, "hex");
-  const expected = Buffer.from(expectedHex, "hex");
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
 
 exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   // Registration is allowed only after Firebase Phone Auth has verified the SMS code.
@@ -101,6 +90,7 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: tr
     tx.create(docRef, {
       uid: request.auth.uid,
       phoneNumber: phone,
+      hashVersion: hash.hashVersion,
       salt: hash.salt,
       passwordHash: hash.passwordHash,
       failedAttempts: 0,
@@ -135,8 +125,8 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
   const lockUntil = record.lockUntil?.toMillis ? record.lockUntil.toMillis() : 0;
   if (lockUntil > now) throw new HttpsError("resource-exhausted", "Too many attempts. Try again after 15 minutes.");
 
-  const matches = await verifyPassword(password, record.salt, record.passwordHash);
-  if (!matches) {
+  const verification = await verifyPassword(password, record);
+  if (!verification.matches) {
     await db.runTransaction(async (tx) => {
       const latest = await tx.get(docRef);
       if (!latest.exists) return;
@@ -151,7 +141,35 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
   }
 
-  await docRef.update({ failedAttempts: 0, lockUntil: FieldValue.delete(), lastLoginAt: FieldValue.serverTimestamp() });
+  let upgradedLegacyHash = false;
+  let upgradedHash = null;
+  if (verification.needsUpgrade) {
+    upgradedHash = await makePasswordHash(password);
+  }
+  await db.runTransaction(async (tx) => {
+    const latest = await tx.get(docRef);
+    if (!latest.exists) throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
+
+    const latestRecord = latest.data();
+    const stillSameCredential = latestRecord.salt === record.salt &&
+      latestRecord.passwordHash === record.passwordHash &&
+      latestRecord.hashVersion === record.hashVersion;
+    const update = {
+      failedAttempts: 0,
+      lockUntil: FieldValue.delete(),
+      lastLoginAt: FieldValue.serverTimestamp()
+    };
+    if (verification.needsUpgrade && stillSameCredential && upgradedHash) {
+      update.hashVersion = upgradedHash.hashVersion;
+      update.salt = upgradedHash.salt;
+      update.passwordHash = upgradedHash.passwordHash;
+      upgradedLegacyHash = true;
+    }
+    tx.update(docRef, update);
+  });
+  if (upgradedLegacyHash) {
+    console.info("Legacy phone password hash upgraded to version 2", { uid: record.uid });
+  }
   const authUser = await getAuth().getUser(record.uid);
   await db.collection("publicProfiles").doc(record.uid).set({
     uid: record.uid,
