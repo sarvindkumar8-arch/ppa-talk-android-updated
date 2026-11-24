@@ -63,6 +63,8 @@ android {
 
     buildFeatures {
         compose = true
+        // MainActivity selects the App Check provider using BuildConfig.DEBUG.
+        buildConfig = true
     }
 }
 
