@@ -1,10 +1,10 @@
+
 const { scrypt: scryptCallback, randomBytes, timingSafeEqual } = require("node:crypto");
 const { promisify } = require("node:util");
 
 const scrypt = promisify(scryptCallback);
 const SCRYPT_OPTIONS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const KEY_LENGTH = 64;
-
 async function makePasswordHash(password) {
   const salt = randomBytes(16);
   const derived = await scrypt(password, salt, KEY_LENGTH, SCRYPT_OPTIONS);
@@ -60,11 +60,100 @@ async function verifyPassword(password, record) {
   };
 }
 
+async function recordFailedLoginAttempt(
+  db, docRef, originalRecord, maxFailedAttempts, lockDurationMs
+) {
+  return db.runTransaction(async (tx) => {
+    const latest = await tx.get(docRef);
+    if (!latest.exists) return false;
+
+    const latestRecord = latest.data();
+    const credentialUnchanged =
+      latestRecord.salt === originalRecord.salt &&
+      latestRecord.passwordHash === originalRecord.passwordHash &&
+      latestRecord.hashVersion === originalRecord.hashVersion;
+
+    if (!credentialUnchanged) return false;
+
+    const previousAttempts =
+      Number.isInteger(latestRecord.failedAttempts) &&
+      latestRecord.failedAttempts >= 0
+        ? latestRecord.failedAttempts
+        : 0;
+
+    const attempts = previousAttempts + 1;
+    const update = { failedAttempts: attempts };
+
+    if (attempts >= maxFailedAttempts) {
+      update.failedAttempts = 0;
+      update.lockUntil = new Date(Date.now() + lockDurationMs);
+    }
+
+    tx.update(docRef, update);
+    return true;
+  });
+}
+
+async function resetPasswordCredentials(
+  db, docRef, expectedUid, expectedPhone, newHash, FieldValue, expectedRecord = null
+) {
+  let updated = false;
+
+  await db.runTransaction(async (tx) => {
+    updated = false;
+
+    const snapshot = await tx.get(docRef);
+    if (!snapshot.exists) return;
+
+    const latest = snapshot.data();
+
+    if (
+      latest.uid !== expectedUid ||
+      latest.phoneNumber !== expectedPhone
+    ) return;
+
+    if (expectedRecord && (
+      latest.salt !== expectedRecord.salt ||
+      latest.passwordHash !== expectedRecord.passwordHash ||
+      latest.hashVersion !== expectedRecord.hashVersion
+    )) return;
+
+    tx.update(docRef, {
+      hashVersion: newHash.hashVersion,
+      salt: newHash.salt,
+      passwordHash: newHash.passwordHash,
+      failedAttempts: 0,
+      lockUntil: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+      passwordUpdatedAt: FieldValue.serverTimestamp()
+    });
+
+    updated = true;
+  });
+
+  return updated;
+}
+
+function isAccountLocked(record, now = Date.now()) {
+  const lockUntil = record?.lockUntil;
+  const lockUntilMs =
+    typeof lockUntil?.toMillis === "function"
+      ? lockUntil.toMillis()
+      : lockUntil instanceof Date
+        ? lockUntil.getTime()
+        : 0;
+
+  return lockUntilMs > now;
+}
 async function finalizeSuccessfulLogin(db, docRef, originalRecord, verification, upgradedHash, FieldValue) {
   let credentialUnchanged = false;
   let upgradedLegacyHash = false;
 
   await db.runTransaction(async (tx) => {
+    // Reset results on every transaction attempt because Firestore may retry.
+    credentialUnchanged = false;
+    upgradedLegacyHash = false;
+
     const latest = await tx.get(docRef);
     if (!latest.exists) return;
 
@@ -97,4 +186,11 @@ async function finalizeSuccessfulLogin(db, docRef, originalRecord, verification,
   return { credentialUnchanged, upgradedLegacyHash };
 }
 
-module.exports = { makePasswordHash, verifyPassword, finalizeSuccessfulLogin };
+module.exports = {
+  makePasswordHash,
+  verifyPassword,
+  finalizeSuccessfulLogin,
+  recordFailedLoginAttempt,
+  resetPasswordCredentials,
+  isAccountLocked
+};
