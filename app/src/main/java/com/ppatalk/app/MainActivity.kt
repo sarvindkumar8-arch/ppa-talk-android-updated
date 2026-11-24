@@ -1235,7 +1235,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Reels" -> ReelsScreen(uid, Modifier.padding(padding), onOpenUserProfile = { profileUid ->
                 viewedProfileUid = profileUid
                 navigateTo("Profile")
-            })
+            }, onCreateReel = { navigateTo("CreateReel") })
             "Notifications" -> NotificationsScreen(uid, Modifier.padding(padding), onOpenFriends = { navigateTo("Friends") })
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
@@ -1369,7 +1369,8 @@ private fun observeVisibleContentOwners(
 fun ReelsScreen(
     currentUid: String,
     modifier: Modifier = Modifier,
-    onOpenUserProfile: (String) -> Unit = {}
+    onOpenUserProfile: (String) -> Unit = {},
+    onCreateReel: () -> Unit = {}
 ) {
     var reels by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -1435,7 +1436,10 @@ fun ReelsScreen(
             verticalAlignment = Alignment.CenterVertically) {
             Text("Reels", color = Color.White, style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.PlayCircleFilled, contentDescription = "Reels", tint = Color.White)
+            TextButton(onClick = onCreateReel) {
+                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                Text("Create Reel", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
         }
         when {
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
