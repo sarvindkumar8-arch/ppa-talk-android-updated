@@ -125,6 +125,8 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: tr
     }, { merge: true });
   });
 
+  // Keep Firebase Auth identity in sync with the verified signup name.
+  await getAuth().updateUser(request.auth.uid, { displayName });
   const token = await getAuth().createCustomToken(request.auth.uid);
   return { token };
 });
@@ -229,9 +231,24 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     console.info("Legacy phone password hash upgraded to version 2");
   }
   const authUser = await getAuth().getUser(record.uid);
-  await db.collection("publicProfiles").doc(record.uid).set({
+  const profileRef = db.collection("publicProfiles").doc(record.uid);
+  const profileSnapshot = await profileRef.get();
+  const savedName = profileSnapshot.get("displayName");
+  const authName = authUser.displayName;
+  const displayName =
+    (typeof savedName === "string" && savedName.trim()
+      ? savedName.trim()
+      : (typeof authName === "string" && authName.trim()
+        ? authName.trim()
+        : "PPA Talk user")).slice(0, 80);
+
+  // Preserve the existing profile name and synchronize legacy Auth accounts.
+  if (authName !== displayName) {
+    await getAuth().updateUser(record.uid, { displayName });
+  }
+  await profileRef.set({
     uid: record.uid,
-    displayName: authUser.displayName || "PPA Talk user",
+    displayName,
     updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
   const token = await getAuth().createCustomToken(record.uid);
