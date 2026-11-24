@@ -5,7 +5,7 @@ const { getFirestore, FieldValue, FieldPath } = require("firebase-admin/firestor
 const { getMessaging } = require("firebase-admin/messaging");
 const { getStorage } = require("firebase-admin/storage");
 const { createHash } = require("node:crypto");
-const { makePasswordHash, verifyPassword } = require("./password-hash");
+const { makePasswordHash, verifyPassword, finalizeSuccessfulLogin } = require("./password-hash");
 
 initializeApp();
 const db = getFirestore();
@@ -140,34 +140,12 @@ exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true,
     throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
   }
 
-  let upgradedLegacyHash = false;
-  let upgradedHash = null;
-  if (verification.needsUpgrade) {
-    upgradedHash = await makePasswordHash(password);
-  }
-  await db.runTransaction(async (tx) => {
-    const latest = await tx.get(docRef);
-    if (!latest.exists) throw new HttpsError("unauthenticated", "Mobile number or password is incorrect.");
-
-    const latestRecord = latest.data();
-    const stillSameCredential = latestRecord.salt === record.salt &&
-      latestRecord.passwordHash === record.passwordHash &&
-      latestRecord.hashVersion === record.hashVersion;
-    const update = {
-      failedAttempts: 0,
-      lockUntil: FieldValue.delete(),
-      lastLoginAt: FieldValue.serverTimestamp()
-    };
-    if (verification.needsUpgrade && stillSameCredential && upgradedHash) {
-      update.hashVersion = upgradedHash.hashVersion;
-      update.salt = upgradedHash.salt;
-      update.passwordHash = upgradedHash.passwordHash;
-      upgradedLegacyHash = true;
-    }
-    tx.update(docRef, update);
-  });
+  const upgradedHash = verification.needsUpgrade ? await makePasswordHash(password) : null;
+  const upgradedLegacyHash = await finalizeSuccessfulLogin(
+    db, docRef, record, verification, upgradedHash, FieldValue
+  );
   if (upgradedLegacyHash) {
-    console.info("Legacy phone password hash upgraded to version 2", { uid: record.uid });
+    console.info("Legacy phone password hash upgraded to version 2");
   }
   const authUser = await getAuth().getUser(record.uid);
   await db.collection("publicProfiles").doc(record.uid).set({
