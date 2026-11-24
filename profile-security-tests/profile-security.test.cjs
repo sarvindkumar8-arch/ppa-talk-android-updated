@@ -190,6 +190,26 @@ async function run() {
         storagePath: "post_photos/private-user/post.jpg", audience: "public"
       }));
     }],
+    ["Owner can create a Reel post with a UID containing regex characters", async () => {
+      const uid = "phone+91user";
+      const db = testEnv.authenticatedContext(uid).firestore();
+      await assertSucceeds(setDoc(doc(db, "posts/phone-reel"), {
+        uid, authorName: "Phone User", text: "", mediaUrl: "",
+        storagePath: "reels/phone+91user/1795524047.mp4",
+        mediaType: "video", postType: "reel", audience: "public",
+        createdAt: serverTimestamp()
+      }));
+    }],
+    ["User cannot create a Reel post with another user's storage path", async () => {
+      const uid = "phone+91user";
+      const db = testEnv.authenticatedContext(uid).firestore();
+      await assertFails(setDoc(doc(db, "posts/foreign-reel"), {
+        uid, authorName: "Phone User", text: "", mediaUrl: "",
+        storagePath: "reels/another-user/clip.mp4",
+        mediaType: "video", postType: "reel", audience: "public",
+        createdAt: serverTimestamp()
+      }));
+    }],
     ["Expired story cannot be read even from a public profile", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(getDoc(doc(db, "stories/expired-story")));
