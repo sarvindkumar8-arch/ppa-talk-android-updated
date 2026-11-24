@@ -6973,6 +6973,7 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmNewPassword by remember { mutableStateOf("") }
+    var phoneChangePasswordMode by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
@@ -7035,6 +7036,18 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                 } else {
                     Text("This account uses mobile-number authentication.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            currentPassword = ""
+                            newPassword = ""
+                            confirmNewPassword = ""
+                            securityMessage = ""
+                            showChangePassword = true
+                            phoneChangePasswordMode = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Change password") }
                 }
                 if (securityMessage.isNotBlank()) {
                     Text(securityMessage, style = MaterialTheme.typography.bodySmall,
@@ -7058,7 +7071,7 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
-    if (showChangePassword && account?.email != null) {
+    if (showChangePassword && account != null) {
         AlertDialog(
             onDismissRequest = { if (!securityBusy) showChangePassword = false },
             title = { Text("Change password") },
@@ -7099,6 +7112,38 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                             else -> {
                                 securityBusy = true
                                 securityMessage = ""
+                                if (phoneChangePasswordMode) {
+                                    if (newPassword.length > 128) {
+                                        securityMessage = "New password must be 128 characters or fewer."
+                                        return@TextButton
+                                    }
+                                    val phone = account.phoneNumber
+                                    if (phone.isNullOrBlank()) {
+                                        securityMessage = "Phone number is unavailable for this account."
+                                        return@TextButton
+                                    }
+                                    securityBusy = true
+                                    val payload = hashMapOf(
+                                        "phoneNumber" to phone,
+                                        "currentPassword" to currentPassword,
+                                        "newPassword" to newPassword
+                                    )
+                                    FirebaseFunctions.getInstance("asia-south1")
+                                        .getHttpsCallable("changePhonePassword").call(payload)
+                                        .addOnSuccessListener {
+                                            securityMessage = "Password changed successfully."
+                                            showChangePassword = false
+                                            phoneChangePasswordMode = false
+                                            currentPassword = ""
+                                            newPassword = ""
+                                            confirmNewPassword = ""
+                                            securityBusy = false
+                                        }
+                                        .addOnFailureListener { exception ->
+                                            securityMessage = exception.localizedMessage ?: "Could not change password."
+                                            securityBusy = false
+                                        }
+                                } else {
                                 val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(
                                     account.email!!, currentPassword
                                 )
@@ -7122,13 +7167,17 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                                         }
                                     }
                                 }
+                                }
                             }
                         }
                     }
                 ) { Text(if (securityBusy) "Please wait…" else "Update password") }
             },
             dismissButton = {
-                TextButton(enabled = !securityBusy, onClick = { showChangePassword = false }) {
+                TextButton(enabled = !securityBusy, onClick = {
+                    showChangePassword = false
+                    phoneChangePasswordMode = false
+                }) {
                     Text("Cancel")
                 }
             }
