@@ -1244,6 +1244,10 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 onReelUploadProgress = { status, percent ->
                     reelUploadStatus = status
                     reelUploadProgress = percent.coerceIn(0, 100)
+                    if (status.startsWith("Uploading") || status.startsWith("Saving")) {
+                        backStack.clear()
+                        selected = "Home"
+                    }
                 }
             )
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
