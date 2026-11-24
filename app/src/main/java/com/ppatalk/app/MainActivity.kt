@@ -78,7 +78,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
@@ -241,7 +240,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Install App Check before any Auth, Firestore, Storage, or Functions calls.
         val appCheckFactory = if (BuildConfig.DEBUG) {
-            DebugAppCheckProviderFactory.getInstance()
+            // Keep the debug-only provider out of release compilation and packaging.
+            Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
+                .getMethod("getInstance")
+                .invoke(null) as com.google.firebase.appcheck.AppCheckProviderFactory
         } else {
             PlayIntegrityAppCheckProviderFactory.getInstance()
         }
