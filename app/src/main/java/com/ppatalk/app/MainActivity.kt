@@ -4162,8 +4162,9 @@ fun CreatePostScreen(
                                     }
                                 }.addOnFailureListener { ex ->
                                     busy = false
-                                    onReelUploadProgress("Reel publish failed", 0)
-                                    reelSettingsNotice = ex.localizedMessage ?: "Could not publish Reel to Feed."
+                                    val detail = ex.localizedMessage ?: ex.message ?: "Unknown Firestore error"
+                                    onReelUploadProgress("Reel publish failed: $detail", 0)
+                                    reelSettingsNotice = "error: $detail"
                                 }
                             }
                             val uri = selectedMedia
@@ -4186,8 +4187,9 @@ fun CreatePostScreen(
                                         saveReel("", mediaRef.path)
                                     }.addOnFailureListener { ex ->
                                         busy = false
-                                        onReelUploadProgress("Reel upload failed", 0)
-                                        reelSettingsNotice = ex.localizedMessage ?: "Video upload failed."
+                                        val detail = ex.localizedMessage ?: ex.message ?: "Unknown Firebase Storage error"
+                                        onReelUploadProgress("Reel upload failed: $detail", 0)
+                                        reelSettingsNotice = "error: $detail"
                                     }
                             }
                         }, enabled = !busy && selectedMedia != null && postText.trim().length <= 5000,
@@ -4201,17 +4203,24 @@ fun CreatePostScreen(
                     if (reelSettingsNotice.isNotBlank()) {
                         AlertDialog(
                             onDismissRequest = { reelSettingsNotice = "" },
-                            title = { Text(when (reelSettingsNotice) {
-                                "location" -> "Add location"; "tags" -> "Tag people"; "affiliate" -> "Add affiliate link"
-                                "playlist" -> "Add to playlist"; "draft" -> "Draft saved"; else -> "Reel setting"
+                            title = { Text(when {
+                                reelSettingsNotice.startsWith("error:") -> "Reel publish failed"
+                                reelSettingsNotice == "location" -> "Add location"
+                                reelSettingsNotice == "tags" -> "Tag people"
+                                reelSettingsNotice == "affiliate" -> "Add affiliate link"
+                                reelSettingsNotice == "playlist" -> "Add to playlist"
+                                reelSettingsNotice == "draft" -> "Draft saved"
+                                else -> "Reel setting"
                             }) },
                             text = {
-                                when (reelSettingsNotice) {
-                                    "location" -> OutlinedTextField(value = reelLocation, onValueChange = { reelLocation = it }, label = { Text("Location") })
-                                    "tags" -> OutlinedTextField(value = reelTags, onValueChange = { reelTags = it }, label = { Text("Usernames, comma separated") })
-                                    "affiliate" -> OutlinedTextField(value = reelAffiliateLink, onValueChange = { reelAffiliateLink = it }, label = { Text("Product URL") })
-                                    "playlist" -> OutlinedTextField(value = reelPlaylist, onValueChange = { reelPlaylist = it }, label = { Text("Playlist name") })
-                                    "draft" -> Text("Your Reel draft details are retained while this screen remains open.")
+                                when {
+                                    reelSettingsNotice.startsWith("error:") ->
+                                        Text(reelSettingsNotice.removePrefix("error:").trim())
+                                    reelSettingsNotice == "location" -> OutlinedTextField(value = reelLocation, onValueChange = { reelLocation = it }, label = { Text("Location") })
+                                    reelSettingsNotice == "tags" -> OutlinedTextField(value = reelTags, onValueChange = { reelTags = it }, label = { Text("Usernames, comma separated") })
+                                    reelSettingsNotice == "affiliate" -> OutlinedTextField(value = reelAffiliateLink, onValueChange = { reelAffiliateLink = it }, label = { Text("Product URL") })
+                                    reelSettingsNotice == "playlist" -> OutlinedTextField(value = reelPlaylist, onValueChange = { reelPlaylist = it }, label = { Text("Playlist name") })
+                                    reelSettingsNotice == "draft" -> Text("Your Reel draft details are retained while this screen remains open.")
                                     else -> Text("This option is shown in the settings UI. Its external service or eligibility workflow is not connected yet.")
                                 }
                             },
