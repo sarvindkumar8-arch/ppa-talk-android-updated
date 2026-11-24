@@ -250,7 +250,25 @@ fun PPATalkApp() {
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
-    var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser?.takeIf { it.phoneNumber != null || it.isEmailVerified }) }
+    val auth = remember { FirebaseAuth.getInstance() }
+    var user by remember {
+        mutableStateOf(auth.currentUser?.takeIf {
+            it.phoneNumber != null || it.isEmailVerified
+        })
+    }
+
+    DisposableEffect(auth) {
+        val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val current = firebaseAuth.currentUser
+            user = current?.takeIf {
+                it.phoneNumber != null || it.isEmailVerified
+            }
+        }
+        auth.addAuthStateListener(authListener)
+        onDispose {
+            auth.removeAuthStateListener(authListener)
+        }
+    }
     val lightColors = lightColorScheme(
         primary = RoyalBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
