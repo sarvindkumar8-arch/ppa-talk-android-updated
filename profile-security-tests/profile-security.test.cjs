@@ -11,7 +11,8 @@ const {
   setDoc,
   updateDoc,
   deleteDoc,
-  serverTimestamp
+  serverTimestamp,
+  deleteField
 } = require("firebase/firestore");
 
 const PROJECT_ID = "ppa-talk-profile-security-test";
@@ -342,10 +343,18 @@ async function run() {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(deleteDoc(doc(db, "profileDirectory/private-user")));
     }],
-    ["Owner can update allowed profile directory fields", async () => {
+    ["Owner can remove legacy private profile media URLs from directory", async () => {
       const db = testEnv.authenticatedContext("private-user").firestore();
       await assertSucceeds(updateDoc(doc(db, "profileDirectory/private-user"), {
-        displayName: "Updated Private User"
+        displayName: "Updated Private User",
+        photoUrl: deleteField(),
+        coverPhotoUrl: deleteField()
+      }));
+    }],
+    ["Owner cannot re-add private profile media URLs to directory", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertFails(updateDoc(doc(db, "profileDirectory/private-user"), {
+        photoUrl: "https://example.test/private-avatar.jpg"
       }));
     }],
     ["Owner cannot add online status to profile directory", async () => {
