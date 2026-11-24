@@ -9,7 +9,13 @@ service cloud.firestore {
         && path.split('/').size() == 3
         && path.split('/')[0] == folder
         && path.split('/')[1] == request.auth.uid
-        && path.split('/')[2].matches('^[A-Za-z0-9_.-]{1,180}
+        && path.split('/')[2] is string
+        && path.split('/')[2].size() > 0
+        && path.split('/')[2].size() <= 180;
+    }
+
+    function areAcceptedFriends(uidA, uidB) {
+      return signedIn()
         && uidA is string && uidB is string && uidA != uidB
         && (
           exists(/databases/$(database)/documents/friends/$(uidA)/list/$(uidB))
