@@ -111,6 +111,39 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: tr
   return { token };
 });
 
+// Reset a phone password only after Firebase Phone Auth has verified the same number.
+exports.resetPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Verify your mobile number with SMS OTP first.");
+  const phone = normalizePhone(request.data?.phoneNumber);
+  const newPassword = validatePassword(request.data?.newPassword);
+  await consumeRateLimit("phone-password-reset", uid + ":" + credentialId(phone), 5, 60 * 60 * 1000);
+
+  const verifiedUser = await getAuth().getUser(uid);
+  if (!verifiedUser.phoneNumber || verifiedUser.phoneNumber !== phone) {
+    throw new HttpsError("permission-denied", "The verified mobile number does not match this account.");
+  }
+
+  const docRef = db.collection("phoneAuthCredentials").doc(credentialId(phone));
+  const hash = await makePasswordHash(newPassword);
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(docRef);
+    if (!snapshot.exists || snapshot.get("uid") !== uid || snapshot.get("phoneNumber") !== phone) {
+      throw new HttpsError("not-found", "Phone account was not found.");
+    }
+    tx.update(docRef, {
+      hashVersion: hash.hashVersion,
+      salt: hash.salt,
+      passwordHash: hash.passwordHash,
+      failedAttempts: 0,
+      lockUntil: FieldValue.delete(),
+      passwordUpdatedAt: FieldValue.serverTimestamp()
+    });
+  });
+
+  return { success: true };
+});
+
 exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   const phone = normalizePhone(request.data?.phoneNumber);
   const password = validatePassword(request.data?.password);
