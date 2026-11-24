@@ -782,32 +782,46 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                     } else {
                         busy = true
                         val payload = hashMapOf("phoneNumber" to fullPhone, "password" to password)
-                        FirebaseFunctions.getInstance("asia-south1").getHttpsCallable("loginWithPhonePassword").call(payload)
-                            .addOnSuccessListener { result ->
-                                val data = result.getData() as? Map<*, *>
-                                val token = data?.get("token") as? String
-                                if (token.isNullOrBlank()) {
+                        // Verify that the installed Debug/Release App Check provider can supply a token
+                        // before calling the App Check-enforced phone-login function. Never display the token.
+                        FirebaseAppCheck.getInstance().getAppCheckToken(false)
+                            .addOnSuccessListener { appCheckToken ->
+                                if (appCheckToken.token.isBlank()) {
                                     busy = false
-                                    message = "LOGIN_STAGE: Cloud Function succeeded but returned no custom token."
+                                    message = "LOGIN_STAGE: App Check returned an empty token. Check this build's App Check provider."
                                 } else {
-                                    message = "LOGIN_STAGE: Cloud Function succeeded; Firebase token sign-in is next."
-                                    auth.signInWithCustomToken(token)
-                                        .addOnSuccessListener {
-                                            busy = false
-                                            message = ""
-                                            onAuthenticated()
+                                    FirebaseFunctions.getInstance("asia-south1").getHttpsCallable("loginWithPhonePassword").call(payload)
+                                        .addOnSuccessListener { result ->
+                                            val data = result.getData() as? Map<*, *>
+                                            val token = data?.get("token") as? String
+                                            if (token.isNullOrBlank()) {
+                                                busy = false
+                                                message = "LOGIN_STAGE: Cloud Function succeeded but returned no custom token."
+                                            } else {
+                                                message = "LOGIN_STAGE: Cloud Function succeeded; Firebase token sign-in is next."
+                                                auth.signInWithCustomToken(token)
+                                                    .addOnSuccessListener {
+                                                        busy = false
+                                                        message = ""
+                                                        onAuthenticated()
+                                                    }
+                                                    .addOnFailureListener { exception ->
+                                                        busy = false
+                                                        message = "LOGIN_STAGE: Firebase custom-token sign-in failed: ${exception.javaClass.simpleName}: ${exception.localizedMessage ?: "No details"}"
+                                                    }
+                                            }
                                         }
                                         .addOnFailureListener { exception ->
                                             busy = false
-                                            message = "LOGIN_STAGE: Firebase custom-token sign-in failed: ${exception.javaClass.simpleName}: ${exception.localizedMessage ?: "No details"}"
+                                            val code = (exception as? com.google.firebase.functions.FirebaseFunctionsException)?.code?.name
+                                                ?: exception.javaClass.simpleName
+                                            message = "LOGIN_STAGE: Cloud Function call failed ($code): ${exception.localizedMessage ?: "No details"}"
                                         }
                                 }
                             }
                             .addOnFailureListener { exception ->
                                 busy = false
-                                val code = (exception as? com.google.firebase.functions.FirebaseFunctionsException)?.code?.name
-                                    ?: exception.javaClass.simpleName
-                                message = "LOGIN_STAGE: Cloud Function call failed ($code): ${exception.localizedMessage ?: "No details"}"
+                                message = "LOGIN_STAGE: App Check token unavailable: ${exception.javaClass.simpleName}: ${exception.localizedMessage ?: "No details"}"
                             }
                     }
                 } else {
