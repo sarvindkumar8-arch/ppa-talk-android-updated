@@ -250,7 +250,25 @@ fun PPATalkApp() {
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences("ppa_talk_preferences", android.content.Context.MODE_PRIVATE) }
     var isDarkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
-    var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser?.takeIf { it.phoneNumber != null || it.isEmailVerified }) }
+    val auth = remember { FirebaseAuth.getInstance() }
+    var user by remember {
+        mutableStateOf(auth.currentUser?.takeIf {
+            it.phoneNumber != null || it.isEmailVerified
+        })
+    }
+
+    DisposableEffect(auth) {
+        val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val current = firebaseAuth.currentUser
+            user = current?.takeIf {
+                it.phoneNumber != null || it.isEmailVerified
+            }
+        }
+        auth.addAuthStateListener(authListener)
+        onDispose {
+            auth.removeAuthStateListener(authListener)
+        }
+    }
     val lightColors = lightColorScheme(
         primary = RoyalBlue, onPrimary = Color.White,
         secondary = Orange, onSecondary = Color.White,
@@ -337,6 +355,14 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var phoneOtp by remember { mutableStateOf("") }
     var phoneOtpSent by remember { mutableStateOf(false) }
     var phoneResendToken by remember { mutableStateOf<PhoneAuthProvider.ForceResendingToken?>(null) }
+    var phoneResetMode by remember { mutableStateOf(false) }
+    var resetOtpSent by remember { mutableStateOf(false) }
+    var resetPhoneVerified by remember { mutableStateOf(false) }
+    var resetVerificationId by remember { mutableStateOf<String?>(null) }
+    var resetOtp by remember { mutableStateOf("") }
+    var resetPassword by remember { mutableStateOf("") }
+    var resetConfirmPassword by remember { mutableStateOf("") }
+    var resetResendToken by remember { mutableStateOf<PhoneAuthProvider.ForceResendingToken?>(null) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -530,6 +556,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors
             )
         }
+        if (!phoneResetMode) {
         OutlinedTextField(
             value = password, onValueChange = { password = it },
             label = { Text("Password") },
@@ -539,8 +566,143 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
         )
+        }
+        if (phoneResetMode && resetOtpSent) {
+            OutlinedTextField(
+                value = resetOtp, onValueChange = { resetOtp = it.filter(Char::isDigit).take(6) },
+                label = { Text("SMS OTP") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors
+            )
+            OutlinedTextField(
+                value = resetPassword, onValueChange = { resetPassword = it },
+                label = { Text("New password") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors
+            )
+            OutlinedTextField(
+                value = resetConfirmPassword, onValueChange = { resetConfirmPassword = it },
+                label = { Text("Confirm new password") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors
+            )
+        }
         Spacer(Modifier.height(14.dp))
 
+        if (phoneResetMode) {
+            Button(
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    message = ""
+                    val fullPhone = countryCode + phoneNumber.filter(Char::isDigit)
+                    if (!fullPhone.matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
+                        message = "Enter a valid mobile number."
+                        return@Button
+                    }
+                    if (!resetOtpSent) {
+                        val activity = context as? Activity
+                        if (activity == null) {
+                            message = "Unable to start phone verification on this screen."
+                            return@Button
+                        }
+                        busy = true
+                        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                            override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                                resetVerificationId = null
+                                busy = true
+                                FirebaseAuth.getInstance().signInWithCredential(credential)
+                                    .addOnSuccessListener {
+                                        busy = false
+                                        resetPhoneVerified = true
+                                        resetOtpSent = true
+                                        message = "Mobile verified. Enter a new password and tap Reset Password."
+                                    }
+                                    .addOnFailureListener { busy = false; message = it.localizedMessage ?: "Phone verification failed." }
+                            }
+                            override fun onVerificationFailed(exception: com.google.firebase.FirebaseException) {
+                                busy = false
+                                message = exception.localizedMessage ?: "Could not send SMS OTP."
+                            }
+                            override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
+                                resetVerificationId = id
+                                resetResendToken = token
+                                resetOtpSent = true
+                                busy = false
+                                message = "OTP sent. Verify your mobile number."
+                            }
+                        }
+                        val builder = PhoneAuthOptions.newBuilder(FirebaseAuth.getInstance())
+                            .setPhoneNumber(fullPhone).setTimeout(60L, TimeUnit.SECONDS)
+                            .setActivity(activity).setCallbacks(callbacks)
+                        resetResendToken?.let { builder.setForceResendingToken(it) }
+                        PhoneAuthProvider.verifyPhoneNumber(builder.build())
+                    } else {
+                        if (!resetPhoneVerified && (resetOtp.length != 6 || resetVerificationId.isNullOrBlank())) {
+                            message = "Enter the 6-digit SMS OTP."
+                            return@Button
+                        }
+                        if (resetPassword.length < 8 || resetPassword.length > 128) {
+                            message = "New password must be 8 to 128 characters long."
+                            return@Button
+                        }
+                        if (resetPassword != resetConfirmPassword) {
+                            message = "New passwords do not match."
+                            return@Button
+                        }
+                        busy = true
+                        val applyPasswordReset: () -> Unit = {
+                            val verifiedPhone = FirebaseAuth.getInstance().currentUser?.phoneNumber
+                            if (verifiedPhone != fullPhone) {
+                                FirebaseAuth.getInstance().signOut()
+                                busy = false
+                                message = "Verified mobile number does not match."
+                            } else {
+                                val payload = hashMapOf("phoneNumber" to fullPhone, "newPassword" to resetPassword)
+                                FirebaseFunctions.getInstance("asia-south1")
+                                    .getHttpsCallable("resetPhonePassword").call(payload)
+                                    .addOnSuccessListener {
+                                        busy = false
+                                        resetOtpSent = false
+                                        resetPhoneVerified = false
+                                        resetVerificationId = null
+                                        resetOtp = ""
+                                        password = resetPassword
+                                        resetPassword = ""
+                                        resetConfirmPassword = ""
+                                        phoneResetMode = false
+                                        message = "Password reset successful. You are now signed in."
+                                        onAuthenticated()
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        FirebaseAuth.getInstance().signOut()
+                                        busy = false
+                                        message = exception.localizedMessage ?: "Password reset failed."
+                                    }
+                            }
+                        }
+                        if (resetPhoneVerified) {
+                            applyPasswordReset()
+                        } else {
+                            val credential = PhoneAuthProvider.getCredential(resetVerificationId!!, resetOtp)
+                            FirebaseAuth.getInstance().signInWithCredential(credential)
+                                .addOnSuccessListener { applyPasswordReset() }
+                                .addOnFailureListener { exception ->
+                                    busy = false
+                                    message = exception.localizedMessage ?: "OTP verification failed."
+                                }
+                        }
+                    }
+                }
+            ) { Text(if (busy) "Please wait..." else if (resetOtpSent) "Reset Password" else "Send OTP") }
+            TextButton(onClick = {
+                phoneResetMode = false
+                resetOtpSent = false
+                resetPhoneVerified = false
+                resetVerificationId = null
+                resetOtp = ""
+                resetPassword = ""
+                resetConfirmPassword = ""
+                message = ""
+            }) { Text("Back to Phone Login") }
+        } else {
         Button(
             onClick = {
                 message = ""
@@ -692,6 +854,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         ) {
             Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Sign In")
         }
+        }
 
         OutlinedButton(
             onClick = {
@@ -705,7 +868,18 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
         }
-        if (!isSignUp && !usePhone) {
+        if (!isSignUp && usePhone && !phoneResetMode) {
+            TextButton(enabled = !busy, onClick = {
+                phoneResetMode = true
+                resetOtpSent = false
+                resetVerificationId = null
+                resetOtp = ""
+                resetPassword = ""
+                resetConfirmPassword = ""
+                message = "Enter your registered mobile number to reset your password."
+            }) { Text("Forgot password?") }
+        }
+        if (!isSignUp && !usePhone && !phoneResetMode) {
             TextButton(
                 enabled = !busy,
                 onClick = {
@@ -6799,6 +6973,7 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmNewPassword by remember { mutableStateOf("") }
+    var phoneChangePasswordMode by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
@@ -6861,6 +7036,18 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                 } else {
                     Text("This account uses mobile-number authentication.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            currentPassword = ""
+                            newPassword = ""
+                            confirmNewPassword = ""
+                            securityMessage = ""
+                            showChangePassword = true
+                            phoneChangePasswordMode = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Change password") }
                 }
                 if (securityMessage.isNotBlank()) {
                     Text(securityMessage, style = MaterialTheme.typography.bodySmall,
@@ -6884,7 +7071,7 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
-    if (showChangePassword && account?.email != null) {
+    if (showChangePassword && account != null) {
         AlertDialog(
             onDismissRequest = { if (!securityBusy) showChangePassword = false },
             title = { Text("Change password") },
@@ -6925,6 +7112,38 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                             else -> {
                                 securityBusy = true
                                 securityMessage = ""
+                                if (phoneChangePasswordMode) {
+                                    if (newPassword.length > 128) {
+                                        securityMessage = "New password must be 128 characters or fewer."
+                                        return@TextButton
+                                    }
+                                    val phone = account.phoneNumber
+                                    if (phone.isNullOrBlank()) {
+                                        securityMessage = "Phone number is unavailable for this account."
+                                        return@TextButton
+                                    }
+                                    securityBusy = true
+                                    val payload = hashMapOf(
+                                        "phoneNumber" to phone,
+                                        "currentPassword" to currentPassword,
+                                        "newPassword" to newPassword
+                                    )
+                                    FirebaseFunctions.getInstance("asia-south1")
+                                        .getHttpsCallable("changePhonePassword").call(payload)
+                                        .addOnSuccessListener {
+                                            securityMessage = "Password changed successfully."
+                                            showChangePassword = false
+                                            phoneChangePasswordMode = false
+                                            currentPassword = ""
+                                            newPassword = ""
+                                            confirmNewPassword = ""
+                                            securityBusy = false
+                                        }
+                                        .addOnFailureListener { exception ->
+                                            securityMessage = exception.localizedMessage ?: "Could not change password."
+                                            securityBusy = false
+                                        }
+                                } else {
                                 val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(
                                     account.email!!, currentPassword
                                 )
@@ -6948,13 +7167,17 @@ fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, mo
                                         }
                                     }
                                 }
+                                }
                             }
                         }
                     }
                 ) { Text(if (securityBusy) "Please wait…" else "Update password") }
             },
             dismissButton = {
-                TextButton(enabled = !securityBusy, onClick = { showChangePassword = false }) {
+                TextButton(enabled = !securityBusy, onClick = {
+                    showChangePassword = false
+                    phoneChangePasswordMode = false
+                }) {
                     Text("Cancel")
                 }
             }

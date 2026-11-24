@@ -7,7 +7,9 @@
   "main": "index.js",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "test": "node --test password-hash.test.js",
+    "test:emulator": "node --test password-hash.emulator.test.js"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",
