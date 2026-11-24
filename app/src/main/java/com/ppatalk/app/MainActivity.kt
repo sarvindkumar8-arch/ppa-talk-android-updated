@@ -788,19 +788,26 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                 val token = data?.get("token") as? String
                                 if (token.isNullOrBlank()) {
                                     busy = false
-                                    message = "Authentication server returned an invalid response."
+                                    message = "LOGIN_STAGE: Cloud Function succeeded but returned no custom token."
                                 } else {
+                                    message = "LOGIN_STAGE: Cloud Function succeeded; Firebase token sign-in is next."
                                     auth.signInWithCustomToken(token)
-                                        .addOnSuccessListener { busy = false; onAuthenticated() }
+                                        .addOnSuccessListener {
+                                            busy = false
+                                            message = ""
+                                            onAuthenticated()
+                                        }
                                         .addOnFailureListener { exception ->
                                             busy = false
-                                            message = exception.localizedMessage ?: "Mobile login failed."
+                                            message = "LOGIN_STAGE: Firebase custom-token sign-in failed: ${exception.javaClass.simpleName}: ${exception.localizedMessage ?: "No details"}"
                                         }
                                 }
                             }
                             .addOnFailureListener { exception ->
                                 busy = false
-                                message = exception.localizedMessage ?: "Mobile authentication failed. Check backend setup."
+                                val code = (exception as? com.google.firebase.functions.FirebaseFunctionsException)?.code?.name
+                                    ?: exception.javaClass.simpleName
+                                message = "LOGIN_STAGE: Cloud Function call failed ($code): ${exception.localizedMessage ?: "No details"}"
                             }
                     }
                 } else {
