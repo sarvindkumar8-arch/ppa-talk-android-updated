@@ -10,6 +10,14 @@ on:
       - '*.gradle.kts'
       - 'settings.gradle.kts'
       - '.github/workflows/android-build.yml'
+  pull_request:
+    branches:
+      - feature/chat-voice-video-calling
+    paths:
+      - 'app/**'
+      - '*.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/android-build.yml'
 
 permissions:
   contents: read
