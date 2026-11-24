@@ -78,7 +78,7 @@ async function verifyPassword(password, saltHex, expectedHex) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
+exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   // Registration is allowed only after Firebase Phone Auth has verified the SMS code.
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Verify your mobile number with SMS OTP before creating an account.");
@@ -122,7 +122,7 @@ exports.registerWithPhonePassword = onCall({ region: REGION, enforceAppCheck: fa
   return { token };
 });
 
-exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: false, maxInstances: 10 }, async (request) => {
+exports.loginWithPhonePassword = onCall({ region: REGION, enforceAppCheck: true, maxInstances: 10 }, async (request) => {
   const phone = normalizePhone(request.data?.phoneNumber);
   const password = validatePassword(request.data?.password);
   await consumeRateLimit("phone-login", credentialId(phone) + ":" + requestNetworkKey(request), 20, 15 * 60 * 1000);
@@ -457,7 +457,7 @@ const LIVEKIT_URL = defineSecret("LIVEKIT_URL");
 
 exports.createLiveKitToken = onCall({
   region: REGION,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   maxInstances: 20,
   secrets: [LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL]
 }, async (request) => {
@@ -562,7 +562,7 @@ exports.createLiveKitToken = onCall({
 // object path; clients cannot request arbitrary objects from another user's folder.
 exports.getSecureMediaUrl = onCall({
   region: REGION,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   maxInstances: 30
 }, async (request) => {
   const viewerUid = request.auth?.uid;
@@ -651,7 +651,7 @@ exports.getSecureMediaUrl = onCall({
 
 exports.getSecureProfileMediaUrl = onCall({
   region: REGION,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   maxInstances: 20
 }, async (request) => {
   const viewerUid = request.auth?.uid;
@@ -701,7 +701,7 @@ exports.getSecureProfileMediaUrl = onCall({
 // Backfills trusted object paths and revokes bearer download tokens.
 exports.revokeLegacyContentMediaTokens = onCall({
   region: REGION,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   maxInstances: 5
 }, async (request) => {
   const uid = request.auth?.uid;
@@ -783,7 +783,7 @@ exports.revokeLegacyContentMediaTokens = onCall({
 
 exports.revokeLegacyProfileMediaTokens = onCall({
   region: REGION,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   maxInstances: 10
 }, async (request) => {
   const uid = request.auth?.uid;
