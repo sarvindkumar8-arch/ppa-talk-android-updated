@@ -76,6 +76,15 @@ async function seedData() {
       uid: "private-user", authorName: "Private User", text: "Private post",
       mediaUrl: "", mediaType: "", postType: "post", audience: "private"
     });
+    // Story sharing is governed by profile visibility, not the source Reel audience.
+    await setDoc(doc(db, "posts/public-owner-private-reel"), {
+      uid: "public-user", authorName: "Public User", text: "Private source Reel",
+      mediaUrl: "", mediaType: "video", postType: "reel", audience: "private"
+    });
+    await setDoc(doc(db, "posts/private-owner-public-reel"), {
+      uid: "private-user", authorName: "Private User", text: "Public source Reel",
+      mediaUrl: "", mediaType: "video", postType: "reel", audience: "public"
+    });
     await setDoc(doc(db, "posts/private-post/comments/private-comment"), {
       uid: "private-user", text: "Private comment", parentId: "private-post"
     });
@@ -95,6 +104,18 @@ async function seedData() {
       uid: "public-user", authorName: "Public User",
       mediaUrl: "https://example.test/story.jpg", mediaType: "image",
       storagePath: "stories/public-user/public-story.jpg",
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
+    });
+    await setDoc(doc(db, "stories/public-story-from-private-reel"), {
+      uid: "public-user", authorName: "Public User",
+      mediaUrl: "https://example.test/shared-reel-story.mp4", mediaType: "video",
+      storagePath: "reels/public-user/shared-reel.mp4",
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
+    });
+    await setDoc(doc(db, "stories/private-story-from-public-reel"), {
+      uid: "private-user", authorName: "Private User",
+      mediaUrl: "https://example.test/private-profile-story.mp4", mediaType: "video",
+      storagePath: "reels/private-user/shared-reel.mp4",
       createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000)
     });
 
@@ -316,6 +337,29 @@ async function run() {
     ["Signed-in user can read a public-profile story", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertSucceeds(getDoc(doc(db, "stories/public-story")));
+    }],
+    ["Public-profile Story shared from a private Reel is visible to a signed-in non-friend", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "stories/public-story-from-private-reel")));
+    }],
+    ["The source private Reel remains hidden from a signed-in non-friend", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "posts/public-owner-private-reel")));
+    }],
+    ["Private-profile Story shared from a public Reel remains hidden from a non-friend", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      await assertFails(getDoc(doc(db, "stories/private-story-from-public-reel")));
+    }],
+    ["Accepted friend can read a private-profile Story shared from a public Reel", async () => {
+      const db = testEnv.authenticatedContext("friend-user").firestore();
+      await assertSucceeds(getDoc(doc(db, "stories/private-story-from-public-reel")));
+    }],
+    ["Public Story does not inherit the source Reel audience field", async () => {
+      const db = testEnv.authenticatedContext("stranger-user").firestore();
+      const snapshot = await assertSucceeds(getDoc(doc(db, "stories/public-story-from-private-reel")));
+      if (Object.prototype.hasOwnProperty.call(snapshot.data(), "audience")) {
+        throw new Error("Story must use profile visibility, not a copied Reel audience");
+      }
     }],
     ["Non-friend cannot read profile presence", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
