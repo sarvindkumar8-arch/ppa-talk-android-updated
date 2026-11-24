@@ -4119,8 +4119,9 @@ fun CreatePostScreen(
                             onReelUploadProgress("Uploading Reel to PPA Talk", 0)
                             val db = FirebaseFirestore.getInstance()
                             fun saveReel(mediaUrl: String, storagePath: String) {
+                                val reelAuthorName = displayName.trim().ifBlank { "PPA Talk user" }.take(80)
                                 val post = hashMapOf(
-                                    "uid" to uid, "authorName" to displayName, "text" to postText.trim(),
+                                    "uid" to uid, "authorName" to reelAuthorName, "text" to postText.trim(),
                                     "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "", "storagePath" to storagePath, "mediaType" to "video", "postType" to "reel",
                                     "audience" to reelAudience.lowercase(), "location" to reelLocation.trim(),
                                     "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
