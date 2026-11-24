@@ -567,7 +567,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             colors = authFieldColors
         )
         }
-        if (phoneResetMode) {
+        if (phoneResetMode && resetOtpSent) {
             OutlinedTextField(
                 value = resetOtp, onValueChange = { resetOtp = it.filter(Char::isDigit).take(6) },
                 label = { Text("SMS OTP") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
