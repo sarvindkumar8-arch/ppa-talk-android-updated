@@ -1001,6 +1001,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         }
     }
     var selected by remember { mutableStateOf("Home") }
+    var reelUploadStatus by remember { mutableStateOf("") }
+    var reelUploadProgress by remember { mutableIntStateOf(0) }
     var activeChatUid by remember { mutableStateOf<String?>(null) }
     var activeChatName by remember { mutableStateOf("") }
     var viewedProfileUid by remember { mutableStateOf(uid) }
@@ -1191,7 +1193,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 onCreateVideo = { navigateTo("CreateReel") },
                 onOpenProfile = { viewedProfileUid = uid; navigateTo("Profile") },
                 onOpenUserProfile = { profileUid -> viewedProfileUid = profileUid; navigateTo("Profile") },
-                displayName = displayName
+                displayName = displayName,
+                reelUploadStatus = reelUploadStatus,
+                reelUploadProgress = reelUploadProgress
             )
             "Profile" -> if (viewedProfileUid == uid) {
                 ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
@@ -1223,7 +1227,29 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
             "CreatePhoto" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "image")
             "CreateVideo" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "video")
-            "CreateReel" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "media")
+            "CreateReel" -> CreatePostScreen(
+                uid, displayName, email, Modifier.padding(padding), initialPicker = "media",
+                onPublished = {
+                    reelUploadStatus = ""
+                    reelUploadProgress = 0
+                    backStack.clear()
+                    selected = "Home"
+                },
+                onClose = {
+                    reelUploadStatus = ""
+                    reelUploadProgress = 0
+                    backStack.clear()
+                    selected = "Home"
+                },
+                onReelUploadProgress = { status, percent ->
+                    reelUploadStatus = status
+                    reelUploadProgress = percent.coerceIn(0, 100)
+                    if (status.startsWith("Uploading") || status.startsWith("Saving")) {
+                        backStack.clear()
+                        selected = "Home"
+                    }
+                }
+            )
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
             "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
                 activeChatUid = friendUid
@@ -1611,7 +1637,9 @@ fun HomeFeed(
     onCreateVideo: () -> Unit = onCreatePost,
     onOpenProfile: () -> Unit = {},
     onOpenUserProfile: (String) -> Unit = {},
-    displayName: String = "PPA Talk user"
+    displayName: String = "PPA Talk user",
+    reelUploadStatus: String = "",
+    reelUploadProgress: Int = 0
 ) {
     var posts by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -1679,6 +1707,25 @@ fun HomeFeed(
         }
         item {
             StoriesStrip(uid = currentUid, displayName = displayName)
+        }
+        if (reelUploadStatus.isNotBlank()) {
+            item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            progress = { reelUploadProgress / 100f },
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.5.dp
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(reelUploadStatus, modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("$reelUploadProgress%", style = MaterialTheme.typography.labelMedium, color = RoyalBlue)
+                    }
+                    Spacer(Modifier.height(7.dp))
+                    LinearProgressIndicator(progress = { reelUploadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                }
+            }
         }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -3334,7 +3381,11 @@ private fun createFilteredPhotoUri(
 }
 
 @Composable
-fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: Modifier = Modifier, initialPicker: String? = null, onPublished: () -> Unit = {}, onClose: () -> Unit = {}) {
+fun CreatePostScreen(
+    uid: String, displayName: String, email: String, modifier: Modifier = Modifier,
+    initialPicker: String? = null, onPublished: () -> Unit = {}, onClose: () -> Unit = {},
+    onReelUploadProgress: (String, Int) -> Unit = { _, _ -> }
+) {
     var postText by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf("") }
@@ -4043,6 +4094,7 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                         Button(onClick = {
                             busy = true
                             reelSettingsNotice = ""
+                            onReelUploadProgress("Uploading Reel to PPA Talk", 0)
                             val db = FirebaseFirestore.getInstance()
                             fun saveReel(mediaUrl: String, storagePath: String) {
                                 val post = hashMapOf(
@@ -4058,7 +4110,19 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                     "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                 )
                                 db.collection("posts").add(post).addOnSuccessListener {
+                                    fun finishPublishing(storyUploaded: Boolean) {
+                                        busy = false
+                                        onReelUploadProgress("", 0)
+                                        success = true
+                                        message = if (storyUploaded) "Your Reel was published to Feed and Story!" else "Your Reel was published to Feed. Story upload failed."
+                                        selectedMedia = null
+                                        mediaType = ""
+                                        postText = ""
+                                        onPublished()
+                                        if (initialPicker == "media" || initialPicker == "video") onClose()
+                                    }
                                     if (reelShareToStory) {
+                                        onReelUploadProgress("Uploading Reel to Story", 100)
                                         val story = hashMapOf(
                                             "uid" to uid, "authorName" to displayName, "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "",
                                             "mediaType" to "video", "storagePath" to storagePath,
@@ -4066,18 +4130,18 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                                             "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
                                         )
                                         db.collection("stories").add(story)
+                                            .addOnSuccessListener { finishPublishing(true) }
+                                            .addOnFailureListener { ex ->
+                                                finishPublishing(false)
+                                                reelSettingsNotice = ex.localizedMessage ?: "Reel is on Feed, but Story upload failed."
+                                            }
+                                    } else {
+                                        finishPublishing(true)
                                     }
-                                    busy = false
-                                    success = true
-                                    message = "Your Reel was published!"
-                                    selectedMedia = null
-                                    mediaType = ""
-                                    postText = ""
-                                    onPublished()
-                                    if (initialPicker == "media" || initialPicker == "video") onClose()
                                 }.addOnFailureListener { ex ->
                                     busy = false
-                                    reelSettingsNotice = ex.localizedMessage ?: "Reel publish failed."
+                                    onReelUploadProgress("Reel publish failed", 0)
+                                    reelSettingsNotice = ex.localizedMessage ?: "Could not publish Reel to Feed."
                                 }
                             }
                             val uri = selectedMedia
@@ -4087,16 +4151,25 @@ fun CreatePostScreen(uid: String, displayName: String, email: String, modifier: 
                             } else {
                                 val mediaRef = FirebaseStorage.getInstance().reference
                                     .child("reels/" + uid + "/" + System.currentTimeMillis() + ".mp4")
-                                mediaRef.putFile(uri).addOnSuccessListener {
-                                    mediaRef.downloadUrl.addOnSuccessListener { url -> saveReel(url.toString(), mediaRef.path) }
-                                        .addOnFailureListener { ex ->
-                                            busy = false
-                                            reelSettingsNotice = ex.localizedMessage ?: "Could not get video URL."
-                                        }
-                                }.addOnFailureListener { ex ->
-                                    busy = false
-                                    reelSettingsNotice = ex.localizedMessage ?: "Video upload failed."
-                                }
+                                mediaRef.putFile(uri)
+                                    .addOnProgressListener { snapshot ->
+                                        val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                                        val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                                        onReelUploadProgress("Uploading Reel to PPA Talk", percent)
+                                    }
+                                    .addOnSuccessListener {
+                                        onReelUploadProgress("Saving Reel to Feed", 100)
+                                        mediaRef.downloadUrl.addOnSuccessListener { url -> saveReel(url.toString(), mediaRef.path) }
+                                            .addOnFailureListener { ex ->
+                                                busy = false
+                                                onReelUploadProgress("Could not finish Reel upload", 0)
+                                                reelSettingsNotice = ex.localizedMessage ?: "Could not get video URL."
+                                            }
+                                    }.addOnFailureListener { ex ->
+                                        busy = false
+                                        onReelUploadProgress("Reel upload failed", 0)
+                                        reelSettingsNotice = ex.localizedMessage ?: "Video upload failed."
+                                    }
                             }
                         }, enabled = !busy && selectedMedia != null && postText.trim().length <= 5000,
                             modifier = Modifier.weight(1f).height(54.dp),
