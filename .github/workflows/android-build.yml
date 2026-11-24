@@ -5,18 +5,15 @@ on:
   push:
     branches:
       - feature/chat-voice-video-calling
-    paths:
-      - 'app/**'
-      - '*.gradle.kts'
-      - 'settings.gradle.kts'
-      - '.github/workflows/android-build.yml'
+  pull_request:
+    branches:
+      - feature/chat-voice-video-calling
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
