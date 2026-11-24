@@ -357,6 +357,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     var phoneResendToken by remember { mutableStateOf<PhoneAuthProvider.ForceResendingToken?>(null) }
     var phoneResetMode by remember { mutableStateOf(false) }
     var resetOtpSent by remember { mutableStateOf(false) }
+    var resetPhoneVerified by remember { mutableStateOf(false) }
     var resetVerificationId by remember { mutableStateOf<String?>(null) }
     var resetOtp by remember { mutableStateOf("") }
     var resetPassword by remember { mutableStateOf("") }
@@ -610,6 +611,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                                 FirebaseAuth.getInstance().signInWithCredential(credential)
                                     .addOnSuccessListener {
                                         busy = false
+                                        resetPhoneVerified = true
                                         resetOtpSent = true
                                         message = "Mobile verified. Enter a new password and tap Reset Password."
                                     }
@@ -633,7 +635,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         resetResendToken?.let { builder.setForceResendingToken(it) }
                         PhoneAuthProvider.verifyPhoneNumber(builder.build())
                     } else {
-                        if (resetOtp.length != 6 || resetVerificationId.isNullOrBlank()) {
+                        if (!resetPhoneVerified && (resetOtp.length != 6 || resetVerificationId.isNullOrBlank())) {
                             message = "Enter the 6-digit SMS OTP."
                             return@Button
                         }
@@ -646,47 +648,54 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                             return@Button
                         }
                         busy = true
-                        val credential = PhoneAuthProvider.getCredential(resetVerificationId!!, resetOtp)
-                        FirebaseAuth.getInstance().signInWithCredential(credential)
-                            .addOnSuccessListener { authResult ->
-                                val verifiedPhone = authResult.user?.phoneNumber
-                                if (verifiedPhone != fullPhone) {
-                                    FirebaseAuth.getInstance().signOut()
-                                    busy = false
-                                    message = "Verified mobile number does not match."
-                                } else {
-                                    val payload = hashMapOf("phoneNumber" to fullPhone, "newPassword" to resetPassword)
-                                    FirebaseFunctions.getInstance("asia-south1")
-                                        .getHttpsCallable("resetPhonePassword").call(payload)
-                                        .addOnSuccessListener {
-                                            busy = false
-                                            resetOtpSent = false
-                                            resetVerificationId = null
-                                            resetOtp = ""
-                                            password = resetPassword
-                                            resetPassword = ""
-                                            resetConfirmPassword = ""
-                                            phoneResetMode = false
-                                            message = "Password reset successful. You are now signed in."
-                                            onAuthenticated()
-                                        }
-                                        .addOnFailureListener { exception ->
-                                            FirebaseAuth.getInstance().signOut()
-                                            busy = false
-                                            message = exception.localizedMessage ?: "Password reset failed."
-                                        }
-                                }
-                            }
-                            .addOnFailureListener { exception ->
+                        val applyPasswordReset: () -> Unit = {
+                            val verifiedPhone = FirebaseAuth.getInstance().currentUser?.phoneNumber
+                            if (verifiedPhone != fullPhone) {
+                                FirebaseAuth.getInstance().signOut()
                                 busy = false
-                                message = exception.localizedMessage ?: "OTP verification failed."
+                                message = "Verified mobile number does not match."
+                            } else {
+                                val payload = hashMapOf("phoneNumber" to fullPhone, "newPassword" to resetPassword)
+                                FirebaseFunctions.getInstance("asia-south1")
+                                    .getHttpsCallable("resetPhonePassword").call(payload)
+                                    .addOnSuccessListener {
+                                        busy = false
+                                        resetOtpSent = false
+                                        resetPhoneVerified = false
+                                        resetVerificationId = null
+                                        resetOtp = ""
+                                        password = resetPassword
+                                        resetPassword = ""
+                                        resetConfirmPassword = ""
+                                        phoneResetMode = false
+                                        message = "Password reset successful. You are now signed in."
+                                        onAuthenticated()
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        FirebaseAuth.getInstance().signOut()
+                                        busy = false
+                                        message = exception.localizedMessage ?: "Password reset failed."
+                                    }
                             }
+                        }
+                        if (resetPhoneVerified) {
+                            applyPasswordReset()
+                        } else {
+                            val credential = PhoneAuthProvider.getCredential(resetVerificationId!!, resetOtp)
+                            FirebaseAuth.getInstance().signInWithCredential(credential)
+                                .addOnSuccessListener { applyPasswordReset() }
+                                .addOnFailureListener { exception ->
+                                    busy = false
+                                    message = exception.localizedMessage ?: "OTP verification failed."
+                                }
+                        }
                     }
                 }
             ) { Text(if (busy) "Please wait..." else if (resetOtpSent) "Reset Password" else "Send OTP") }
             TextButton(onClick = {
                 phoneResetMode = false
                 resetOtpSent = false
+                resetPhoneVerified = false
                 resetVerificationId = null
                 resetOtp = ""
                 resetPassword = ""
