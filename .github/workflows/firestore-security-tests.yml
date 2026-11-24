@@ -9,10 +9,8 @@ on:
       - 'profile-security-tests/**'
       - '.github/workflows/firestore-security-tests.yml'
   pull_request:
-    paths:
-      - 'firestore.rules.example'
-      - 'profile-security-tests/**'
-      - '.github/workflows/firestore-security-tests.yml'
+    branches:
+      - feature/chat-voice-video-calling
   workflow_dispatch:
 
 permissions:
