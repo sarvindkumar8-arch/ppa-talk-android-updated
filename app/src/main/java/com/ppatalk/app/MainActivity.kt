@@ -2597,9 +2597,11 @@ Button(
                     }
                     fun saveStory(url: String, storagePath: String = "") {
                         val now = System.currentTimeMillis()
+                        // Firestore posts/stories rules require a non-empty author name (max 80 chars).
+                        val storyAuthorName = displayName.trim().ifBlank { "PPA Talk user" }.take(80)
                         val reelData = hashMapOf(
                             "uid" to authenticatedUid,
-                            "authorName" to displayName,
+                            "authorName" to storyAuthorName,
                             "text" to "",
                             "mediaUrl" to if (storagePath.isBlank()) url else "",
                             "storagePath" to storagePath,
@@ -2609,7 +2611,7 @@ Button(
                         )
                         val storyData = hashMapOf(
                             "uid" to authenticatedUid,
-                            "authorName" to displayName,
+                            "authorName" to storyAuthorName,
                             "mediaUrl" to if (storagePath.isBlank()) url else "",
                             "storagePath" to storagePath,
                             "mediaType" to mediaType,
