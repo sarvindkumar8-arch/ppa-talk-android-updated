@@ -29,12 +29,17 @@ service cloud.firestore {
         );
     }
 
+    function isPublicProfile(uid) {
+      return exists(/databases/$(database)/documents/publicProfiles/$(uid))
+        && get(/databases/$(database)/documents/publicProfiles/$(uid)).data.profileVisibility == 'public';
+    }
+
+    // A public profile may receive a chat from another user, but a requester
+    // cannot use their own public status to initiate chats with private users.
     function canStartChat(uidA, uidB) {
       return areAcceptedFriends(uidA, uidB)
-        || (exists(/databases/$(database)/documents/publicProfiles/$(uidA))
-          && get(/databases/$(database)/documents/publicProfiles/$(uidA)).data.profileVisibility == 'public')
-        || (exists(/databases/$(database)/documents/publicProfiles/$(uidB))
-          && get(/databases/$(database)/documents/publicProfiles/$(uidB)).data.profileVisibility == 'public');
+        || (signedIn() && request.auth.uid == uidA && isPublicProfile(uidB))
+        || (signedIn() && request.auth.uid == uidB && isPublicProfile(uidA));
     }
 
     function isAcceptedFriend(ownerUid) {
