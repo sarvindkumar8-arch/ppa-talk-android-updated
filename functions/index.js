@@ -503,6 +503,7 @@ exports.notifyFriendRequest = onDocumentWritten({
   });
   if (!claimed) return;
 
+  try {
   const tokensSnapshot = await db.collection("users").doc(request.toUid)
     .collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
@@ -557,6 +558,16 @@ exports.notifyFriendRequest = onDocumentWritten({
       if (snapshot.exists && snapshot.get("claimId") === claimId) tx.update(deliveryRef, { claimId: FieldValue.delete(), leaseUntil: FieldValue.delete() });
     });
     throw new Error("Friend-request push delivery failed for all tokens; retrying.");
+  }
+  } catch (error) {
+    // Release the lease on any pre-delivery or processing error so retry can proceed immediately.
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(deliveryRef);
+      if (snapshot.exists && snapshot.get("claimId") === claimId && snapshot.get("sent") !== true) {
+        tx.update(deliveryRef, { claimId: FieldValue.delete(), leaseUntil: FieldValue.delete() });
+      }
+    });
+    throw error;
   }
 });
 
