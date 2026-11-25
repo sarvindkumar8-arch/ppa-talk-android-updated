@@ -171,15 +171,6 @@ service cloud.firestore {
         && (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 4096))
         && (!('coverPhotoUrl' in request.resource.data) || (request.resource.data.coverPhotoUrl is string && request.resource.data.coverPhotoUrl.size() <= 4096))
         && (!('photoOriginalUrl' in request.resource.data) || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
-        && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
-        && (!('profileVisibility' in request.resource.data) || request.resource.data.profileVisibility in ['public', 'private'])
-        && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
-        && (!('username' in request.resource.data) || (request.resource.data.username is string && request.resource.data.username.size() <= 32))
-        && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
-        && (!('interests' in request.resource.data) || (request.resource.data.interests is list && request.resource.data.interests.size() <= 30))
-        && (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 4096))
-        && (!('coverPhotoUrl' in request.resource.data) || (request.resource.data.coverPhotoUrl is string && request.resource.data.coverPhotoUrl.size() <= 4096))
-        && (!('photoOriginalUrl' in request.resource.data) || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
         && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096))
         && !request.resource.data.keys().hasAny(['isOnline', 'lastSeen']);
       allow delete: if owns(userId);
