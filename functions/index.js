@@ -1033,9 +1033,14 @@ exports.revokeLegacyProfileMediaTokens = onCall({
           if (objectSegment) objectPath = decodeURIComponent(objectSegment);
         } catch (_) {}
       }
-      if (typeof objectPath === "string" && objectPath.startsWith(folder + "/" + uid + "/original_")) {
+      const validOriginalPath = typeof objectPath === "string" &&
+        new RegExp("^" + folder + "/" + uid + "/original_[A-Za-z0-9_.-]+$").test(objectPath);
+      if (validOriginalPath) {
         profileUpdates[pathField] = objectPath;
         profileUpdates[urlField] = FieldValue.delete();
+      } else if (objectPath) {
+        // Do not migrate an untrusted or malformed path into the profile record.
+        console.warn("Skipping malformed legacy original media path", { uid, folder });
       }
     }
     if (Object.keys(profileUpdates).length) await profileRef.update(profileUpdates);
