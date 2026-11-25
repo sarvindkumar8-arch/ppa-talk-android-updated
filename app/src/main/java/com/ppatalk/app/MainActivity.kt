@@ -4033,7 +4033,10 @@ fun CreatePostScreen(
                     val uploadUri = if (mediaType == "image" && (selectedPhotoFilter != "Original" || photoBrightness != 0f || photoContrast != 1f || photoSaturation != 1f)) {
                         createFilteredPhotoUri(context, uri, selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation) ?: uri
                     } else uri
-                    mediaRef.putFile(uploadUri)
+                    val uploadMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                        .setContentType(if (mediaType == "video") "video/mp4" else "image/jpeg")
+                        .build()
+                    mediaRef.putFile(uploadUri, uploadMetadata)
                         .addOnSuccessListener {
                             mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString(), mediaRef.path) }
                                 .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media URL could not be loaded." }
@@ -4214,7 +4217,10 @@ fun CreatePostScreen(
                             } else {
                                 val mediaRef = FirebaseStorage.getInstance().reference
                                     .child("reels/" + uid + "/" + System.currentTimeMillis() + ".mp4")
-                                mediaRef.putFile(uri)
+                                val reelMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                                    .setContentType("video/mp4")
+                                    .build()
+                                mediaRef.putFile(uri, reelMetadata)
                                     .addOnProgressListener { snapshot ->
                                         val total = snapshot.totalByteCount.coerceAtLeast(1L)
                                         val percent = (100L * snapshot.bytesTransferred / total).toInt()
