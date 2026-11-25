@@ -220,6 +220,12 @@ async function run() {
         participantIds: ["stranger-user", "private-user"]
       }));
     }],
+    ["Public requester cannot initiate a chat with a private profile", async () => {
+      const db = testEnv.authenticatedContext("public-user").firestore();
+      await assertFails(setDoc(doc(db, "chats/public-requester-private-target"), {
+        participantIds: ["public-user", "private-user"]
+      }));
+    }],
     ["Non-friend can start a chat with a public profile", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertSucceeds(setDoc(doc(db, "chats/public-profile-chat"), {
