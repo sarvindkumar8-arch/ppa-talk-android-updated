@@ -51,5 +51,12 @@ jobs:
       - name: Check Cloud Functions JavaScript syntax
         run: node --check functions/index.js
 
+      - name: Copy production rules into the emulator project directory
+        run: |
+          cp firestore.rules.example profile-security-tests/firestore.rules.ci
+          cp storage.rules.example profile-security-tests/storage.rules.ci
+          cmp -s firestore.rules.example profile-security-tests/firestore.rules.ci
+          cmp -s storage.rules.example profile-security-tests/storage.rules.ci
+
       - name: Run Firestore and Storage Emulator tests against production rules
         run: npx --yes firebase-tools emulators:exec --config profile-security-tests/firebase.json --only firestore,storage --project ppa-talk-profile-security-test "npm --prefix profile-security-tests run test:all"
