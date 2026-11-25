@@ -3517,7 +3517,7 @@ fun CreatePostScreen(
                     )
                     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                 }
-                val alreadyAllowed = permissions.any { context.checkSelfPermission(it) == 0 }
+                val alreadyAllowed = permissions.any { context.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
                 if (alreadyAllowed) {
                     galleryPermissionGranted = true
                     deviceGalleryItems = runCatching { loadDeviceGallery(context) }.getOrDefault(emptyList())
