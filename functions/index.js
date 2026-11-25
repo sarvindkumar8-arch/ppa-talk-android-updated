@@ -472,7 +472,8 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
 exports.notifyFriendRequest = onDocumentWritten({
   document: "friendRequests/{requestId}",
   region: REGION,
-  maxInstances: 20
+  maxInstances: 20,
+  retry: true
 }, async (event) => {
   const before = event.data?.before?.data();
   const request = event.data?.after?.data();
@@ -489,8 +490,7 @@ exports.notifyFriendRequest = onDocumentWritten({
     .collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
   if (tokens.length === 0) {
-    console.info("No registered FCM tokens for friend-request recipient", request.toUid);
-    return;
+    throw new Error("No registered FCM tokens; retry friend-request push delivery.");
   }
 
   const senderProfile = await db.collection("publicProfiles").doc(request.fromUid).get();
@@ -534,6 +534,8 @@ exports.notifyFriendRequest = onDocumentWritten({
   }
   if (result.successCount > 0) {
     await deliveryRef.set({ sent: true, requestId: event.params.requestId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+  } else {
+    throw new Error("Friend-request push delivery failed for all tokens; retrying.");
   }
 });
 
