@@ -187,7 +187,8 @@ class PpaCallController(
                 when (state) {
                     PeerConnection.IceConnectionState.CONNECTED,
                     PeerConnection.IceConnectionState.COMPLETED -> {
-                        stopRingback()\n                        Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
+                        stopRingback()
+                        Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
                         onStatus(if (callType == "video") videoNegotiationStatus("Connected") else "Connected")
                     }
                     PeerConnection.IceConnectionState.DISCONNECTED -> onStatus("Connection interrupted…")
