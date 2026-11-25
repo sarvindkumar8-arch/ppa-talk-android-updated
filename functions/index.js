@@ -816,8 +816,15 @@ exports.getSecureMediaUrl = onCall({
       );
     }
   } else {
-    canView = canView || visibility === "public";
-    if (!canView) {
+    // Honor explicit story audience settings; retain profile-visibility fallback for legacy stories.
+    const storyAudience = typeof record.audience === "string" ? record.audience.toLowerCase() : "";
+    if (storyAudience && !["public", "friends", "private"].includes(storyAudience)) {
+      throw new HttpsError("permission-denied", "This story has an invalid audience setting.");
+    }
+    canView = canView || (storyAudience === "public" && visibility === "public") ||
+      (!storyAudience && visibility === "public");
+    const allowFriendAccess = storyAudience === "friends" || (!storyAudience && !canView);
+    if (!canView && allowFriendAccess) {
       const pairIds = [ownerUid + "_" + viewerUid, viewerUid + "_" + ownerUid];
       const [friendEntry, requestSnapshots] = await Promise.all([
         db.collection("friends").doc(ownerUid).collection("list").doc(viewerUid).get(),
