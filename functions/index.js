@@ -576,7 +576,8 @@ exports.notifyFriendRequest = onDocumentWritten({
 exports.notifyNewChatMessage = onDocumentCreated({
   document: "chats/{chatId}/messages/{messageId}",
   region: REGION,
-  maxInstances: 30
+  maxInstances: 30,
+  retry: true
 }, async (event) => {
   const message = event.data?.data();
   if (!message || typeof message.uid !== "string" ||
