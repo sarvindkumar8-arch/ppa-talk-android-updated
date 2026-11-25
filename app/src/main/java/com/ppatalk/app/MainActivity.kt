@@ -6772,11 +6772,9 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                         error = "This chat's participant data needs repair. Please try again later."
                         null
                     } else {
-                        chatRef.set(mapOf(
-                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                            "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                            "unreadCount_$currentUid" to 0L
-                        ), com.google.firebase.firestore.SetOptions.merge())
+                        // Opening an existing chat should not require a metadata write.
+                        // Read-state is updated separately after the message listener succeeds.
+                        com.google.android.gms.tasks.Tasks.forResult<Void>(null)
                     }
                 } else {
                     chatRef.set(mapOf(
