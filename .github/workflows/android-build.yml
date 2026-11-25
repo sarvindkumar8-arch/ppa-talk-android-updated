@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - feature/chat-voice-video-calling
+      - phase-1-final
   pull_request:
     branches:
       - feature/chat-voice-video-calling
+      - phase-1-final
 permissions:
   contents: read
 jobs:
