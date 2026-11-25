@@ -456,7 +456,7 @@ service cloud.firestore {
         && request.resource.data.callerUid == request.auth.uid
         && request.resource.data.calleeUid is string
         && request.resource.data.calleeUid != request.auth.uid
-        && areAcceptedFriends(request.auth.uid, request.resource.data.calleeUid)
+        && canStartChat(request.auth.uid, request.resource.data.calleeUid)
         && request.resource.data.status == 'ringing'
         && request.resource.data.callType in ['audio', 'video'];
       allow read: if isParticipant();
