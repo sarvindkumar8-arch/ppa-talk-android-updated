@@ -6799,11 +6799,11 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                                         "text" to (doc.getString("text") ?: ""),
                                         "expireAt" to doc.getTimestamp("expireAt"))
                                 }
-                                chatRef.set(mapOf(
-                                    "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                                    "unreadCount_$currentUid" to 0L
-                                ), com.google.firebase.firestore.SetOptions.merge())
-                                    .addOnFailureListener { error = "Couldn't mark chat as read." }
+                                // Best-effort read receipt; do not block displaying messages.
+                                chatRef.update(
+                                    "lastReadAt_$currentUid", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                    "unreadCount_$currentUid", 0L
+                                ).addOnFailureListener { /* read receipt failure is non-blocking */ }
                             }
                         }
                 }?.addOnFailureListener { exception ->
@@ -6897,22 +6897,26 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                 if (messageText.isNotBlank()) {
                     sending = true; error = ""
                     val chatRef = db.collection("chats").document(chatId)
-                    chatRef.set(mapOf("participantIds" to listOf(currentUid, friendUid).sorted(),
-                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
-                        com.google.firebase.firestore.SetOptions.merge()).onSuccessTask {
-                        val messageData = hashMapOf<String, Any>(
-                            "uid" to currentUid, "text" to messageText,
-                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    val messageData = hashMapOf<String, Any>(
+                        "uid" to currentUid, "text" to messageText,
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    if (autoDeleteSeconds > 0L) {
+                        messageData["expireAt"] = com.google.firebase.Timestamp(
+                            java.util.Date(System.currentTimeMillis() + autoDeleteSeconds * 1000L)
                         )
-                        if (autoDeleteSeconds > 0L) {
-                            messageData["expireAt"] = com.google.firebase.Timestamp(
-                                java.util.Date(System.currentTimeMillis() + autoDeleteSeconds * 1000L)
-                            )
+                    }
+                    // Send directly to the messages subcollection; avoid rewriting participantIds.
+                    chatRef.collection("messages").add(messageData)
+                        .addOnSuccessListener {
+                            draft = ""; sending = false
+                            chatRef.update(
+                                "lastMessage", messageText,
+                                "lastMessageAt", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                "lastSenderUid", currentUid,
+                                "updatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            ).addOnFailureListener { /* message is sent; metadata update is best effort */ }
                         }
-                        chatRef.collection("messages").add(messageData).addOnSuccessListener {
-                            chatRef.set(mapOf("lastMessage" to messageText, "lastMessageAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(), "lastSenderUid" to currentUid), com.google.firebase.firestore.SetOptions.merge())
-                        }
-                    }.addOnSuccessListener { draft = ""; sending = false }
                         .addOnFailureListener { sending = false; error = it.localizedMessage ?: "Message send failed. Check Firestore rules." }
                 }
             }) { Icon(Icons.Default.Send, contentDescription = "Send message", tint = RoyalBlue) }
