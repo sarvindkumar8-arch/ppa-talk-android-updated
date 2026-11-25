@@ -524,11 +524,15 @@ exports.notifyNewChatMessage = onDocumentCreated({
   const recipientUid = participants.find((uid) => uid !== message.uid);
   if (typeof recipientUid !== "string") return;
 
-  // Count only messages that were not already read in an open conversation.
+  // Use a per-message marker to make unread-count increments idempotent across
+  // Cloud Function retries. Push delivery remains retryable (and may duplicate).
   const messageCreatedAt = message.createdAt?.toDate ? message.createdAt.toDate() : null;
   let shouldNotify = true;
+  const processedRef = chatRef.collection("notificationProcessed").doc(event.params.messageId);
   await db.runTransaction(async (transaction) => {
-    const latestChat = await transaction.get(chatRef);
+    const [latestChat, processed] = await Promise.all([
+      transaction.get(chatRef), transaction.get(processedRef)
+    ]);
     if (!latestChat.exists) {
       shouldNotify = false;
       return;
@@ -537,11 +541,20 @@ exports.notifyNewChatMessage = onDocumentCreated({
     if (messageCreatedAt && lastReadAt?.toDate &&
         lastReadAt.toDate().getTime() >= messageCreatedAt.getTime()) {
       shouldNotify = false;
-      return;
     }
-    transaction.set(chatRef, {
-      ["unreadCount_" + recipientUid]: FieldValue.increment(1)
-    }, { merge: true });
+    if (!processed.exists) {
+      if (shouldNotify) {
+        transaction.set(chatRef, {
+          ["unreadCount_" + recipientUid]: FieldValue.increment(1)
+        }, { merge: true });
+      }
+      transaction.create(processedRef, {
+        messageId: event.params.messageId,
+        recipientUid,
+        countedUnread: shouldNotify,
+        processedAt: FieldValue.serverTimestamp()
+      });
+    }
   });
   if (!shouldNotify) return;
 
