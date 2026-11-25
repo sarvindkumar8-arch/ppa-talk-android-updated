@@ -481,10 +481,20 @@ exports.notifyFriendRequest = onDocumentWritten({
       typeof request.fromUid !== "string" || typeof request.toUid !== "string" ||
       request.fromUid === request.toUid) return;
 
-  // Retry guard: record successful notification delivery for this request event.
+  // Transactional delivery lease prevents concurrent duplicate dispatches.
   const deliveryRef = db.collection("notificationDelivery").doc("friend_" + event.params.requestId + "_" + event.id);
-  const deliverySnapshot = await deliveryRef.get();
-  if (deliverySnapshot.exists && deliverySnapshot.get("sent") === true) return;
+  const claimId = createHash("sha256").update(event.id + ":" + Date.now()).digest("hex");
+  const leaseMs = 5 * 60 * 1000;
+  const claimed = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(deliveryRef);
+    const record = snapshot.exists ? snapshot.data() : {};
+    if (record.sent === true) return false;
+    const leaseUntil = record.leaseUntil?.toMillis ? record.leaseUntil.toMillis() : 0;
+    if (record.claimId && leaseUntil > Date.now()) return false;
+    tx.set(deliveryRef, { claimId, leaseUntil: Date.now() + leaseMs, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return true;
+  });
+  if (!claimed) return;
 
   const tokensSnapshot = await db.collection("users").doc(request.toUid)
     .collection("fcmTokens").get();
@@ -533,8 +543,12 @@ exports.notifyFriendRequest = onDocumentWritten({
     await batch.commit();
   }
   if (result.successCount > 0) {
-    await deliveryRef.set({ sent: true, requestId: event.params.requestId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+    await deliveryRef.set({ sent: true, claimId: FieldValue.delete(), leaseUntil: FieldValue.delete(), requestId: event.params.requestId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   } else {
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(deliveryRef);
+      if (snapshot.exists && snapshot.get("claimId") === claimId) tx.update(deliveryRef, { claimId: FieldValue.delete(), leaseUntil: FieldValue.delete() });
+    });
     throw new Error("Friend-request push delivery failed for all tokens; retrying.");
   }
 });
