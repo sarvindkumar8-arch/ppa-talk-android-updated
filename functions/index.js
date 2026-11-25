@@ -547,8 +547,8 @@ exports.notifyNewChatMessage = onDocumentCreated({
   const recipientUid = participants.find((uid) => uid !== message.uid);
   if (typeof recipientUid !== "string") return;
 
-  // Use a per-message marker to make unread-count increments idempotent across
-  // Cloud Function retries. Push delivery remains retryable (and may duplicate).
+  // Keep unread-count processing and push delivery status in the same marker,
+  // so a retry can resume push delivery without incrementing unread twice.
   const messageCreatedAt = message.createdAt?.toDate ? message.createdAt.toDate() : null;
   let shouldNotify = true;
   const processedRef = chatRef.collection("notificationProcessed").doc(event.params.messageId);
@@ -566,8 +566,7 @@ exports.notifyNewChatMessage = onDocumentCreated({
       shouldNotify = false;
     }
     if (processed.exists) {
-      // A retry must not send another push for an already-processed message.
-      shouldNotify = false;
+      shouldNotify = processed.get('pushSent') !== true;
       return;
     }
     if (shouldNotify) {
@@ -579,6 +578,7 @@ exports.notifyNewChatMessage = onDocumentCreated({
       messageId: event.params.messageId,
       recipientUid,
       countedUnread: shouldNotify,
+      pushSent: false,
       processedAt: FieldValue.serverTimestamp()
     });
   });
@@ -588,8 +588,7 @@ exports.notifyNewChatMessage = onDocumentCreated({
     .collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
   if (!tokens.length) {
-    console.info("No registered FCM tokens for chat recipient", recipientUid);
-    return;
+    throw new Error("No registered FCM tokens; retry chat push delivery.");
   }
 
   const senderProfile = await db.collection("publicProfiles").doc(message.uid).get();
@@ -621,6 +620,11 @@ exports.notifyNewChatMessage = onDocumentCreated({
     }
   });
   await Promise.all(stale);
+  if (result.successCount > 0) {
+    await processedRef.set({ pushSent: true, pushSentAt: FieldValue.serverTimestamp() }, { merge: true });
+  } else {
+    throw new Error("Chat push delivery failed for all tokens; retrying.");
+  }
   console.info("Chat message push result", {
     chatId: event.params.chatId,
     successCount: result.successCount,
