@@ -3245,6 +3245,7 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
     var commentText by remember(post.id) { mutableStateOf("") }
     var replyTo by remember(post.id) { mutableStateOf<FeedComment?>(null) }
     var sending by remember(post.id) { mutableStateOf(false) }
+    var sendError by remember(post.id) { mutableStateOf("") }
     var currentName by remember(currentUid) { mutableStateOf("PPA Talk user") }
     var currentPhoto by remember(currentUid) { mutableStateOf("") }
     var sortNewest by remember(post.id) { mutableStateOf(false) }
@@ -3360,6 +3361,7 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
                         TextButton(onClick = { replyTo = null }) { Text("Cancel") }
                     }
                 }
+                if (sendError.isNotBlank()) Text("Comment failed: $sendError", color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (currentPhoto.isNotBlank()) AsyncImage(model = currentPhoto, contentDescription = null,
                         modifier = Modifier.size(38.dp).clip(CircleShape), contentScale = ContentScale.Crop)
@@ -3369,11 +3371,12 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
                         placeholder = { Text("Comment as $currentName") }, shape = CircleShape, maxLines = 3)
                     IconButton(enabled = !sending && commentText.isNotBlank() && commentText.trim().length <= 1000, onClick = {
                         sending = true
+                        sendError = ""
                         val data = hashMapOf("uid" to currentUid, "authorName" to currentName, "text" to commentText.trim(),
                             "parentId" to (replyTo?.id ?: ""), "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
                         db.collection("posts").document(post.id).collection("comments").add(data)
                             .addOnSuccessListener { commentText = ""; replyTo = null; sending = false }
-                            .addOnFailureListener { sending = false }
+                            .addOnFailureListener { error -> sending = false; sendError = error.localizedMessage ?: error.toString() }
                     }) { Icon(Icons.Default.Send, contentDescription = "Send comment", tint = RoyalBlue) }
                 }
             }
