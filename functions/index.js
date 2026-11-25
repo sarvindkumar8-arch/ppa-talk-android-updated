@@ -857,7 +857,7 @@ exports.getSecureMediaUrl = onCall({
     }
     canView = canView || (storyAudience === "public" && visibility === "public") ||
       (!storyAudience && visibility === "public");
-    const allowFriendAccess = storyAudience === "friends" || (!storyAudience && !canView);
+    const allowFriendAccess = ["public", "friends"].includes(storyAudience) || (!storyAudience && !canView);
     if (!canView && allowFriendAccess) {
       const pairIds = [ownerUid + "_" + viewerUid, viewerUid + "_" + ownerUid];
       const [friendEntry, requestSnapshots] = await Promise.all([
