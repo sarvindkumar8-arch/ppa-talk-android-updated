@@ -407,6 +407,11 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
   const after = event.data?.after?.data();
   if (!after || !["accepted", "accepting", "rejected", "ended", "missed"].includes(after.status)) return;
   if (before?.status === after.status) return;
+  // Retry guard for this call-status cancellation event.
+  const cancelDeliveryRef = db.collection("notificationDelivery").doc("call_cancel_" + event.params.callId + "_" + after.status);
+  const cancelDelivery = await cancelDeliveryRef.get();
+  if (cancelDelivery.exists && cancelDelivery.get("sent") === true) return;
+
   // Clear the call notification on every device belonging to both participants.
   // The caller may have an older notification from a previous app state/device.
   const participantUids = [...new Set([after.calleeUid, after.callerUid]
@@ -441,6 +446,9 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
     }
   });
   await Promise.all(stale);
+  if (result.successCount > 0) {
+    await cancelDeliveryRef.set({ sent: true, callId: event.params.callId, status: after.status, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
   console.info("Incoming call cancellation push result", {
     callId: event.params.callId,
     status: after.status,
