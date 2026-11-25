@@ -6808,11 +6808,11 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                                     .addOnFailureListener { error = "Couldn't mark chat as read." }
                             }
                         }
-                }?.addOnFailureListener {
-                    error = "Chat access denied. Both users must be allowed to start this conversation."
+                }?.addOnFailureListener { exception ->
+                    error = "Chat initialization denied (\${exception.code}). Chat ID: $chatId"
                 }
             }
-            .addOnFailureListener { error = "Couldn't verify chat access. Check your connection." }
+            .addOnFailureListener { exception -> error = "Chat verification failed (\${exception.code}). Chat ID: $chatId" }
         onDispose { registration?.remove(); settingsRegistration?.remove() }
     }
     Column(modifier.fillMaxSize()) {
