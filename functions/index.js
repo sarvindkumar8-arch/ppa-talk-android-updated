@@ -346,6 +346,15 @@ exports.notifyIncomingCall = onDocumentCreated({
       typeof call.callerUid !== "string" || typeof call.calleeUid !== "string" ||
       !["audio", "video"].includes(call.callType)) return;
 
+  const callRef = db.collection("callSessions").doc(event.params.callId);
+  // Avoid dispatching a stale ringing alert if the session was already accepted,
+  // rejected, or ended while this create-trigger was waiting to run.
+  const latestCall = await callRef.get();
+  const latest = latestCall.data();
+  if (!latestCall.exists || latest?.status !== "ringing" ||
+      latest.callerUid !== call.callerUid || latest.calleeUid !== call.calleeUid ||
+      latest.callType !== call.callType) return;
+
   const deliveryRef = db.collection("notificationDelivery").doc("incoming_call_" + event.params.callId);
   const deliverySnapshot = await deliveryRef.get();
   if (deliverySnapshot.exists && deliverySnapshot.get("sent") === true) return;
@@ -358,14 +367,15 @@ exports.notifyIncomingCall = onDocumentCreated({
     return;
   }
 
+  // Recheck the call status immediately before delivery to reduce stale alerts.
+  const currentCall = await callRef.get();
+  if (!currentCall.exists || currentCall.get("status") !== "ringing") return;
+
   const callerProfile = await db.collection("publicProfiles").doc(call.callerUid).get();
   const callerName = callerProfile.get("displayName") || "PPA Talk user";
   const kind = call.callType === "video" ? "video" : "voice";
   const result = await getMessaging().sendEachForMulticast({
     tokens,
-    // Send a data-only push. If a notification payload is included, Android
-    // displays it itself in the background and the app cannot reliably cancel
-    // that system-owned ringing notification when the call is accepted.
     data: {
       title: callerName,
       body: "Incoming " + kind + " call",
@@ -373,26 +383,26 @@ exports.notifyIncomingCall = onDocumentCreated({
       callerUid: call.callerUid,
       callType: call.callType
     },
-    android: {
-      priority: "high",
-      ttl: 60 * 1000
-    }
+    android: { priority: "high", ttl: 60 * 1000 }
   });
 
   const stale = [];
   result.responses.forEach((response, index) => {
     if (!response.success &&
         ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(response.error?.code)) {
-      stale.push(tokensSnapshot.docs.find((doc) => doc.id === tokens[index]).ref.delete());
+      const tokenDoc = tokensSnapshot.docs.find((doc) => doc.id === tokens[index]);
+      if (tokenDoc) stale.push(tokenDoc.ref.delete());
     }
   });
   await Promise.all(stale);
   if (result.successCount > 0) {
     await deliveryRef.set({ sent: true, callId: event.params.callId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   }
+  if (result.failureCount > 0 && result.successCount === 0) {
+    throw new Error("Incoming call push delivery failed for all tokens; retrying.");
+  }
   console.info("Incoming call push result", { successCount: result.successCount, failureCount: result.failureCount });
 });
-
 
 
 // Cancel an incoming-call alert on the callee's devices as soon as the call
