@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/chat-voice-video-calling
+      - phase-1-final
     paths:
       - 'firestore.rules.example'
       - 'storage.rules.example'
