@@ -459,7 +459,8 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
   if (result.successCount > 0) {
     await cancelDeliveryRef.set({ sent: true, callId: event.params.callId, status: after.status, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   }
-  if (result.successCount === 0) throw new Error("Call cancellation push failed for all tokens; retrying.");\n  console.info("Incoming call cancellation push result", {
+  if (result.successCount === 0) throw new Error("Call cancellation push failed for all tokens; retrying.");
+  console.info("Incoming call cancellation push result", {
     callId: event.params.callId,
     status: after.status,
     successCount: result.successCount,
