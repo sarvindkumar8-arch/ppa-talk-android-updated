@@ -346,6 +346,10 @@ exports.notifyIncomingCall = onDocumentCreated({
       typeof call.callerUid !== "string" || typeof call.calleeUid !== "string" ||
       !["audio", "video"].includes(call.callType)) return;
 
+  const deliveryRef = db.collection("notificationDelivery").doc("incoming_call_" + event.params.callId);
+  const deliverySnapshot = await deliveryRef.get();
+  if (deliverySnapshot.exists && deliverySnapshot.get("sent") === true) return;
+
   const tokensSnapshot = await db.collection("users").doc(call.calleeUid)
     .collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
@@ -383,6 +387,9 @@ exports.notifyIncomingCall = onDocumentCreated({
     }
   });
   await Promise.all(stale);
+  if (result.successCount > 0) {
+    await deliveryRef.set({ sent: true, callId: event.params.callId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
   console.info("Incoming call push result", { successCount: result.successCount, failureCount: result.failureCount });
 });
 
