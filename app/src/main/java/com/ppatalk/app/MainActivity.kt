@@ -3298,6 +3298,13 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
                     if (ordered.isEmpty()) item { Text("No comments yet. Be the first to comment!") }
                     items(ordered, key = { it.id }) { comment ->
                         var authorPhoto by remember(comment.uid) { mutableStateOf("") }
+                        var myCommentReaction by remember(comment.id, currentUid) { mutableStateOf("") }
+                        DisposableEffect(comment.id, currentUid) {
+                            val reactionReg = db.collection("posts").document(post.id).collection("comments")
+                                .document(comment.id).collection("reactions").document(currentUid)
+                                .addSnapshotListener { snap, _ -> myCommentReaction = snap?.getString("reaction").orEmpty() }
+                            onDispose { reactionReg.remove() }
+                        }
                         LaunchedEffect(comment.uid) {
                             db.collection("profileDirectory").document(comment.uid).get()
                                 .addOnSuccessListener { authorPhoto = it.getString("photoUrl").orEmpty() }
@@ -3324,17 +3331,17 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
                                         }
                                         Spacer(Modifier.weight(1f))
                                         IconButton(onClick = {
-                                            db.collection("posts").document(post.id).collection("comments").document(comment.id)
-                                                .collection("reactions").document(currentUid).set(mapOf("uid" to currentUid, "reaction" to "👍"))
-                                                .addOnSuccessListener { Toast.makeText(commentReactionContext, "Comment liked", Toast.LENGTH_SHORT).show() }
+                                            val reactionRef = db.collection("posts").document(post.id).collection("comments").document(comment.id).collection("reactions").document(currentUid)
+                                            if (myCommentReaction == "👍") reactionRef.delete()
+                                            else reactionRef.set(mapOf("uid" to currentUid, "reaction" to "👍"))
                                                 .addOnFailureListener { e -> Toast.makeText(commentReactionContext, "Like failed: ${e.localizedMessage ?: e.toString()}", Toast.LENGTH_LONG).show() }
-                                        }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbUpOffAlt, contentDescription = "Like comment") }
+                                        }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbUpOffAlt, contentDescription = "Like comment", tint = if (myCommentReaction == "👍") RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant) }
                                         IconButton(onClick = {
-                                            db.collection("posts").document(post.id).collection("comments").document(comment.id)
-                                                .collection("reactions").document(currentUid).set(mapOf("uid" to currentUid, "reaction" to "👎"))
-                                                .addOnSuccessListener { Toast.makeText(commentReactionContext, "Comment disliked", Toast.LENGTH_SHORT).show() }
+                                            val reactionRef = db.collection("posts").document(post.id).collection("comments").document(comment.id).collection("reactions").document(currentUid)
+                                            if (myCommentReaction == "👎") reactionRef.delete()
+                                            else reactionRef.set(mapOf("uid" to currentUid, "reaction" to "👎"))
                                                 .addOnFailureListener { e -> Toast.makeText(commentReactionContext, "Dislike failed: ${e.localizedMessage ?: e.toString()}", Toast.LENGTH_LONG).show() }
-                                        }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbDownOffAlt, contentDescription = "Dislike comment") }
+                                        }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbDownOffAlt, contentDescription = "Dislike comment", tint = if (myCommentReaction == "👎") Orange else MaterialTheme.colorScheme.onSurfaceVariant) }
                                     }
                                 }
                             }
