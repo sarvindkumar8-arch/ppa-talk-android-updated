@@ -381,17 +381,32 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid;
 
         match /reactions/{reactionUid} {
-          allow read: if signedIn()
-            && exists(/databases/$(database)/documents/posts/$(postId))
-            && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
-          allow create, update: if owns(reactionUid)
+          function readableParentPost() {
+            return signedIn()
+              && exists(/databases/$(database)/documents/posts/$(postId))
+              && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
+          }
+          function readableParentComment() {
+            return exists(/databases/$(database)/documents/posts/$(postId)/comments/$(commentId));
+          }
+          allow read: if readableParentPost() && readableParentComment();
+          allow create: if signedIn()
+            && reactionUid == request.auth.uid
             && request.resource.data.uid == request.auth.uid
+            && request.resource.data.keys().hasOnly(['uid', 'reaction'])
             && request.resource.data.reaction in ['👍', '👎']
-            && exists(/databases/$(database)/documents/posts/$(postId))
-            && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
-          allow delete: if owns(reactionUid)
-            && exists(/databases/$(database)/documents/posts/$(postId))
-            && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
+            && readableParentPost() && readableParentComment();
+          allow update: if signedIn()
+            && reactionUid == request.auth.uid
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.keys().hasOnly(['uid', 'reaction'])
+            && request.resource.data.reaction in ['👍', '👎']
+            && readableParentPost() && readableParentComment();
+          allow delete: if signedIn()
+            && reactionUid == request.auth.uid
+            && resource.data.uid == request.auth.uid
+            && readableParentPost() && readableParentComment();
         }
       }
     }
