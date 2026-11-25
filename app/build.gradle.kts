@@ -38,10 +38,11 @@ android {
 
     buildTypes {
         getByName("debug") {
-            check(hasCustomSigning) {
-                "Persistent debug signing is required. Check the keystore file and GitHub Actions signing secrets."
+            // Use persistent signing when configured (CI); otherwise use Android's
+            // standard debug signing so local Termux builds don't require secrets.
+            if (hasCustomSigning) {
+                signingConfig = signingConfigs.getByName("custom")
             }
-            signingConfig = signingConfigs.getByName("custom")
         }
 
         getByName("release") {
