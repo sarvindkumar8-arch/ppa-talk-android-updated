@@ -454,6 +454,11 @@ exports.notifyFriendRequest = onDocumentWritten({
       typeof request.fromUid !== "string" || typeof request.toUid !== "string" ||
       request.fromUid === request.toUid) return;
 
+  // Retry guard: record successful notification delivery for this request event.
+  const deliveryRef = db.collection("notificationDelivery").doc("friend_" + event.params.requestId);
+  const deliverySnapshot = await deliveryRef.get();
+  if (deliverySnapshot.exists && deliverySnapshot.get("sent") === true) return;
+
   const tokensSnapshot = await db.collection("users").doc(request.toUid)
     .collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
@@ -500,6 +505,9 @@ exports.notifyFriendRequest = onDocumentWritten({
       db.collection("users").doc(request.toUid).collection("fcmTokens").doc(token)
     ));
     await batch.commit();
+  }
+  if (result.successCount > 0) {
+    await deliveryRef.set({ sent: true, requestId: event.params.requestId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   }
 });
 
