@@ -29,6 +29,7 @@ import android.provider.MediaStore
 import android.Manifest
 import android.media.MediaPlayer
 import android.content.Intent
+import android.widget.Toast
 import android.widget.VideoView
 import android.widget.MediaController
 import androidx.activity.ComponentActivity
@@ -3241,6 +3242,7 @@ fun PostLikesDialog(post: FeedPost, onDismiss: () -> Unit) {
 
 @Composable
 fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit) {
+    val commentReactionContext = LocalContext.current
     var comments by remember(post.id) { mutableStateOf<List<FeedComment>>(emptyList()) }
     var commentText by remember(post.id) { mutableStateOf("") }
     var replyTo by remember(post.id) { mutableStateOf<FeedComment?>(null) }
@@ -3324,10 +3326,14 @@ fun PostCommentsDialog(post: FeedPost, currentUid: String, onDismiss: () -> Unit
                                         IconButton(onClick = {
                                             db.collection("posts").document(post.id).collection("comments").document(comment.id)
                                                 .collection("reactions").document(currentUid).set(mapOf("uid" to currentUid, "reaction" to "👍"))
+                                                .addOnSuccessListener { Toast.makeText(commentReactionContext, "Comment liked", Toast.LENGTH_SHORT).show() }
+                                                .addOnFailureListener { e -> Toast.makeText(commentReactionContext, "Like failed: ${e.localizedMessage ?: e.toString()}", Toast.LENGTH_LONG).show() }
                                         }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbUpOffAlt, contentDescription = "Like comment") }
                                         IconButton(onClick = {
                                             db.collection("posts").document(post.id).collection("comments").document(comment.id)
                                                 .collection("reactions").document(currentUid).set(mapOf("uid" to currentUid, "reaction" to "👎"))
+                                                .addOnSuccessListener { Toast.makeText(commentReactionContext, "Comment disliked", Toast.LENGTH_SHORT).show() }
+                                                .addOnFailureListener { e -> Toast.makeText(commentReactionContext, "Dislike failed: ${e.localizedMessage ?: e.toString()}", Toast.LENGTH_LONG).show() }
                                         }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.ThumbDownOffAlt, contentDescription = "Dislike comment") }
                                     }
                                 }
