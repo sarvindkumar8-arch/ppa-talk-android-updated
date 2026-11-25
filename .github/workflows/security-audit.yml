@@ -51,6 +51,5 @@ jobs:
       - name: Check Cloud Functions JavaScript syntax
         run: node --check functions/index.js
 
-      - name: Run Firestore and Storage Emulator tests
-        working-directory: profile-security-tests
-        run: npx --yes firebase-tools emulators:exec --config firebase.json --only firestore,storage --project ppa-talk-profile-security-test "npm run test:all"
+      - name: Run Firestore and Storage Emulator tests against production rules
+        run: npx --yes firebase-tools emulators:exec --config profile-security-tests/firebase.json --only firestore,storage --project ppa-talk-profile-security-test "npm --prefix profile-security-tests run test:all"
