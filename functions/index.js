@@ -436,7 +436,7 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
     snapshot.docs.forEach((doc) => tokenOwners.set(doc.id, doc.ref));
   });
   const tokens = [...tokenOwners.keys()];
-  if (!tokens.length) return;
+  if (!tokens.length) throw new Error("No registered FCM tokens for call cancellation; retrying.");
 
   const result = await getMessaging().sendEachForMulticast({
     tokens,
@@ -459,7 +459,7 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
   if (result.successCount > 0) {
     await cancelDeliveryRef.set({ sent: true, callId: event.params.callId, status: after.status, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   }
-  console.info("Incoming call cancellation push result", {
+  if (result.successCount === 0) throw new Error("Call cancellation push failed for all tokens; retrying.");\n  console.info("Incoming call cancellation push result", {
     callId: event.params.callId,
     status: after.status,
     successCount: result.successCount,
