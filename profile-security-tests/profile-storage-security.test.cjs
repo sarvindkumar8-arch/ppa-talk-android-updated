@@ -7,7 +7,7 @@ const { ref, uploadBytes, getBytes, deleteObject } = require("firebase/storage")
 const PROJECT_ID = "ppa-talk-profile-security-test";
 const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST || "127.0.0.1:9199";
 const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8085";
-const RULES_PATH = path.resolve(__dirname, "storage.rules.test");
+const RULES_PATH = path.resolve(__dirname, "../storage.rules.example");
 let testEnv;
 
 async function seedData() {
