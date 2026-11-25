@@ -565,19 +565,22 @@ exports.notifyNewChatMessage = onDocumentCreated({
         lastReadAt.toDate().getTime() >= messageCreatedAt.getTime()) {
       shouldNotify = false;
     }
-    if (!processed.exists) {
-      if (shouldNotify) {
-        transaction.set(chatRef, {
-          ["unreadCount_" + recipientUid]: FieldValue.increment(1)
-        }, { merge: true });
-      }
-      transaction.create(processedRef, {
-        messageId: event.params.messageId,
-        recipientUid,
-        countedUnread: shouldNotify,
-        processedAt: FieldValue.serverTimestamp()
-      });
+    if (processed.exists) {
+      // A retry must not send another push for an already-processed message.
+      shouldNotify = false;
+      return;
     }
+    if (shouldNotify) {
+      transaction.set(chatRef, {
+        ["unreadCount_" + recipientUid]: FieldValue.increment(1)
+      }, { merge: true });
+    }
+    transaction.create(processedRef, {
+      messageId: event.params.messageId,
+      recipientUid,
+      countedUnread: shouldNotify,
+      processedAt: FieldValue.serverTimestamp()
+    });
   });
   if (!shouldNotify) return;
 
