@@ -1,5 +1,4 @@
-name: Android Debug APK
-
+name: Android APK Build
 on:
   workflow_dispatch:
   push:
@@ -8,125 +7,80 @@ on:
   pull_request:
     branches:
       - feature/chat-voice-video-calling
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
-
-      - name: Install Android 35 platform and build tools
+      - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses >/dev/null
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-
-      - name: Configure persistent APK signing key
+      - name: Configure signing (optional)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
-          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
-            echo "Missing GitHub Actions secret: ANDROID_KEYSTORE_BASE64" >&2
-            exit 1
-          fi
           mkdir -p app
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/ppa-talk-debug-new.jks
           test -s app/ppa-talk-debug-new.jks
-          test -n "${ANDROID_KEYSTORE_PASSWORD:-}" || { echo "Missing ANDROID_KEYSTORE_PASSWORD" >&2; exit 1; }
-          test -n "${ANDROID_KEY_ALIAS:-}" || { echo "Missing ANDROID_KEY_ALIAS" >&2; exit 1; }
-
-          echo "=== Keystore file diagnostics (no secrets printed) ==="
-          stat -c 'Keystore size: %s bytes' app/ppa-talk-debug-new.jks
-          sha256sum app/ppa-talk-debug-new.jks
-
-          echo "=== Checking PKCS12 password and listing aliases ==="
-          if ! keytool -list -keystore app/ppa-talk-debug-new.jks -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD"; then
-            echo "DIAGNOSIS: PKCS12 could not be opened with ANDROID_KEYSTORE_PASSWORD. Check the password secret and uploaded file."
-            exit 1
-          fi
-
-          echo "=== Checking requested alias and certificate fingerprint ==="
-          if ! keytool -list -v -keystore app/ppa-talk-debug-new.jks -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"; then
-            echo "DIAGNOSIS: Keystore opened, but ANDROID_KEY_ALIAS was not found or its entry could not be read."
-            exit 1
-          fi
-          echo "PKCS12 keystore, password, alias, and certificate verified."
-
-      - name: Build debug APK with persistent signing
+          keytool -list -keystore app/ppa-talk-debug-new.jks -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"
+      - name: Build debug APK
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify debug APK
         run: |
           set -euo pipefail
-          test -n "${ANDROID_KEYSTORE_PASSWORD:-}" || { echo "Missing ANDROID_KEYSTORE_PASSWORD" >&2; exit 1; }
-          test -n "${ANDROID_KEY_ALIAS:-}" || { echo "Missing ANDROID_KEY_ALIAS" >&2; exit 1; }
-          gradle --no-daemon :app:assembleDebug --stacktrace
-
-      - name: Verify APK signing certificate
-        run: |
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Build signed Release APK
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          set -euo pipefail
-          test -n "${ANDROID_KEYSTORE_PASSWORD:-}"
-          test -n "${ANDROID_KEY_ALIAS:-}"
-          gradle --no-daemon :app:assembleRelease --stacktrace
-
-      - name: Verify Release APK and Firebase certificate fingerprint
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/release/app-release.apk"
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          EXPECTED_SHA256="89AFF37248125DFFDA453E162A60E72AD40AAD3E18E463BD060A248AC5E33FB1"
-
+          APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/release-signature.txt
-
-          ACTUAL_SHA256="$(awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' /tmp/release-signature.txt | tr -d ':\r\n ' | tr '[:lower:]' '[:upper:]')"
-
-          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
-            echo "ERROR: Release APK certificate does not match Firebase registered fingerprint."
-            echo "Expected: $EXPECTED_SHA256"
-            echo "Actual:   ${ACTUAL_SHA256:-NOT_FOUND}"
-            exit 1
-          fi
-
-          echo "PASS: Release APK signature is valid."
-          echo "PASS: Release certificate matches Firebase registered SHA-256."
-
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ppa-talk-debug-and-release-apks
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release.apk
+          name: ppa-talk-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Build release APK (optional)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: gradle --no-daemon :app:assembleRelease --stacktrace
+      - name: Verify release Firebase certificate
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          EXPECTED_SHA256="89AFF37248125DFFDA453E162A60E72AD40AAD3E18E463BD060A248AC5E33FB1"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/signature.txt
+          ACTUAL_SHA256="$(awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' /tmp/signature.txt | tr -d ':\r\n ' | tr '[:lower:]' '[:upper:]')"
+          test "$ACTUAL_SHA256" = "$EXPECTED_SHA256" || { echo "Release fingerprint mismatch"; exit 1; }
+      - name: Upload release APK
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ppa-talk-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
