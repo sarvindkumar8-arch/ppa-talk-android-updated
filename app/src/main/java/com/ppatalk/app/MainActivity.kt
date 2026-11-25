@@ -6757,47 +6757,63 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
         }
     }
 
-    // Ensure the parent chat exists before subscribing to messages. Firestore
-    // rules authorize message reads only for participants in this parent document.
+    // Initialize only missing chat documents. Existing participant IDs are immutable
+    // in Firestore rules, so never rewrite them during chat opening.
     DisposableEffect(chatId, currentUid, friendUid) {
         var registration: com.google.firebase.firestore.ListenerRegistration? = null
+        var settingsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
         val chatRef = db.collection("chats").document(chatId)
-        val settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, _ ->
-            autoDeleteSeconds = chatSnapshot?.getLong("autoDeleteSeconds") ?: 0L
-        }
-        chatRef.set(mapOf(
-            "participantIds" to listOf(currentUid, friendUid).sorted(),
-            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-            "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-            "unreadCount_$currentUid" to 0L
-        ), com.google.firebase.firestore.SetOptions.merge())
-            .addOnSuccessListener {
-                registration = chatRef.collection("messages")
-                    .orderBy("createdAt", Query.Direction.ASCENDING)
-                    .addSnapshotListener { snap, exception ->
-                        if (exception != null) error = exception.localizedMessage ?: "Messages could not load. Check Firestore chat permissions."
-                        else if (snap != null) {
-                            messages = snap.documents.map { doc ->
-                                mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""),
-                                    "text" to (doc.getString("text") ?: ""),
-                                    "expireAt" to doc.getTimestamp("expireAt"))
-                            }
-                            // Keep the conversation marked read while it is open,
-                            // including messages received after the initial load.
-                            chatRef.set(
-                                mapOf(
+        val expectedParticipants = listOf(currentUid, friendUid).sorted()
+        chatRef.get()
+            .addOnSuccessListener { existing ->
+                val initTask = if (existing.exists()) {
+                    val participants = existing.get("participantIds") as? List<*>
+                    if (participants != expectedParticipants) {
+                        error = "This chat's participant data needs repair. Please try again later."
+                        null
+                    } else {
+                        chatRef.set(mapOf(
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                            "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                            "unreadCount_$currentUid" to 0L
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                    }
+                } else {
+                    chatRef.set(mapOf(
+                        "participantIds" to expectedParticipants,
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "unreadCount_$currentUid" to 0L
+                    ), com.google.firebase.firestore.SetOptions.merge())
+                }
+                initTask?.addOnSuccessListener {
+                    settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, settingsError ->
+                        if (settingsError != null) error = "Chat settings couldn't be loaded."
+                        else autoDeleteSeconds = chatSnapshot?.getLong("autoDeleteSeconds") ?: 0L
+                    }
+                    registration = chatRef.collection("messages")
+                        .orderBy("createdAt", Query.Direction.ASCENDING)
+                        .addSnapshotListener { snap, exception ->
+                            if (exception != null) error = "Messages couldn't load. Check your connection or chat access."
+                            else if (snap != null) {
+                                messages = snap.documents.map { doc ->
+                                    mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""),
+                                        "text" to (doc.getString("text") ?: ""),
+                                        "expireAt" to doc.getTimestamp("expireAt"))
+                                }
+                                chatRef.set(mapOf(
                                     "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                     "unreadCount_$currentUid" to 0L
-                                ),
-                                com.google.firebase.firestore.SetOptions.merge()
-                            )
+                                ), com.google.firebase.firestore.SetOptions.merge())
+                                    .addOnFailureListener { error = "Couldn't mark chat as read." }
+                            }
                         }
-                    }
+                }?.addOnFailureListener {
+                    error = "Chat access denied. Both users must be allowed to start this conversation."
+                }
             }
-            .addOnFailureListener { exception ->
-                error = exception.localizedMessage ?: "Chat permission denied. Please check Firestore rules."
-            }
-        onDispose { registration?.remove(); settingsRegistration.remove() }
+            .addOnFailureListener { error = "Couldn't verify chat access. Check your connection." }
+        onDispose { registration?.remove(); settingsRegistration?.remove() }
     }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
