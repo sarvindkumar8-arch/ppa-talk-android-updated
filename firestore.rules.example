@@ -379,6 +379,20 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/posts/$(postId))
           && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data)
           && resource.data.uid == request.auth.uid;
+
+        match /reactions/{reactionUid} {
+          allow read: if signedIn()
+            && exists(/databases/$(database)/documents/posts/$(postId))
+            && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
+          allow create, update: if owns(reactionUid)
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.reaction in ['👍', '👎']
+            && exists(/databases/$(database)/documents/posts/$(postId))
+            && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
+          allow delete: if owns(reactionUid)
+            && exists(/databases/$(database)/documents/posts/$(postId))
+            && canReadPost(get(/databases/$(database)/documents/posts/$(postId)).data);
+        }
       }
     }
 
