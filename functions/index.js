@@ -470,7 +470,7 @@ exports.notifyFriendRequest = onDocumentWritten({
       request.fromUid === request.toUid) return;
 
   // Retry guard: record successful notification delivery for this request event.
-  const deliveryRef = db.collection("notificationDelivery").doc("friend_" + event.params.requestId);
+  const deliveryRef = db.collection("notificationDelivery").doc("friend_" + event.params.requestId + "_" + event.id);
   const deliverySnapshot = await deliveryRef.get();
   if (deliverySnapshot.exists && deliverySnapshot.get("sent") === true) return;
 
