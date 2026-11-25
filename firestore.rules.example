@@ -535,8 +535,11 @@ service cloud.firestore {
           (isCallee()
             && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['answer', 'status', 'updatedAt', 'acceptedAt', 'endedAt'])
-            && (request.resource.data.status == resource.data.status
-              || request.resource.data.status in ['accepted', 'rejected', 'ended', 'missed']))
+            && ((resource.data.status == 'ringing'
+              && request.resource.data.status in ['accepted', 'rejected', 'missed'])
+              || (resource.data.status == 'accepted'
+                && request.resource.data.status == 'ended')
+              || request.resource.data.status == resource.data.status))
         );
       allow delete: if false;
 
