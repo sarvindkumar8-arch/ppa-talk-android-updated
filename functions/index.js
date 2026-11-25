@@ -339,7 +339,8 @@ const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/
 exports.notifyIncomingCall = onDocumentCreated({
   document: "callSessions/{callId}",
   region: REGION,
-  maxInstances: 20
+  maxInstances: 20,
+  retry: true
 }, async (event) => {
   const call = event.data?.data();
   if (!call || call.status !== "ringing" ||
@@ -347,8 +348,6 @@ exports.notifyIncomingCall = onDocumentCreated({
       !["audio", "video"].includes(call.callType)) return;
 
   const callRef = db.collection("callSessions").doc(event.params.callId);
-  // Avoid dispatching a stale ringing alert if the session was already accepted,
-  // rejected, or ended while this create-trigger was waiting to run.
   const latestCall = await callRef.get();
   const latest = latestCall.data();
   if (!latestCall.exists || latest?.status !== "ringing" ||
@@ -356,18 +355,26 @@ exports.notifyIncomingCall = onDocumentCreated({
       latest.callType !== call.callType) return;
 
   const deliveryRef = db.collection("notificationDelivery").doc("incoming_call_" + event.params.callId);
-  const deliverySnapshot = await deliveryRef.get();
-  if (deliverySnapshot.exists && deliverySnapshot.get("sent") === true) return;
+  const now = Date.now();
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(deliveryRef);
+    const data = snap.exists ? snap.data() : {};
+    if (data.sent === true || (Number(data.leaseUntil || 0) > now)) return false;
+    tx.set(deliveryRef, {
+      callId: event.params.callId,
+      claimedAt: FieldValue.serverTimestamp(),
+      leaseUntil: now + 2 * 60 * 1000,
+      sent: false
+    }, { merge: true });
+    return true;
+  });
+  if (!claimed) return;
 
   const tokensSnapshot = await db.collection("users").doc(call.calleeUid)
     .collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((doc) => doc.id).filter(Boolean);
-  if (tokens.length === 0) {
-    console.info("No registered FCM tokens for callee", call.calleeUid);
-    return;
-  }
+  if (!tokens.length) throw new Error("No registered FCM tokens for incoming call; retrying after lease expiry.");
 
-  // Recheck the call status immediately before delivery to reduce stale alerts.
   const currentCall = await callRef.get();
   if (!currentCall.exists || currentCall.get("status") !== "ringing") return;
 
@@ -396,14 +403,11 @@ exports.notifyIncomingCall = onDocumentCreated({
   });
   await Promise.all(stale);
   if (result.successCount > 0) {
-    await deliveryRef.set({ sent: true, callId: event.params.callId, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+    await deliveryRef.set({ sent: true, leaseUntil: 0, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   }
-  if (result.failureCount > 0 && result.successCount === 0) {
-    throw new Error("Incoming call push delivery failed for all tokens; retrying.");
-  }
+  if (result.successCount === 0) throw new Error("Incoming call push delivery failed for all tokens; retrying.");
   console.info("Incoming call push result", { successCount: result.successCount, failureCount: result.failureCount });
 });
-
 
 // Cancel an incoming-call alert on the callee's devices as soon as the call
 // is accepted, rejected, ended, or missed. This is data-only so Android does
