@@ -281,8 +281,30 @@ service cloud.firestore {
       // A post's owner identity and audience cannot be changed by editing it.
       allow update: if owns(resource.data.uid)
         && request.resource.data.uid == resource.data.uid
+        && (!('authorName' in request.resource.data)
+          || (request.resource.data.authorName is string
+            && request.resource.data.authorName.size() > 0
+            && request.resource.data.authorName.size() <= 80))
+        && (!('text' in request.resource.data)
+          || (request.resource.data.text is string
+            && request.resource.data.text.size() <= 5000))
+        && (!('mediaUrl' in request.resource.data)
+          || (request.resource.data.mediaUrl is string
+            && request.resource.data.mediaUrl.size() <= 4096))
+        && (!('mediaType' in request.resource.data)
+          || request.resource.data.mediaType in ['image', 'video'])
+        && (!('postType' in request.resource.data)
+          || request.resource.data.postType in ['post', 'reel', 'photo', 'video'])
         && (!('audience' in request.resource.data)
           || request.resource.data.audience in ['public', 'friends', 'private'])
+        && (!('location' in request.resource.data)
+          || (request.resource.data.location is string
+            && request.resource.data.location.size() <= 200))
+        && (!('overlayText' in request.resource.data)
+          || (request.resource.data.overlayText is string
+            && request.resource.data.overlayText.size() <= 1000))
+        && (!('originalAudioMuted' in request.resource.data)
+          || request.resource.data.originalAudioMuted is bool)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'authorName', 'text', 'mediaUrl', 'mediaType', 'postType', 'audience',
           'location', 'taggedUsers', 'overlayText', 'sticker', 'effect',
