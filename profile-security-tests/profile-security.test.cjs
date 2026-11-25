@@ -17,7 +17,7 @@ const {
 
 const PROJECT_ID = "ppa-talk-profile-security-test";
 const EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8085";
-const RULES_PATH = path.resolve(__dirname, "firestore.rules.test");
+const RULES_PATH = path.resolve(__dirname, "../firestore.rules.example");
 
 let testEnv;
 
