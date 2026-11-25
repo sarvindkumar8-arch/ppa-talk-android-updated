@@ -4036,12 +4036,23 @@ fun CreatePostScreen(
                     val uploadMetadata = com.google.firebase.storage.StorageMetadata.Builder()
                         .setContentType(if (mediaType == "video") "video/mp4" else "image/jpeg")
                         .build()
+                    message = "Uploading media…"
                     mediaRef.putFile(uploadUri, uploadMetadata)
-                        .addOnSuccessListener {
-                            mediaRef.downloadUrl.addOnSuccessListener { downloadUri -> savePost(downloadUri.toString(), mediaRef.path) }
-                                .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media URL could not be loaded." }
+                        .addOnProgressListener { snapshot ->
+                            val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                            val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                            message = "Uploading media: $percent%"
                         }
-                        .addOnFailureListener { ex -> busy = false; message = ex.localizedMessage ?: "Media upload failed. Check Firebase Storage rules." }
+                        .addOnSuccessListener {
+                            message = "Upload complete. Publishing post…"
+                            // Secure path-based media is resolved later; no download-token URL is needed.
+                            savePost("", mediaRef.path)
+                        }
+                        .addOnFailureListener { ex ->
+                            busy = false
+                            val detail = ex.localizedMessage ?: ex.message ?: ex.toString()
+                            message = "Storage upload failed: $detail"
+                        }
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
