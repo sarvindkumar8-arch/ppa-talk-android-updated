@@ -6809,10 +6809,10 @@ fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifi
                             }
                         }
                 }?.addOnFailureListener { exception ->
-                    error = "Chat initialization denied (\${exception.code}). Chat ID: $chatId"
+                    error = "Chat initialization denied (${exception.code}). Chat ID: $chatId"
                 }
             }
-            .addOnFailureListener { exception -> error = "Chat verification failed (\${exception.code}). Chat ID: $chatId" }
+            .addOnFailureListener { exception -> error = "Chat verification failed (${exception.code}). Chat ID: $chatId" }
         onDispose { registration?.remove(); settingsRegistration?.remove() }
     }
     Column(modifier.fillMaxSize()) {
