@@ -4995,12 +4995,23 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                     .setContentType(originalMimeType).build()
                 val croppedMetadata = com.google.firebase.storage.StorageMetadata.Builder()
                     .setContentType("image/jpeg").build()
+                message = "Uploading original photo to Firebase Storage…"
                 originalRef.putBytes(originalBytes, originalMetadata)
+                    .addOnProgressListener { snapshot ->
+                        val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                        val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                        message = "Original photo upload: $percent%"
+                    }
                     .addOnSuccessListener {
-                        message = "Original photo upload ho gayi. Display photo upload ho rahi hai..."
+                        message = "Original photo uploaded. Uploading display photo…"
                         displayRef.putBytes(croppedBytes, croppedMetadata)
+                            .addOnProgressListener { snapshot ->
+                                val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                                val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                                message = "Display photo upload: $percent%"
+                            }
                             .addOnSuccessListener {
-                                message = "Display photo upload ho gayi. Profile details save ho rahi hain..."
+                                message = "Display photo uploaded. Saving profile details…"
                                 displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
                                     message = "Photo URL mil gaya. Profile details save ho rahi hain..."
                                     val updates = mapOf(
