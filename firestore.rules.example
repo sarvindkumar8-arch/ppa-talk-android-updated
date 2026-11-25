@@ -69,8 +69,8 @@ service cloud.firestore {
     function canReadStory(story) {
       return signedIn() && (
         story.uid == request.auth.uid
-        || profileIsPublic(story.uid)
-        || isAcceptedFriend(story.uid)
+        || (profileIsPublic(story.uid) && story.get('audience', 'public') == 'public')
+        || (isAcceptedFriend(story.uid) && story.get('audience', 'public') in ['public', 'friends'])
       );
     }
 
@@ -256,7 +256,7 @@ service cloud.firestore {
       allow read: if canReadStory(resource.data) && resource.data.expiresAt is timestamp && resource.data.expiresAt > request.time;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
-          'uid', 'authorName', 'mediaUrl', 'mediaType', 'storagePath', 'createdAt', 'expiresAt'
+          'uid', 'authorName', 'mediaUrl', 'mediaType', 'storagePath', 'createdAt', 'expiresAt', 'audience'
         ])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.authorName is string
@@ -265,6 +265,7 @@ service cloud.firestore {
         && request.resource.data.mediaUrl is string
         && request.resource.data.mediaUrl.size() <= 4096
         && request.resource.data.mediaType in ['image', 'video']
+        && (!('audience' in request.resource.data) || request.resource.data.audience in ['public', 'friends', 'private'])
         && request.resource.data.createdAt == request.time
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
