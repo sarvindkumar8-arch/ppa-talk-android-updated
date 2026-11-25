@@ -191,23 +191,29 @@ service cloud.firestore {
       // Directory metadata remains discoverable, but private-profile bearer
       // photo URLs must never be stored in this broadly readable document.
       allow read: if signedIn();
+      function validDirectoryFields() {
+        return request.resource.data.uid == userId
+          && request.resource.data.profileVisibility in ['public', 'private']
+          && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
+          && (!('username' in request.resource.data) || (request.resource.data.username is string && request.resource.data.username.size() <= 32))
+          && (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 4096))
+          && (!('coverPhotoUrl' in request.resource.data) || (request.resource.data.coverPhotoUrl is string && request.resource.data.coverPhotoUrl.size() <= 4096))
+          && (request.resource.data.profileVisibility == 'public'
+            || !request.resource.data.keys().hasAny(['photoUrl', 'coverPhotoUrl']));
+      }
       allow create: if owns(userId)
-        && request.resource.data.uid == userId
         && request.resource.data.keys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
           'profileVisibility', 'updatedAt'
         ])
-        && (request.resource.data.profileVisibility == 'public'
-          || !request.resource.data.keys().hasAny(['photoUrl', 'coverPhotoUrl']));
+        && validDirectoryFields();
       allow update: if owns(userId)
         && resource.data.uid == userId
-        && request.resource.data.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
           'profileVisibility', 'updatedAt'
         ])
-        && (request.resource.data.profileVisibility == 'public'
-          || !request.resource.data.keys().hasAny(['photoUrl', 'coverPhotoUrl']));
+        && validDirectoryFields();
       allow delete: if owns(userId);
     }
 
