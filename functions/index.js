@@ -415,19 +415,29 @@ exports.notifyIncomingCall = onDocumentCreated({
 exports.cancelIncomingCallAlert = onDocumentWritten({
   document: "callSessions/{callId}",
   region: REGION,
-  maxInstances: 20
+  maxInstances: 20,
+  retry: true
 }, async (event) => {
   const before = event.data?.before?.data();
   const after = event.data?.after?.data();
   if (!after || !["accepted", "accepting", "rejected", "ended", "missed"].includes(after.status)) return;
   if (before?.status === after.status) return;
-  // Retry guard for this call-status cancellation event.
-  const cancelDeliveryRef = db.collection("notificationDelivery").doc("call_cancel_" + event.params.callId + "_" + after.status);
-  const cancelDelivery = await cancelDeliveryRef.get();
-  if (cancelDelivery.exists && cancelDelivery.get("sent") === true) return;
 
-  // Clear the call notification on every device belonging to both participants.
-  // The caller may have an older notification from a previous app state/device.
+  const callId = event.params.callId;
+  const cancelDeliveryRef = db.collection("notificationDelivery").doc("call_cancel_" + callId + "_" + after.status);
+  const now = Date.now();
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(cancelDeliveryRef);
+    const data = snap.exists ? snap.data() : {};
+    if (data.sent === true || Number(data.leaseUntil || 0) > now) return false;
+    tx.set(cancelDeliveryRef, {
+      callId, status: after.status, sent: false,
+      claimedAt: FieldValue.serverTimestamp(), leaseUntil: now + 2 * 60 * 1000
+    }, { merge: true });
+    return true;
+  });
+  if (!claimed) return;
+
   const participantUids = [...new Set([after.calleeUid, after.callerUid]
     .filter((uid) => typeof uid === "string" && uid.length > 0))];
   if (!participantUids.length) return;
@@ -436,21 +446,15 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
     db.collection("users").doc(uid).collection("fcmTokens").get()
   ));
   const tokenOwners = new Map();
-  tokenSnapshots.forEach((snapshot) => {
-    snapshot.docs.forEach((doc) => tokenOwners.set(doc.id, doc.ref));
-  });
+  tokenSnapshots.forEach((snapshot) => snapshot.docs.forEach((doc) => tokenOwners.set(doc.id, doc.ref)));
   const tokens = [...tokenOwners.keys()];
-  if (!tokens.length) throw new Error("No registered FCM tokens for call cancellation; retrying.");
+  if (!tokens.length) throw new Error("No registered FCM tokens for call cancellation; retrying after lease expiry.");
 
   const result = await getMessaging().sendEachForMulticast({
     tokens,
-    data: {
-      type: "call_cancel",
-      callId: event.params.callId
-    },
+    data: { type: "call_cancel", callId },
     android: { priority: "high", ttl: 60 * 1000 }
   });
-
   const stale = [];
   result.responses.forEach((response, index) => {
     if (!response.success &&
@@ -461,14 +465,13 @@ exports.cancelIncomingCallAlert = onDocumentWritten({
   });
   await Promise.all(stale);
   if (result.successCount > 0) {
-    await cancelDeliveryRef.set({ sent: true, callId: event.params.callId, status: after.status, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+    await cancelDeliveryRef.set({
+      sent: true, leaseUntil: 0, callId, status: after.status, sentAt: FieldValue.serverTimestamp()
+    }, { merge: true });
   }
   if (result.successCount === 0) throw new Error("Call cancellation push failed for all tokens; retrying.");
   console.info("Incoming call cancellation push result", {
-    callId: event.params.callId,
-    status: after.status,
-    successCount: result.successCount,
-    failureCount: result.failureCount
+    callId, status: after.status, successCount: result.successCount, failureCount: result.failureCount
   });
 });
 
