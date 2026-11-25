@@ -252,6 +252,25 @@ async function run() {
         status: "ringing", callType: "audio"
       }));
     }],
+    ["ICE candidate fields are bounded", async () => {
+      const db = testEnv.authenticatedContext("private-user").firestore();
+      await assertSucceeds(setDoc(doc(db, "callSessions/friends-call/callerCandidates/valid"), {
+        sdpMid: "audio", sdpMLineIndex: 0, candidate: "candidate:valid",
+        createdAt: new Date()
+      }));
+      await assertFails(setDoc(doc(db, "callSessions/friends-call/callerCandidates/oversized"), {
+        sdpMid: "x".repeat(101), sdpMLineIndex: 0, candidate: "candidate:bad",
+        createdAt: new Date()
+      }));
+      await assertFails(setDoc(doc(db, "callSessions/friends-call/callerCandidates/invalid-index"), {
+        sdpMid: "audio", sdpMLineIndex: 101, candidate: "candidate:bad",
+        createdAt: new Date()
+      }));
+      await assertFails(setDoc(doc(db, "callSessions/friends-call/callerCandidates/oversized-candidate"), {
+        sdpMid: "audio", sdpMLineIndex: 0, candidate: "x".repeat(2049),
+        createdAt: new Date()
+      }));
+    }],
     ["Anonymous user cannot read a public profile", async () => {
       const db = testEnv.unauthenticatedContext().firestore();
       await assertFails(getDoc(doc(db, "publicProfiles/public-user")));
