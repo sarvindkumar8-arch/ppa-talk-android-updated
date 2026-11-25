@@ -2,6 +2,8 @@ package com.ppatalk.app
 
 import android.content.Context
 import android.util.Log
+import android.media.ToneGenerator
+import android.media.AudioManager
 import org.webrtc.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -45,6 +47,22 @@ class PpaCallController(
     private val remoteTrackLock = Any()
     private var muted = false
     private var speakerEnabled = true
+    private var ringbackTone: ToneGenerator? = null
+
+    private fun startRingback() {
+        stopRingback()
+        try {
+            ringbackTone = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 65).also {
+                it.startTone(ToneGenerator.TONE_SUP_RINGTONE, -1)
+            }
+        } catch (e: Exception) { Log.w("PPATalkCall", "Could not start ringback tone", e) }
+    }
+
+    private fun stopRingback() {
+        try { ringbackTone?.stopTone() } catch (_: Exception) {}
+        try { ringbackTone?.release() } catch (_: Exception) {}
+        ringbackTone = null
+    }
 
     init {
         PeerConnectionFactory.initialize(
@@ -81,7 +99,7 @@ class PpaCallController(
             createOffer()
             listenForCallUpdates()
             listenForRemoteCandidates()
-        }.addOnFailureListener { onError(it.localizedMessage ?: "Could not start call. Check Firestore rules.") }
+        }.addOnFailureListener { stopRingback(); onError(it.localizedMessage ?: "Could not start call. Check Firestore rules.") }
     }
 
     fun acceptIncoming(id: String) {
@@ -169,7 +187,7 @@ class PpaCallController(
                 when (state) {
                     PeerConnection.IceConnectionState.CONNECTED,
                     PeerConnection.IceConnectionState.COMPLETED -> {
-                        Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
+                        stopRingback()\n                        Log.d("PPATalkWebRTC", "ICE connected: callType=$callType, callId=$callId")
                         onStatus(if (callType == "video") videoNegotiationStatus("Connected") else "Connected")
                     }
                     PeerConnection.IceConnectionState.DISCONNECTED -> onStatus("Connection interrupted…")
@@ -376,7 +394,7 @@ class PpaCallController(
                     onStatus("Call ended")
                     onRemoteCallEnded()
                 }
-                "ringing" -> if (caller) onStatus("Calling…")
+                "ringing" -> if (caller) { startRingback(); onStatus("Calling…") }
             }
         }
     }
