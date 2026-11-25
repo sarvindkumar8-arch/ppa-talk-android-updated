@@ -265,7 +265,7 @@ fun PPATalkApp() {
     val auth = remember { FirebaseAuth.getInstance() }
     var user by remember {
         mutableStateOf(auth.currentUser?.takeIf {
-            it.phoneNumber != null || it.isEmailVerified
+            it.phoneNumber != null || it.providerData.any { provider -> provider.providerId == "phone" } || it.isEmailVerified
         })
     }
 
@@ -273,7 +273,7 @@ fun PPATalkApp() {
         val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val current = firebaseAuth.currentUser
             user = current?.takeIf {
-                it.phoneNumber != null || it.isEmailVerified
+                it.phoneNumber != null || it.providerData.any { provider -> provider.providerId == "phone" } || it.isEmailVerified
             }
         }
         auth.addAuthStateListener(authListener)
