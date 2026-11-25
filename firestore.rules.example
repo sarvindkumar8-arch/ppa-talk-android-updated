@@ -504,7 +504,14 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == get(/databases/$(database)/documents/callSessions/$(callId)).data.callerUid
           && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt'])
-          && request.resource.data.candidate is string;
+          && request.resource.data.sdpMid is string
+          && request.resource.data.sdpMid.size() <= 100
+          && request.resource.data.sdpMLineIndex is int
+          && request.resource.data.sdpMLineIndex >= 0
+          && request.resource.data.sdpMLineIndex <= 100
+          && request.resource.data.candidate is string
+          && request.resource.data.candidate.size() > 0
+          && request.resource.data.candidate.size() <= 2048;
         allow update, delete: if false;
       }
       match /calleeCandidates/{candidateId} {
@@ -516,7 +523,14 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == get(/databases/$(database)/documents/callSessions/$(callId)).data.calleeUid
           && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt'])
-          && request.resource.data.candidate is string;
+          && request.resource.data.sdpMid is string
+          && request.resource.data.sdpMid.size() <= 100
+          && request.resource.data.sdpMLineIndex is int
+          && request.resource.data.sdpMLineIndex >= 0
+          && request.resource.data.sdpMLineIndex <= 100
+          && request.resource.data.candidate is string
+          && request.resource.data.candidate.size() > 0
+          && request.resource.data.candidate.size() <= 2048;
         allow update, delete: if false;
       }
     }
