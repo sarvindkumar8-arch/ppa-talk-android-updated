@@ -1,9 +1,9 @@
 {
   "firestore": {
-    "rules": "firestore.rules.example"
+    "rules": "firestore.rules.ci"
   },
   "storage": {
-    "rules": "storage.rules.example"
+    "rules": "storage.rules.ci"
   },
   "emulators": {
     "firestore": {
