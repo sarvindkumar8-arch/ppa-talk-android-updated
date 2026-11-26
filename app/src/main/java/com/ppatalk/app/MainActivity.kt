@@ -5024,22 +5024,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                         val firestore = FirebaseFirestore.getInstance()
                                         val profileRef = firestore.collection("publicProfiles").document(uid)
                                         val directoryRef = firestore.collection("profileDirectory").document(uid)
-                                        val batch = firestore.batch()
-                                        batch.set(profileRef, updates, com.google.firebase.firestore.SetOptions.merge())
-                                        batch.set(directoryRef, mapOf(
-                                            "uid" to uid,
-                                            "displayName" to displayName.ifBlank { "PPA Talk user" },
-                                            "username" to username,
-                                            "photoUrl" to if (profileVisibility == "public")
-                                                (if (isCover) photoUrl else displayDownload.toString())
-                                                else com.google.firebase.firestore.FieldValue.delete(),
-                                            "coverPhotoUrl" to if (profileVisibility == "public")
-                                                (if (isCover) displayDownload.toString() else coverPhotoUrl)
-                                                else com.google.firebase.firestore.FieldValue.delete(),
-                                            "profileVisibility" to profileVisibility,
-                                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        ), com.google.firebase.firestore.SetOptions.merge())
-                                        batch.commit()
+                                        profileRef.set(updates, com.google.firebase.firestore.SetOptions.merge())
                                             .addOnSuccessListener {
                                                 message = "Profile photo details save ho gayi. Finalizing..."
                                                 if (isCover) {
@@ -5049,6 +5034,24 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                     photoUrl = displayDownload.toString()
                                                     photoOriginalUrl = originalRef.path
                                                 }
+                                                // Directory sync is separate and non-blocking: it must not
+                                                // reject/rollback the primary profile media save.
+                                                directoryRef.set(mapOf(
+                                                    "uid" to uid,
+                                                    "displayName" to displayName.ifBlank { "PPA Talk user" },
+                                                    "username" to username,
+                                                    "photoUrl" to if (profileVisibility == "public")
+                                                        (if (isCover) photoUrl else displayDownload.toString())
+                                                        else com.google.firebase.firestore.FieldValue.delete(),
+                                                    "coverPhotoUrl" to if (profileVisibility == "public")
+                                                        (if (isCover) displayDownload.toString() else coverPhotoUrl)
+                                                        else com.google.firebase.firestore.FieldValue.delete(),
+                                                    "profileVisibility" to profileVisibility,
+                                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                ), com.google.firebase.firestore.SetOptions.merge())
+                                                    .addOnFailureListener { directoryException ->
+                                                        android.util.Log.w("PpaProfileMedia", "Directory sync failed after profile media save", directoryException)
+                                                    }
                                                 if (profileVisibility == "public") {
                                                     val photoPost = hashMapOf(
                                                         "uid" to uid,
