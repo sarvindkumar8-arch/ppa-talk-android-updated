@@ -1437,6 +1437,7 @@ fun ReelsScreen(
     modifier: Modifier = Modifier,
     onOpenUserProfile: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
     var reels by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
