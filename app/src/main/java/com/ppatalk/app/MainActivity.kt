@@ -1544,7 +1544,7 @@ fun ReelsScreen(
     }
 }
 
-@OptIn(androidx.media3.common.util.UnstableApi::class)
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @Composable
 private fun ReelFullscreenViewer(
     reels: List<FeedPost>, initialIndex: Int, currentUid: String,
