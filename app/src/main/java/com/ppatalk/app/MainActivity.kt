@@ -1649,7 +1649,6 @@ private fun ReelFullscreenViewer(
                 androidx.media3.ui.PlayerView(viewContext).apply {
                     player = reelPlayer
                     useController = false
-                    setShowBuffering(androidx.media3.ui.PlayerView.SHOW_BUFFERING_ALWAYS)
                     resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             }, update = { view -> view.player = reelPlayer },
@@ -3140,41 +3139,78 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             } else if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && (post.mediaType == "video" || post.postType == "reel")) {
                 Spacer(Modifier.height(8.dp))
                 var reelMuted by remember(post.id) { mutableStateOf(true) }
-                var reelPlayer by remember(post.id) { mutableStateOf<MediaPlayer?>(null) }
-                Box(
-                    Modifier.fillMaxWidth().aspectRatio(4f / 5f).background(Color.Black)
-                ) {
+                var inlineVideoError by remember(post.id) { mutableStateOf("") }
+                var inlineVideoLoading by remember(post.id) { mutableStateOf(true) }
+                val inlinePlayer = remember(post.id) {
+                    androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+                        repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                        volume = 0f
+                    }
+                }
+                DisposableEffect(inlinePlayer) {
+                    val listener = object : androidx.media3.common.Player.Listener {
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            inlineVideoLoading = false
+                            inlineVideoError = error.localizedMessage ?: error.errorCodeName
+                            android.util.Log.e("PpaInlineVideo", "Inline video playback error", error)
+                        }
+                        override fun onPlaybackStateChanged(state: Int) {
+                            if (state == androidx.media3.common.Player.STATE_READY) {
+                                inlineVideoLoading = false
+                                inlineVideoError = ""
+                            } else if (state == androidx.media3.common.Player.STATE_BUFFERING) inlineVideoLoading = true
+                        }
+                    }
+                    inlinePlayer.addListener(listener)
+                    onDispose { inlinePlayer.removeListener(listener); inlinePlayer.release() }
+                }
+                LaunchedEffect(inlinePlayer, secureMediaUrl) {
+                    inlineVideoError = ""
+                    inlineVideoLoading = true
+                    inlinePlayer.stop()
+                    inlinePlayer.clearMediaItems()
+                    when {
+                        secureMediaUrl.startsWith("MEDIA_ERROR:") -> {
+                            inlineVideoLoading = false
+                            inlineVideoError = secureMediaUrl.removePrefix("MEDIA_ERROR:")
+                        }
+                        secureMediaUrl.isBlank() -> inlineVideoLoading = true
+                        secureMediaUrl.startsWith("https://") || secureMediaUrl.startsWith("http://") -> {
+                            inlinePlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(secureMediaUrl))
+                            inlinePlayer.prepare()
+                            inlinePlayer.playWhenReady = true
+                        }
+                        else -> { inlineVideoLoading = false; inlineVideoError = "Invalid video URL." }
+                    }
+                }
+                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).background(Color.Black)) {
                     AndroidView(
-                        factory = { context ->
-                            VideoView(context).apply {
-                                setVideoURI(Uri.parse(secureMediaUrl))
-                                setOnPreparedListener { player ->
-                                    player.isLooping = true
-                                    player.setVolume(0f, 0f)
-                                    reelPlayer = player
-                                    start()
-                                }
+                        factory = { viewContext ->
+                            androidx.media3.ui.PlayerView(viewContext).apply {
+                                player = inlinePlayer
+                                useController = false
+                                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                             }
                         },
-                        update = { view ->
-                            reelPlayer?.setVolume(if (reelMuted) 0f else 1f, if (reelMuted) 0f else 1f)
-                            if (!view.isPlaying) view.start()
-                        },
+                        update = { view -> view.player = inlinePlayer },
                         modifier = Modifier.fillMaxSize()
                     )
+                    if (inlineVideoLoading && inlineVideoError.isBlank()) CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+                    if (inlineVideoError.isNotBlank()) {
+                        Text("Video unavailable: $inlineVideoError", color = Color.White,
+                            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.9f)
+                                .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(10.dp)).padding(12.dp))
+                    }
                     IconButton(
                         onClick = {
                             reelMuted = !reelMuted
-                            reelPlayer?.setVolume(if (reelMuted) 0f else 1f, if (reelMuted) 0f else 1f)
+                            inlinePlayer.volume = if (reelMuted) 0f else 1f
                         },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)
                             .background(Color.Black.copy(alpha = 0.45f), CircleShape)
                     ) {
-                        Icon(
-                            if (reelMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            contentDescription = if (reelMuted) "Unmute reel" else "Mute reel",
-                            tint = Color.White
-                        )
+                        Icon(if (reelMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = if (reelMuted) "Unmute reel" else "Mute reel", tint = Color.White)
                     }
                 }
             }
