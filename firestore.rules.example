@@ -192,8 +192,9 @@ service cloud.firestore {
       allow update: if owns(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'photoUrl', 'coverPhotoUrl', 'photoOriginalPath', 'coverPhotoOriginalPath',
-          'photoOriginalUrl', 'coverPhotoOriginalUrl', 'updatedAt'
+          'photoOriginalUrl', 'coverPhotoOriginalUrl', 'updatedAt', 'uid'
         ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid']) || request.resource.data.uid == userId)
         && (!('photoUrl' in request.resource.data) || request.resource.data.photoUrl is string)
         && (!('coverPhotoUrl' in request.resource.data) || request.resource.data.coverPhotoUrl is string)
         && (!('photoOriginalPath' in request.resource.data) || request.resource.data.photoOriginalPath is string)
