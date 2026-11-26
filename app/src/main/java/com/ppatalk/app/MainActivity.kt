@@ -1589,25 +1589,80 @@ private fun ReelFullscreenViewer(
                     onDragCancel = { dragAmount = 0f }
                 )
             }) {
-            val reelPlayer = remember(secureMediaUrl) {
+            var playerError by remember(reel.id) { mutableStateOf("") }
+            var playerLoading by remember(reel.id) { mutableStateOf(true) }
+            val reelPlayer = remember(reel.id) {
                 androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
                     repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
-                    if (secureMediaUrl.startsWith("http")) {
-                        setMediaItem(androidx.media3.common.MediaItem.fromUri(secureMediaUrl))
-                        prepare()
-                        playWhenReady = true
+                }
+            }
+            DisposableEffect(reelPlayer) {
+                val listener = object : androidx.media3.common.Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        playerLoading = false
+                        playerError = "Playback failed: " + (error.localizedMessage ?: error.errorCodeName)
+                        android.util.Log.e("PpaReelPlayer", "Reel playback error id=${reel.id} code=${error.errorCodeName}", error)
+                    }
+                    override fun onPlaybackStateChanged(state: Int) {
+                        if (state == androidx.media3.common.Player.STATE_READY) {
+                            playerLoading = false
+                            playerError = ""
+                        } else if (state == androidx.media3.common.Player.STATE_BUFFERING) {
+                            playerLoading = true
+                        }
+                    }
+                }
+                reelPlayer.addListener(listener)
+                onDispose { reelPlayer.removeListener(listener); reelPlayer.release() }
+            }
+            LaunchedEffect(reelPlayer, secureMediaUrl) {
+                playerError = ""
+                playerLoading = true
+                reelPlayer.stop()
+                reelPlayer.clearMediaItems()
+                when {
+                    secureMediaUrl.startsWith("MEDIA_ERROR:") -> {
+                        playerLoading = false
+                        playerError = secureMediaUrl.removePrefix("MEDIA_ERROR:")
+                    }
+                    secureMediaUrl.isBlank() -> {
+                        playerLoading = true
+                    }
+                    secureMediaUrl.startsWith("http://") || secureMediaUrl.startsWith("https://") -> {
+                        try {
+                            reelPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(secureMediaUrl))
+                            reelPlayer.prepare()
+                            reelPlayer.playWhenReady = true
+                        } catch (e: Exception) {
+                            playerLoading = false
+                            playerError = "Could not load video: ${e.localizedMessage ?: e.javaClass.simpleName}"
+                            android.util.Log.e("PpaReelPlayer", "Media setup failed id=${reel.id}", e)
+                        }
+                    }
+                    else -> {
+                        playerLoading = false
+                        playerError = "Invalid video URL."
                     }
                 }
             }
-            DisposableEffect(reelPlayer) { onDispose { reelPlayer.release() } }
             AndroidView(factory = { viewContext ->
                 androidx.media3.ui.PlayerView(viewContext).apply {
                     player = reelPlayer
                     useController = false
                     setShowBuffering(androidx.media3.ui.PlayerView.SHOW_BUFFERING_ALWAYS)
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             }, update = { view -> view.player = reelPlayer },
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f).align(Alignment.Center))
+            if (playerLoading && playerError.isBlank()) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+            }
+            if (playerError.isNotBlank()) {
+                Box(Modifier.align(Alignment.Center).fillMaxWidth(0.85f)
+                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(12.dp)).padding(16.dp)) {
+                    Text("Video unavailable\\n$playerError", color = Color.White)
+                }
+            }
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.32f)).padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
