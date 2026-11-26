@@ -823,30 +823,30 @@ exports.getSecureMediaUrl = onCall({
     console.error("Secure media invalid document ID", {mediaType, documentIdLength: documentId.length});
     throw new HttpsError("invalid-argument", "Invalid post/story document ID.");
   }
-  // Keep the canonical three-part structure. Preserve encoded characters in object names;
-  // decode only URL object-name components above.
-  const pathSegments = objectPath.split("/");
-  if (pathSegments.length !== 3 || !["post_photos", "stories", "reels"].includes(pathSegments[0]) ||
-      pathSegments.some((segment) => !segment || segment === "." || segment === "..") ||
-      pathSegments[1].length > 128 || pathSegments[2].length > 180) {
-    console.error("Secure media path structure rejected", {mediaType, rawLength: rawObjectPath.length, normalizedLength: objectPath.length, segmentCount: pathSegments.length, prefix: pathSegments[0]});
-    throw new HttpsError("invalid-argument", "Invalid storage object path format.");
-  }
-
   const docSnapshot = await db.collection(collection).doc(documentId).get();
   if (!docSnapshot.exists) throw new HttpsError("not-found", "Media record was not found.");
   const record = docSnapshot.data();
   const ownerUid = record.uid;
-  const objectFolder = objectPath.split("/")[0];
+  // Treat Firestore's storagePath as canonical rather than rejecting client formatting.
+  // The request path is only required to identify the same stored object.
+  const canonicalPath = typeof record.storagePath === "string" ? record.storagePath.trim() : "";
+  const pathSegments = canonicalPath.split("/");
+  const objectFolder = pathSegments[0];
   const folderMatchesType = mediaType === "story"
     ? ["stories", "reels"].includes(objectFolder)
     : mediaType === "reel"
       ? objectFolder === "reels" && record.postType === "reel"
       : objectFolder === "post_photos" || (objectFolder === "reels" && record.postType === "reel");
-  if (typeof ownerUid !== "string" || objectPath.split("/")[1] !== ownerUid ||
-      record.storagePath !== objectPath || !folderMatchesType) {
-    throw new HttpsError("permission-denied", "Media reference does not match its owner, type, or record.");
+  const canonicalStructureValid = pathSegments.length === 3 &&
+    pathSegments.every((segment) => segment && segment !== "." && segment !== "..") &&
+    pathSegments[1].length <= 128 && pathSegments[2].length <= 180;
+  if (!canonicalStructureValid || typeof ownerUid !== "string" ||
+      pathSegments[1] !== ownerUid || !folderMatchesType ||
+      (objectPath && objectPath !== canonicalPath)) {
+    console.error("Secure media canonical path rejected", {mediaType, documentId, pathSegmentCount: pathSegments.length, folder: objectFolder, requestPathLength: objectPath.length, canonicalPathLength: canonicalPath.length});
+    throw new HttpsError("permission-denied", "Media record path is invalid or does not match the request.");
   }
+  const objectPath = canonicalPath;
 
   if (mediaType === "story") {
     const expiresAt = record.expiresAt?.toMillis ? record.expiresAt.toMillis() : 0;
