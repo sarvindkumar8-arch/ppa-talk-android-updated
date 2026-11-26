@@ -1301,7 +1301,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
             "Reels" -> ReelsScreen(uid, Modifier.padding(padding), onOpenUserProfile = { profileUid ->
                 viewedProfileUid = profileUid
                 navigateTo("Profile")
-            })
+            }, onCloseViewer = { handleBack() })
             "Notifications" -> NotificationsScreen(uid, Modifier.padding(padding), onOpenFriends = { navigateTo("Friends") })
             else -> SimplePage("Notifications", "Your activity will appear here", Modifier.padding(padding))
         }
@@ -1435,7 +1435,8 @@ private fun observeVisibleContentOwners(
 fun ReelsScreen(
     currentUid: String,
     modifier: Modifier = Modifier,
-    onOpenUserProfile: (String) -> Unit = {}
+    onOpenUserProfile: (String) -> Unit = {},
+    onCloseViewer: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var reels by remember { mutableStateOf<List<FeedPost>>(emptyList()) }
@@ -1510,7 +1511,7 @@ fun ReelsScreen(
                     color = Color.White, modifier = Modifier.padding(24.dp))
             }
             else -> ReelFullscreenViewer(visibleReels, 0, currentUid,
-                onClose = { /* keep the Reels tab focused on its vertical reel feed */ },
+                onClose = onCloseViewer,
                 onOpenUserProfile = onOpenUserProfile,
                 onHideReel = { id -> hiddenReelIds = hiddenReelIds + id })
         }
@@ -1554,7 +1555,7 @@ private fun ReelPreviewPlayer(mediaUrl: String, modifier: Modifier = Modifier) {
             androidx.media3.ui.PlayerView(viewContext).apply {
                 this.player = player
                 useController = false
-                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             }
         }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
         if (previewError.isNotBlank()) Text("Reel playback error: $previewError", color = Color.White,
@@ -1676,7 +1677,7 @@ private fun ReelFullscreenViewer(
                     resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             }, update = { view -> view.player = reelPlayer },
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f).align(Alignment.Center))
+                modifier = Modifier.fillMaxSize())
             if (playerLoading && playerError.isBlank()) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
             }
