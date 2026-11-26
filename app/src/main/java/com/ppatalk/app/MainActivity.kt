@@ -5299,10 +5299,6 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                     message = if (isCover) "Cover photo saved successfully."
                                                         else "Profile photo saved successfully."
                                                 }
-                                                saving = false
-                                                photoEditorUri = null
-                                                isError = false
-                                                message = if (isCover) "Cover photo saved successfully." else "Profile photo saved successfully."
                                             }
                                             .addOnFailureListener { exception ->
                                                 saving = false
