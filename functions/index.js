@@ -840,12 +840,28 @@ exports.getSecureMediaUrl = onCall({
   const canonicalStructureValid = pathSegments.length === 3 &&
     pathSegments.every((segment) => segment && segment !== "." && segment !== "..") &&
     pathSegments[1].length <= 128 && pathSegments[2].length <= 180;
-  if (!canonicalStructureValid || typeof ownerUid !== "string" ||
-      pathSegments[1] !== ownerUid || !folderMatchesType ||
-      (objectPath && objectPath !== canonicalPath)) {
-    console.error("Secure media canonical path rejected", {mediaType, documentId, pathSegmentCount: pathSegments.length, folder: objectFolder, requestPathLength: objectPath.length, canonicalPathLength: canonicalPath.length});
-    throw new HttpsError("permission-denied", "Media record path is invalid or does not match the request.");
+  if (!canonicalPath) {
+    console.error("Secure media record missing storagePath", {mediaType, documentId});
+    throw new HttpsError("failed-precondition", "Media record is missing storagePath.");
   }
+  if (!canonicalStructureValid) {
+    console.error("Secure media canonical path malformed", {mediaType, documentId, segmentCount: pathSegments.length, folder: objectFolder});
+    throw new HttpsError("failed-precondition", "Media record storagePath has an invalid structure.");
+  }
+  if (typeof ownerUid !== "string" || !ownerUid.trim()) {
+    console.error("Secure media record missing owner UID", {mediaType, documentId});
+    throw new HttpsError("failed-precondition", "Media record is missing its owner UID.");
+  }
+  if (pathSegments[1] !== ownerUid) {
+    console.error("Secure media owner/path mismatch", {mediaType, documentId, ownerUidLength: ownerUid.length, pathUidLength: pathSegments[1]?.length || 0});
+    throw new HttpsError("permission-denied", "Media owner does not match storagePath.");
+  }
+  if (!folderMatchesType) {
+    console.error("Secure media folder/type mismatch", {mediaType, documentId, folder: objectFolder, postType: record.postType || ""});
+    throw new HttpsError("permission-denied", "Media storage folder does not match media type.");
+  }
+  // Firestore record is canonical; request path is not used as an additional
+  // string equality check because equivalent Firebase references may differ in encoding.
   objectPath = canonicalPath;
 
   if (mediaType === "story") {
