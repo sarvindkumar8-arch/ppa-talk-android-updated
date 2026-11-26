@@ -814,10 +814,11 @@ exports.getSecureMediaUrl = onCall({
     console.error("Secure media invalid document ID", {mediaType, documentIdLength: documentId.length});
     throw new HttpsError("invalid-argument", "Invalid post/story document ID.");
   }
-  const pathMatch = /^(post_photos|stories|reels)\/([^/]+)\/([^/]+)$/.exec(objectPath);
-  if (!pathMatch || !/^[A-Za-z0-9_-]{1,128}$/.test(pathMatch[2]) ||
-      !/^[A-Za-z0-9_.-]{1,180}$/.test(pathMatch[3])) {
-    console.error("Secure media invalid object path format", {mediaType, pathPrefix: objectPath.split("/")[0], pathLength: objectPath.length});
+  // Firebase UIDs may contain characters beyond alphanumerics/underscore/hyphen.
+  // Validate the path structure and segment lengths without over-restricting the UID.
+  const pathMatch = /^(post_photos|stories|reels)\/([^/]{1,128})\/([^/]{1,180})$/.exec(objectPath);
+  if (!pathMatch) {
+    console.error("Secure media invalid object path structure", {mediaType, pathPrefix: objectPath.split("/")[0], pathLength: objectPath.length});
     throw new HttpsError("invalid-argument", "Invalid storage object path format.");
   }
 
