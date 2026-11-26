@@ -187,6 +187,19 @@ service cloud.firestore {
             || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['coverPhotoOriginalUrl'])
             || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
+      // Dedicated owner-only media update path for legacy profile documents.
+      // This additive permission avoids unrelated legacy fields blocking photo/cover saves.
+      allow update: if owns(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'photoUrl', 'coverPhotoUrl', 'photoOriginalPath', 'coverPhotoOriginalPath',
+          'photoOriginalUrl', 'coverPhotoOriginalUrl', 'updatedAt'
+        ])
+        && (!('photoUrl' in request.resource.data) || request.resource.data.photoUrl is string)
+        && (!('coverPhotoUrl' in request.resource.data) || request.resource.data.coverPhotoUrl is string)
+        && (!('photoOriginalPath' in request.resource.data) || request.resource.data.photoOriginalPath is string)
+        && (!('coverPhotoOriginalPath' in request.resource.data) || request.resource.data.coverPhotoOriginalPath is string)
+        && (!('photoOriginalUrl' in request.resource.data) || request.resource.data.photoOriginalUrl is string)
+        && (!('coverPhotoOriginalUrl' in request.resource.data) || request.resource.data.coverPhotoOriginalUrl is string);
       allow delete: if owns(userId);
     }
 
