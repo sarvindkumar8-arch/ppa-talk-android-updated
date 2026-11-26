@@ -965,6 +965,17 @@ private fun authSendPasswordReset(email: String, onResult: (Boolean, String) -> 
 @Composable
 fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, onSignOut: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    var canonicalProfileName by remember(uid) { mutableStateOf(displayName) }
+    DisposableEffect(uid) {
+        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                snapshot?.getString("displayName")?.takeIf { it.isNotBlank() }?.let {
+                    canonicalProfileName = it
+                }
+            }
+        onDispose { }
+    }
+    val effectiveDisplayName = canonicalProfileName.ifBlank { displayName }
     DisposableEffect(uid, lifecycleOwner) {
         val db = FirebaseFirestore.getInstance()
         val publicProfileRef = db.collection("publicProfiles").document(uid)
@@ -975,12 +986,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         publicProfileRef.get().addOnSuccessListener { profile ->
             if (!profile.exists()) {
                 publicProfileRef.set(mapOf(
-                    "uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
+                    "uid" to uid, "displayName" to effectiveDisplayName.ifBlank { "PPA Talk user" },
                     "profileVisibility" to "public",
                     "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 ), com.google.firebase.firestore.SetOptions.merge())
-                directoryRef.set(mapOf("uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
+                directoryRef.set(mapOf("uid" to uid, "displayName" to effectiveDisplayName.ifBlank { "PPA Talk user" },
                     "profileVisibility" to "public",
                     "isOnline" to com.google.firebase.firestore.FieldValue.delete(),
                     "lastSeen" to com.google.firebase.firestore.FieldValue.delete(),
@@ -1000,7 +1011,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 val isPublicProfile = (profile.getString("profileVisibility") ?: "public") == "public"
                 directoryRef.set(mapOf(
                     "uid" to uid,
-                    "displayName" to (profile.getString("displayName") ?: displayName.ifBlank { "PPA Talk user" }),
+                    "displayName" to (profile.getString("displayName") ?: effectiveDisplayName.ifBlank { "PPA Talk user" }),
                     "username" to profile.getString("username").orEmpty(),
                     // Private profile media URLs are bearer links. Keep them out of
                     // the directory, which is readable by every signed-in account.
@@ -1075,7 +1086,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     DisposableEffect(uid, displayName) {
         val db = FirebaseFirestore.getInstance()
         db.collection("publicProfiles").document(uid).set(
-            mapOf("uid" to uid, "displayName" to displayName.ifBlank { "PPA Talk user" },
+            mapOf("uid" to uid, "displayName" to effectiveDisplayName.ifBlank { "PPA Talk user" },
                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
             com.google.firebase.firestore.SetOptions.merge()
         )
@@ -1240,9 +1251,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 }
             )
             "Profile" -> if (viewedProfileUid == uid) {
-                ProfileScreen(uid = uid, email = email, initialName = displayName, modifier = Modifier.padding(padding))
+                ProfileScreen(uid = uid, email = email, initialName = effectiveDisplayName, modifier = Modifier.padding(padding))
             } else {
-                PublicProfileScreen(viewedProfileUid, currentUid = uid, currentName = displayName, onOpenChat = { friendUid, friendName ->
+                PublicProfileScreen(viewedProfileUid, currentUid = uid, currentName = effectiveDisplayName, onOpenChat = { friendUid, friendName ->
                     returnToProfileAfterChat = true
                     activeChatUid = friendUid
                     activeChatName = friendName
@@ -1258,7 +1269,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Log out") }
             }
             "Marketplace" -> SimplePage("Marketplace", "Discover products and community listings", Modifier.padding(padding))
-            "Search" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
+            "Search" -> FriendsScreen(uid, effectiveDisplayName, { friendUid, friendName ->
                 activeChatUid = friendUid
                 activeChatName = friendName
             }, Modifier.padding(padding), onOpenProfile = { profileUid ->
@@ -1266,9 +1277,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 navigateTo("Profile")
             }, onBack = { handleBack() }, screenTitle = "Search Friends")
             "Messenger" -> MessengerScreen(uid, onOpenChat = { friendUid, friendName -> activeChatUid = friendUid; activeChatName = friendName }, modifier = Modifier.padding(padding))
-            "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), onPublished = { backStack.clear(); selected = "Home" })
-            "CreatePhoto" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "image", onPublished = { backStack.clear(); selected = "Home" })
-            "CreateVideo" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "video", onPublished = { backStack.clear(); selected = "Home" })
+            "Create" -> CreatePostScreen(uid, effectiveDisplayName, email, Modifier.padding(padding), onPublished = { backStack.clear(); selected = "Home" })
+            "CreatePhoto" -> CreatePostScreen(uid, effectiveDisplayName, email, Modifier.padding(padding), initialPicker = "image", onPublished = { backStack.clear(); selected = "Home" })
+            "CreateVideo" -> CreatePostScreen(uid, effectiveDisplayName, email, Modifier.padding(padding), initialPicker = "video", onPublished = { backStack.clear(); selected = "Home" })
             "CreateReel" -> CreatePostScreen(
                 uid, displayName, email, Modifier.padding(padding), initialPicker = "media",
                 onPublished = {
@@ -1293,7 +1304,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 }
             )
             "Settings" -> SettingsScreen(isDarkMode, onThemeModeChange, Modifier.padding(padding))
-            "Friends" -> FriendsScreen(uid, displayName, { friendUid, friendName ->
+            "Friends" -> FriendsScreen(uid, effectiveDisplayName, { friendUid, friendName ->
                 activeChatUid = friendUid
                 activeChatName = friendName
             }, Modifier.padding(padding), onOpenProfile = { profileUid ->
