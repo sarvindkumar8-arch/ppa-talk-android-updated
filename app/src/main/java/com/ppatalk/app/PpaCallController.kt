@@ -50,7 +50,7 @@ class PpaCallController(
     private var ringbackTone: ToneGenerator? = null
 
     private fun startRingback() {
-        stopRingback()
+        if (ringbackTone != null || released) return
         try {
             ringbackTone = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 65).also {
                 it.startTone(ToneGenerator.TONE_SUP_RINGTONE, -1)
@@ -364,7 +364,7 @@ class PpaCallController(
         val id = callId ?: return
         callListener?.remove()
         callListener = db.collection("callSessions").document(id).addSnapshotListener { snapshot, error ->
-            if (error != null) { onError(error.localizedMessage ?: "Call listener failed."); return@addSnapshotListener }
+            if (error != null) { stopRingback(); onError(error.localizedMessage ?: "Call listener failed."); return@addSnapshotListener }
             if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
             val status = snapshot.getString("status") ?: "ringing"
             when (status) {
@@ -377,6 +377,8 @@ class PpaCallController(
                     }
                 }
                 "accepted" -> {
+                    // Stop ringback as soon as the call is accepted, before SDP/ICE work.
+                    if (caller) stopRingback()
                     val answerMap = snapshot.get("answer") as? Map<*, *>
                     val sdp = answerMap?.get("sdp") as? String
                     if (caller && !sdp.isNullOrBlank() && !remoteDescriptionSet) {
@@ -384,6 +386,7 @@ class PpaCallController(
                         peer?.setRemoteDescription(object : SimpleSdpObserver() {
                             override fun onSetSuccess() {
                                 remoteDescriptionSet = true
+                                stopRingback()
                                 Log.d("PPATalkWebRTC", "Remote ANSWER applied successfully")
                                 remoteVideoSdpLine = videoSdpSummary(sdp)
                         logSdpMediaSections("REMOTE ANSWER", sdp)
@@ -396,10 +399,12 @@ class PpaCallController(
                     }
                 }
                 "rejected" -> {
+                    stopRingback()
                     onStatus("Call declined")
                     onRemoteCallEnded()
                 }
                 "ended", "missed" -> {
+                    stopRingback()
                     onStatus("Call ended")
                     onRemoteCallEnded()
                 }
@@ -605,6 +610,7 @@ class PpaCallController(
 
     fun release() {
         if (released) return
+        stopRingback()
         released = true
         callListener?.remove()
         candidateListener?.remove()
