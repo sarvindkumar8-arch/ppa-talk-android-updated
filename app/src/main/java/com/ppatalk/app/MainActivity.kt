@@ -4037,6 +4037,8 @@ fun CreatePostScreen(
                         .setContentType(if (mediaType == "video") "video/mp4" else "image/jpeg")
                         .build()
                     message = "Uploading media…"
+                    // Log account/path/type to help isolate per-account failures without exposing tokens.
+                    android.util.Log.i("PpaFeedUpload", "Start upload uid=$uid type=$mediaType path=${mediaRef.path} uri=$uploadUri")
                     mediaRef.putFile(uploadUri, uploadMetadata)
                         .addOnProgressListener { snapshot ->
                             val total = snapshot.totalByteCount.coerceAtLeast(1L)
@@ -4044,13 +4046,15 @@ fun CreatePostScreen(
                             message = "Uploading media: $percent%"
                         }
                         .addOnSuccessListener {
+                            android.util.Log.i("PpaFeedUpload", "Storage upload succeeded path=${mediaRef.path}")
                             message = "Upload complete. Publishing post…"
                             // Secure path-based media is resolved later; no download-token URL is needed.
                             savePost("", mediaRef.path)
                         }
                         .addOnFailureListener { ex ->
+                            android.util.Log.e("PpaFeedUpload", "Storage upload failed path=${mediaRef.path}", ex)
                             busy = false
-                            val detail = ex.localizedMessage ?: ex.message ?: ex.toString()
+                            val detail = "code=${(ex as? com.google.firebase.storage.StorageException)?.errorCode}, ${ex.localizedMessage ?: ex.message ?: ex.toString()}"
                             message = "Storage upload failed: $detail"
                         }
                 }
