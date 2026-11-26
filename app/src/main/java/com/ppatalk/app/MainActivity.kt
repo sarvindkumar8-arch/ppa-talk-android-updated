@@ -1677,13 +1677,34 @@ fun HomeFeed(
         val db = FirebaseFirestore.getInstance()
         val ownerRegistrations = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
         val ownerAccessModes = mutableMapOf<String, String>()
+        // Subscribe to the current user's posts independently from directory visibility.
+        ownerRegistrations[currentUid] = db.collection("posts").whereEqualTo("uid", currentUid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Could not load your posts."
+                } else if (snapshot != null) {
+                    val ownPosts = snapshot.documents.map { doc ->
+                        FeedPost(doc.id, doc.getString("uid") ?: currentUid,
+                            doc.getString("authorName") ?: "PPA Talk user",
+                            doc.getString("text") ?: "", doc.getTimestamp("createdAt")?.toDate(),
+                            doc.getString("mediaUrl") ?: "", doc.getString("mediaType") ?: "",
+                            doc.getString("postType") ?: "post", doc.getString("storagePath").orEmpty())
+                    }
+                    posts = (posts.filterNot { it.uid == currentUid } + ownPosts)
+                        .sortedByDescending { it.createdAt?.time ?: 0L }
+                    loading = false
+                    error = ""
+                }
+            }
+        ownerAccessModes[currentUid] = "owner"
         val audienceRegistrations = observeVisibleContentOwners(db, currentUid) { ownerAccess ->
-            (ownerRegistrations.keys - ownerAccess.keys).forEach { ownerUid ->
+            (ownerRegistrations.keys - ownerAccess.keys - currentUid).forEach { ownerUid ->
                 ownerRegistrations.remove(ownerUid)?.remove()
                 ownerAccessModes.remove(ownerUid)
                 posts = posts.filterNot { it.uid == ownerUid }
             }
             ownerAccess.forEach { (ownerUid, accessMode) ->
+                if (ownerUid == currentUid) return@forEach
                 if (ownerAccessModes[ownerUid] != null && ownerAccessModes[ownerUid] != accessMode) {
                     ownerRegistrations.remove(ownerUid)?.remove()
                     posts = posts.filterNot { it.uid == ownerUid }
