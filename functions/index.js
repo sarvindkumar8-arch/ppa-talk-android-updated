@@ -837,9 +837,13 @@ exports.getSecureMediaUrl = onCall({
     : mediaType === "reel"
       ? objectFolder === "reels" && record.postType === "reel"
       : objectFolder === "post_photos" || (objectFolder === "reels" && record.postType === "reel");
-  const canonicalStructureValid = pathSegments.length === 3 &&
+  // Accept nested object-name segments as valid bucket-relative Storage paths.
+  // Firebase object names may contain additional slash-separated segments.
+  const canonicalStructureValid = pathSegments.length >= 3 &&
+    ["post_photos", "stories", "reels"].includes(pathSegments[0]) &&
     pathSegments.every((segment) => segment && segment !== "." && segment !== "..") &&
-    pathSegments[1].length <= 128 && pathSegments[2].length <= 180;
+    pathSegments[1].length <= 128 &&
+    pathSegments.slice(2).join("/").length <= 900;
   if (!canonicalPath) {
     console.error("Secure media record missing storagePath", {mediaType, documentId});
     throw new HttpsError("failed-precondition", "Media record is missing storagePath.");
