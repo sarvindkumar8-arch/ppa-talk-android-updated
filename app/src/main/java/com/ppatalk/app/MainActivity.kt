@@ -5015,6 +5015,7 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                 displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
                                     message = "Photo URL mil gaya. Profile details save ho rahi hain..."
                                     val updates = mapOf(
+                                        "uid" to uid,
                                         originalPathField to originalRef.path,
                                         legacyOriginalField to com.google.firebase.firestore.FieldValue.delete(),
                                         displayField to displayDownload.toString(),
