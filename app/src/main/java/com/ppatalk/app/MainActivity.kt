@@ -1250,9 +1250,9 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                 navigateTo("Profile")
             }, onBack = { handleBack() }, screenTitle = "Search Friends")
             "Messenger" -> MessengerScreen(uid, onOpenChat = { friendUid, friendName -> activeChatUid = friendUid; activeChatName = friendName }, modifier = Modifier.padding(padding))
-            "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding))
-            "CreatePhoto" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "image")
-            "CreateVideo" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "video")
+            "Create" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), onPublished = { backStack.clear(); selected = "Home" })
+            "CreatePhoto" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "image", onPublished = { backStack.clear(); selected = "Home" })
+            "CreateVideo" -> CreatePostScreen(uid, displayName, email, Modifier.padding(padding), initialPicker = "video", onPublished = { backStack.clear(); selected = "Home" })
             "CreateReel" -> CreatePostScreen(
                 uid, displayName, email, Modifier.padding(padding), initialPicker = "media",
                 onPublished = {
