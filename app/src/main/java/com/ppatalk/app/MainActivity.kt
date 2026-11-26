@@ -1521,12 +1521,7 @@ fun ReelsScreen(
                         modifier = Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 10.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF171717))) {
                         Box(Modifier.fillMaxSize()) {
-                            AndroidView(factory = { context ->
-                                VideoView(context).apply {
-                                    setVideoURI(Uri.parse(secureMediaUrl))
-                                    setOnPreparedListener { player -> player.isLooping = true; start() }
-                                }
-                            }, modifier = Modifier.fillMaxSize())
+                            ReelPreviewPlayer(secureMediaUrl, Modifier.fillMaxSize())
                             Text("▶  Open Reel", color = Color.White,
                                 modifier = Modifier.align(Alignment.BottomStart)
                                     .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
@@ -1541,6 +1536,50 @@ fun ReelsScreen(
         ReelFullscreenViewer(visibleReels, selectedReelIndex, currentUid,
             onClose = { selectedReelIndex = -1 }, onOpenUserProfile = onOpenUserProfile,
             onHideReel = { id -> hiddenReelIds = hiddenReelIds + id; selectedReelIndex = -1 })
+    }
+}
+
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
+@Composable
+private fun ReelPreviewPlayer(mediaUrl: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var previewError by remember(mediaUrl) { mutableStateOf("") }
+    val player = remember { androidx.media3.exoplayer.ExoPlayer.Builder(context).build() }
+    DisposableEffect(player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                previewError = error.localizedMessage ?: error.errorCodeName
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
+    }
+    LaunchedEffect(mediaUrl, player) {
+        previewError = ""
+        player.stop()
+        player.clearMediaItems()
+        when {
+            mediaUrl.startsWith("MEDIA_ERROR:") -> previewError = mediaUrl.removePrefix("MEDIA_ERROR:")
+            mediaUrl.isBlank() -> Unit
+            mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://") -> {
+                player.setMediaItem(androidx.media3.common.MediaItem.fromUri(mediaUrl))
+                player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                player.prepare()
+                player.playWhenReady = true
+            }
+            else -> previewError = "Invalid media URL"
+        }
+    }
+    Box(modifier.background(Color.Black)) {
+        AndroidView(factory = { viewContext ->
+            androidx.media3.ui.PlayerView(viewContext).apply {
+                this.player = player
+                useController = false
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            }
+        }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
+        if (previewError.isNotBlank()) Text("Reel playback error: $previewError", color = Color.White,
+            modifier = Modifier.align(Alignment.Center).padding(12.dp))
     }
 }
 
