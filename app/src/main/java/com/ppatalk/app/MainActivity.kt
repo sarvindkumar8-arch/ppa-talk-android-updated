@@ -2949,6 +2949,7 @@ Button(
 }
 
 
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @Composable
 fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {},
     onHidePost: () -> Unit = {}, onCommentsClick: () -> Unit) {
