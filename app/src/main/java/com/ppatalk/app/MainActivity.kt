@@ -176,22 +176,36 @@ private fun rememberSecureMediaUrl(
         } else {
             // Never fall back to a token URL when authorization fails for a path-backed record.
             resolvedUrl = "";
-            FirebaseFunctions.getInstance("asia-south1")
-                .getHttpsCallable("getSecureMediaUrl")
-                .call(mapOf(
-                    "mediaType" to mediaType,
-                    "documentId" to documentId,
-                    "objectPath" to storagePath
-                ))
-                .addOnSuccessListener { result ->
-                    val data = result.getData() as? Map<*, *>
-                    val secureUrl = data?.get("url") as? String
-                    if (!secureUrl.isNullOrBlank()) resolvedUrl = secureUrl
-                }
-                .addOnFailureListener { ex ->
-                    android.util.Log.e("PpaSecureMedia", "Secure media URL failed type=$mediaType post=$documentId path=$storagePath", ex)
-                    resolvedUrl = "MEDIA_ERROR:" + (ex.localizedMessage ?: ex.toString())
-                }
+            val authUser = FirebaseAuth.getInstance().currentUser
+            if (authUser == null) {
+                resolvedUrl = "MEDIA_ERROR:No signed-in Firebase user."
+            } else {
+                // Force refresh before callable invocation to ensure the callable receives a current ID token.
+                authUser.getIdToken(true)
+                    .addOnSuccessListener {
+                        FirebaseFunctions.getInstance("asia-south1")
+                            .getHttpsCallable("getSecureMediaUrl")
+                            .call(mapOf(
+                                "mediaType" to mediaType,
+                                "documentId" to documentId,
+                                "objectPath" to storagePath
+                            ))
+                            .addOnSuccessListener { result ->
+                                val data = result.getData() as? Map<*, *>
+                                val secureUrl = data?.get("url") as? String
+                                if (!secureUrl.isNullOrBlank()) resolvedUrl = secureUrl
+                                else resolvedUrl = "MEDIA_ERROR:Function returned an empty URL."
+                            }
+                            .addOnFailureListener { ex ->
+                                android.util.Log.e("PpaSecureMedia", "Callable failed type=$mediaType post=$documentId path=$storagePath", ex)
+                                resolvedUrl = "MEDIA_ERROR:" + (ex.localizedMessage ?: ex.toString())
+                            }
+                    }
+                    .addOnFailureListener { ex ->
+                        android.util.Log.e("PpaSecureMedia", "ID token refresh failed", ex)
+                        resolvedUrl = "MEDIA_ERROR:Token refresh failed: " + (ex.localizedMessage ?: ex.toString())
+                    }
+            }
         }
     }
     return resolvedUrl
