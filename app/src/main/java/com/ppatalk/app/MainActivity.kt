@@ -967,13 +967,13 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
     val lifecycleOwner = LocalLifecycleOwner.current
     var canonicalProfileName by remember(uid) { mutableStateOf(displayName) }
     DisposableEffect(uid) {
-        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+        val nameRegistration = FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
             .addSnapshotListener { snapshot, _ ->
                 snapshot?.getString("displayName")?.takeIf { it.isNotBlank() }?.let {
                     canonicalProfileName = it
                 }
             }
-        onDispose { }
+        onDispose { nameRegistration.remove() }
     }
     val effectiveDisplayName = canonicalProfileName.ifBlank { displayName }
     DisposableEffect(uid, lifecycleOwner) {
@@ -1083,13 +1083,8 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         handleBack()
     }
 
-    DisposableEffect(uid, displayName) {
+    DisposableEffect(uid) {
         val db = FirebaseFirestore.getInstance()
-        db.collection("publicProfiles").document(uid).set(
-            mapOf("uid" to uid, "displayName" to effectiveDisplayName.ifBlank { "PPA Talk user" },
-                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
-            com.google.firebase.firestore.SetOptions.merge()
-        )
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
             db.collection("users").document(uid)
                 .collection("fcmTokens").document(token)
