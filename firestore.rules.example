@@ -30,11 +30,12 @@ service cloud.firestore {
     }
 
     function canStartChat(uidA, uidB) {
-      return areAcceptedFriends(uidA, uidB)
-        || (exists(/databases/$(database)/documents/publicProfiles/$(uidA))
-          && get(/databases/$(database)/documents/publicProfiles/$(uidA)).data.profileVisibility == 'public')
-        || (exists(/databases/$(database)/documents/publicProfiles/$(uidB))
-          && get(/databases/$(database)/documents/publicProfiles/$(uidB)).data.profileVisibility == 'public');
+      let targetUid = uidA == request.auth.uid ? uidB : uidA;
+      return signedIn()
+        && request.auth.uid in [uidA, uidB]
+        && (areAcceptedFriends(uidA, uidB)
+          || (exists(/databases/$(database)/documents/publicProfiles/$(targetUid))
+            && get(/databases/$(database)/documents/publicProfiles/$(targetUid)).data.profileVisibility == 'public'));
     }
 
     function isAcceptedFriend(ownerUid) {
@@ -499,7 +500,14 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == get(/databases/$(database)/documents/callSessions/$(callId)).data.callerUid
           && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt'])
-          && request.resource.data.candidate is string;
+          && request.resource.data.sdpMid is string
+          && request.resource.data.sdpMid.size() <= 100
+          && request.resource.data.sdpMLineIndex is int
+          && request.resource.data.sdpMLineIndex >= 0
+          && request.resource.data.sdpMLineIndex <= 100
+          && request.resource.data.candidate is string
+          && request.resource.data.candidate.size() <= 2048
+          && request.resource.data.createdAt is timestamp;
         allow update, delete: if false;
       }
       match /calleeCandidates/{candidateId} {
@@ -511,7 +519,14 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == get(/databases/$(database)/documents/callSessions/$(callId)).data.calleeUid
           && request.resource.data.keys().hasOnly(['sdpMid', 'sdpMLineIndex', 'candidate', 'createdAt'])
-          && request.resource.data.candidate is string;
+          && request.resource.data.sdpMid is string
+          && request.resource.data.sdpMid.size() <= 100
+          && request.resource.data.sdpMLineIndex is int
+          && request.resource.data.sdpMLineIndex >= 0
+          && request.resource.data.sdpMLineIndex <= 100
+          && request.resource.data.candidate is string
+          && request.resource.data.candidate.size() <= 2048
+          && request.resource.data.createdAt is timestamp;
         allow update, delete: if false;
       }
     }
