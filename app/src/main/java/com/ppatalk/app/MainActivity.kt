@@ -5017,7 +5017,6 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                     val updates = mapOf(
                                         "uid" to uid,
                                         originalPathField to originalRef.path,
-                                        legacyOriginalField to com.google.firebase.firestore.FieldValue.delete(),
                                         displayField to displayDownload.toString(),
                                         "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                     )
