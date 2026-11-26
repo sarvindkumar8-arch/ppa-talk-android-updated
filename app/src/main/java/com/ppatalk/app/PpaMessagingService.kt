@@ -180,20 +180,23 @@ class PpaMessagingService : FirebaseMessagingService() {
 
     private fun showCallNotification(title: String, body: String, callId: String,
                                      callerUid: String, callType: String) {
-        val channelId = "ppa_incoming_calls_v3"
+        val channelId = "ppa_incoming_calls_v4"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            {
-            val ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            manager.createNotificationChannel(NotificationChannel(
+            val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val channel = NotificationChannel(
                 channelId, "Incoming calls", NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Ringtone and alerts for incoming PPA Talk calls"
+                setSound(ringtoneUri, AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build())
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 1000, 500, 1000)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-            })
-        }
+            }
+            manager.createNotificationChannel(channel)
         }
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
