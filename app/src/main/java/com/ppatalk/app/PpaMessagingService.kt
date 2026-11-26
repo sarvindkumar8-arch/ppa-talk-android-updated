@@ -78,6 +78,7 @@ class PpaMessagingService : FirebaseMessagingService() {
             cancelCallNotification(callId)
             return
         }
+        if (type.isNotBlank() && type != "incoming_call") return
         val callerUid = message.data["callerUid"].orEmpty()
         val callType = message.data["callType"] ?: "audio"
         if (callId.isBlank()) return
@@ -90,7 +91,7 @@ class PpaMessagingService : FirebaseMessagingService() {
                 val currentUid = FirebaseAuth.getInstance().currentUser?.uid
                 if (snapshot.exists() &&
                     snapshot.getString("status") == "ringing" &&
-                    snapshot.getString("calleeUid") == currentUid) {
+                    currentUid != null && snapshot.getString("calleeUid") == currentUid) {
                     showCallNotification(title, body, callId, callerUid, callType)
                 } else {
                     cancelCallNotification(callId)
