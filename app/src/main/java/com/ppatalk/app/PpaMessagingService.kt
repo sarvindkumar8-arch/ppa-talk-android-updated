@@ -180,7 +180,7 @@ class PpaMessagingService : FirebaseMessagingService() {
 
     private fun showCallNotification(title: String, body: String, callId: String,
                                      callerUid: String, callType: String) {
-        val channelId = "ppa_incoming_calls_v2"
+        val channelId = "ppa_incoming_calls_v3"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             {
