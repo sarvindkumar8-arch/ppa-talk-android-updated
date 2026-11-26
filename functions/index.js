@@ -808,7 +808,14 @@ exports.getSecureMediaUrl = onCall({
   const collection = mediaType === "story" ? "stories" :
     (mediaType === "post" || mediaType === "reel") ? "posts" : "";
   const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
-  const objectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
+  const rawObjectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
+  // Normalize common Firebase object reference forms to the canonical bucket-relative path.
+  let objectPath = rawObjectPath.replace(/^\\/+/, "");
+  objectPath = objectPath.replace(/^gs:\/\/[^/]+\//, "");
+  objectPath = objectPath.replace(/^https?:\/\/[^/]+\/(?:v0\/b\/[^/]+\/o\/)?/, "");
+  try { objectPath = decodeURIComponent(objectPath); } catch (_) {}
+  if (objectPath.includes("/o/")) objectPath = objectPath.substring(objectPath.lastIndexOf("/o/") + 3);
+  if (objectPath.startsWith("o/")) objectPath = objectPath.substring(2);
   if (!collection) throw new HttpsError("invalid-argument", "Unsupported media type.");
   if (!/^[A-Za-z0-9_-]{1,150}$/.test(documentId)) {
     console.error("Secure media invalid document ID", {mediaType, documentIdLength: documentId.length});
