@@ -801,7 +801,10 @@ exports.getSecureMediaUrl = onCall({
   if (!viewerUid) throw new HttpsError("unauthenticated", "Sign in to view this media.");
   await consumeRateLimit("secure-media-url", viewerUid, 120, 60 * 1000);
 
-  const mediaType = request.data?.mediaType;
+  const requestedMediaType = request.data?.mediaType;
+  // Android feed passes "image" for photo posts; normalize it to a post record.
+  const mediaType = requestedMediaType === "image" ? "post" :
+    requestedMediaType === "video" ? "reel" : requestedMediaType;
   const collection = mediaType === "story" ? "stories" :
     (mediaType === "post" || mediaType === "reel") ? "posts" : "";
   const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
