@@ -5261,44 +5261,10 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                     .addOnFailureListener { directoryException ->
                                                         android.util.Log.w("PpaProfileMedia", "Directory sync failed after profile media save", directoryException)
                                                     }
-                                                if (profileVisibility == "public") {
-                                                    val photoPost = hashMapOf(
-                                                        "uid" to uid,
-                                                        "authorName" to displayName.ifBlank { "PPA Talk user" },
-                                                        "text" to if (isCover) "Updated their cover photo." else "Updated their profile photo.",
-                                                        "mediaUrl" to displayDownload.toString(),
-                                                        "originalPath" to originalRef.path,
-                                                        "thumbnailUrl" to displayDownload.toString(),
-                                                        "mediaType" to "image",
-                                                        "postType" to "post",
-                                                        "photoKind" to if (isCover) "cover" else "profile",
-                                                        "profileVisibility" to profileVisibility,
-                                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                                    )
-                                                    FirebaseFirestore.getInstance().collection("posts").add(photoPost)
-                                                        .addOnSuccessListener {
-                                                            saving = false
-                                                            photoEditorUri = null
-                                                            message = if (isCover)
-                                                                "Cover photo save ho gayi aur Feed + Photos mein share ho gayi."
-                                                            else "Profile photo save ho gayi aur Feed + Photos mein share ho gayi."
-                                                        }
-                                                        .addOnFailureListener { exception ->
-                                                            // Profile media is already saved successfully. Feed failure must not
-                                                            // roll back or block the profile/cover photo change.
-                                                            saving = false
-                                                            photoEditorUri = null
-                                                            isError = false
-                                                            message = if (isCover)
-                                                                "Cover photo saved. Feed sharing failed: ${exception.localizedMessage ?: "unknown error"}"
-                                                            else
-                                                                "Profile photo saved. Feed sharing failed: ${exception.localizedMessage ?: "unknown error"}"
-                                                        }
-                                                } else {
-                                                    saving = false
-                                                    photoEditorUri = null
-                                                    message = "Original photo save ho gayi. Private profile hone ke karan Feed par share nahi ki gayi."
-                                                }
+                                                saving = false
+                                                photoEditorUri = null
+                                                isError = false
+                                                message = if (isCover) "Cover photo saved successfully." else "Profile photo saved successfully."
                                             }
                                             .addOnFailureListener { exception ->
                                                 saving = false
