@@ -368,6 +368,14 @@ class PpaCallController(
             if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
             val status = snapshot.getString("status") ?: "ringing"
             when (status) {
+                // The callee transitions to "accepting" immediately on tapping Accept.
+                // Stop caller ringback at that point rather than waiting for SDP/ICE.
+                "accepting" -> {
+                    if (caller) {
+                        stopRingback()
+                        onStatus("Connecting…")
+                    }
+                }
                 "accepted" -> {
                     val answerMap = snapshot.get("answer") as? Map<*, *>
                     val sdp = answerMap?.get("sdp") as? String
