@@ -4030,33 +4030,48 @@ fun CreatePostScreen(
                     val extension = if (mediaType == "video") "mp4" else "jpg"
                     val folder = if (mediaType == "video") "reels" else "post_photos"
                     val mediaRef = FirebaseStorage.getInstance().reference.child("$folder/$uid/${System.currentTimeMillis()}.$extension")
-                    val uploadUri = if (mediaType == "image" && (selectedPhotoFilter != "Original" || photoBrightness != 0f || photoContrast != 1f || photoSaturation != 1f)) {
-                        createFilteredPhotoUri(context, uri, selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation) ?: uri
-                    } else uri
-                    val uploadMetadata = com.google.firebase.storage.StorageMetadata.Builder()
-                        .setContentType(if (mediaType == "video") "video/mp4" else "image/jpeg")
-                        .build()
-                    message = "Uploading media…"
-                    // Log account/path/type to help isolate per-account failures without exposing tokens.
-                    android.util.Log.i("PpaFeedUpload", "Start upload uid=$uid type=$mediaType path=${mediaRef.path} uri=$uploadUri")
-                    mediaRef.putFile(uploadUri, uploadMetadata)
-                        .addOnProgressListener { snapshot ->
-                            val total = snapshot.totalByteCount.coerceAtLeast(1L)
-                            val percent = (100L * snapshot.bytesTransferred / total).toInt()
-                            message = "Uploading media: $percent%"
-                        }
-                        .addOnSuccessListener {
-                            android.util.Log.i("PpaFeedUpload", "Storage upload succeeded path=${mediaRef.path}")
-                            message = "Upload complete. Publishing post…"
-                            // Secure path-based media is resolved later; no download-token URL is needed.
-                            savePost("", mediaRef.path)
-                        }
-                        .addOnFailureListener { ex ->
-                            android.util.Log.e("PpaFeedUpload", "Storage upload failed path=${mediaRef.path}", ex)
-                            busy = false
-                            val detail = "code=${(ex as? com.google.firebase.storage.StorageException)?.errorCode}, ${ex.localizedMessage ?: ex.message ?: ex.toString()}"
-                            message = "Storage upload failed: $detail"
-                        }
+                    try {
+                        // Persist the selected URI into app-private cache before upload. This avoids
+                        // transient gallery/provider URI permission failures across devices/accounts.
+                        val sourceUri = if (mediaType == "image" && (selectedPhotoFilter != "Original" || photoBrightness != 0f || photoContrast != 1f || photoSaturation != 1f)) {
+                            createFilteredPhotoUri(context, uri, selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation) ?: uri
+                        } else uri
+                        val suffix = if (mediaType == "video") ".mp4" else ".jpg"
+                        val cachedMedia = java.io.File(context.cacheDir, "ppa_upload_${System.currentTimeMillis()}$suffix")
+                        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                            cachedMedia.outputStream().use { output -> input.copyTo(output) }
+                        } ?: throw java.io.IOException("Selected media could not be opened.")
+                        if (!cachedMedia.exists() || cachedMedia.length() <= 0L) throw java.io.IOException("Selected media file is empty.")
+                        val uploadUri = Uri.fromFile(cachedMedia)
+                        val uploadMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                            .setContentType(if (mediaType == "video") "video/mp4" else "image/jpeg")
+                            .build()
+                        message = "Uploading media…"
+                        android.util.Log.i("PpaFeedUpload", "Start upload uid=$uid type=$mediaType path=${mediaRef.path} cachedBytes=${cachedMedia.length()}")
+                        mediaRef.putFile(uploadUri, uploadMetadata)
+                            .addOnProgressListener { snapshot ->
+                                val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                                val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                                message = "Uploading media: $percent%"
+                            }
+                            .addOnSuccessListener {
+                                android.util.Log.i("PpaFeedUpload", "Storage upload succeeded path=${mediaRef.path}")
+                                cachedMedia.delete()
+                                message = "Upload complete. Publishing post…"
+                                savePost("", mediaRef.path)
+                            }
+                            .addOnFailureListener { ex ->
+                                android.util.Log.e("PpaFeedUpload", "Storage upload failed path=${mediaRef.path}", ex)
+                                cachedMedia.delete()
+                                busy = false
+                                val detail = "code=${(ex as? com.google.firebase.storage.StorageException)?.errorCode}, ${ex.localizedMessage ?: ex.message ?: ex.toString()}"
+                                message = "Storage upload failed: $detail"
+                            }
+                    } catch (ex: Exception) {
+                        android.util.Log.e("PpaFeedUpload", "Media preparation failed uid=$uid uri=$uri", ex)
+                        busy = false
+                        message = "Photo could not be prepared: ${ex.localizedMessage ?: ex.message ?: "unknown error"}"
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
