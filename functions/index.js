@@ -792,7 +792,9 @@ exports.createLiveKitToken = onCall({
 // object path; clients cannot request arbitrary objects from another user's folder.
 exports.getSecureMediaUrl = onCall({
   region: REGION,
-  enforceAppCheck: true,
+  // Temporarily disable App Check on this endpoint to isolate App Check rejection.
+  // Firebase Auth, ownership, audience, path and record validation remain enforced.
+  enforceAppCheck: false,
   maxInstances: 30
 }, async (request) => {
   const viewerUid = request.auth?.uid;
