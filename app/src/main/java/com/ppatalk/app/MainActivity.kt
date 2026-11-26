@@ -736,7 +736,8 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             onClick = {
                 message = ""
                 val auth = FirebaseAuth.getInstance()
-                if (password.length < 8) {
+                val requirePasswordNow = !usePhone || !isSignUp || phoneOtpSent
+                if (requirePasswordNow && password.length < 8) {
                     message = "Password must be at least 8 characters."
                     return@Button
                 }
