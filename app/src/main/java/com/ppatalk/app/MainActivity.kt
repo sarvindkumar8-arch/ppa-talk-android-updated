@@ -1596,6 +1596,7 @@ private fun ReelFullscreenViewer(
     var commentCount by remember(reels.getOrNull(index)?.id) { mutableIntStateOf(0) }
     var saved by remember(reels.getOrNull(index)?.id) { mutableStateOf(false) }
     var dragAmount by remember { mutableFloatStateOf(0f) }
+    var reelMuted by remember(reels.getOrNull(index)?.id) { mutableStateOf(false) }
     val context = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
     val reel = reels.getOrNull(index) ?: return
@@ -1633,6 +1634,11 @@ private fun ReelFullscreenViewer(
             val reelPlayer = remember(reel.id) {
                 androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
                     repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                    volume = 1f
+                    setAudioAttributes(androidx.media3.common.AudioAttributes.Builder()
+                        .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                        .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                        .build(), true)
                 }
             }
             DisposableEffect(reelPlayer) {
@@ -1714,6 +1720,14 @@ private fun ReelFullscreenViewer(
             }
             Column(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp, top = 34.dp, bottom = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                IconButton(onClick = {
+                    reelMuted = !reelMuted
+                    reelPlayer.volume = if (reelMuted) 0f else 1f
+                }) {
+                    Icon(if (reelMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        contentDescription = if (reelMuted) "Unmute reel" else "Mute reel", tint = Color.White,
+                        modifier = Modifier.size(32.dp))
+                }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconButton(onClick = {
                         val ref = db.collection("posts").document(reel.id).collection("likes").document(currentUid)
