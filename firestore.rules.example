@@ -159,21 +159,34 @@ service cloud.firestore {
         && (!('photoOriginalUrl' in request.resource.data) || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
         && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
       allow update: if owns(userId)
-        // Authorization is based on the document path and authenticated owner.
-        // Legacy uid fields inside existing documents must not block owner media updates.
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'updatedAt', 'isOnline', 'lastSeen'
+          'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl',
+          'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath',
+          'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace',
+          'hometown', 'currentCity', 'work', 'education', 'relationshipStatus',
+          'interests', 'profileVisibility', 'updatedAt', 'isOnline', 'lastSeen'
         ])
-        && (!('uid' in request.resource.data) || request.resource.data.uid == userId)
-        && (!('profileVisibility' in request.resource.data) || request.resource.data.profileVisibility in ['public', 'private'])
-        && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
-        && (!('username' in request.resource.data) || (request.resource.data.username is string && request.resource.data.username.size() <= 32))
-        && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
-        && (!('interests' in request.resource.data) || (request.resource.data.interests is list && request.resource.data.interests.size() <= 30))
-        && (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 4096))
-        && (!('coverPhotoUrl' in request.resource.data) || (request.resource.data.coverPhotoUrl is string && request.resource.data.coverPhotoUrl.size() <= 4096))
-        && (!('photoOriginalUrl' in request.resource.data) || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
-        && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
+        // Validate only values touched by this update, not unrelated legacy fields.
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid'])
+            || request.resource.data.uid == userId)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['profileVisibility'])
+            || request.resource.data.profileVisibility in ['public', 'private'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['displayName'])
+            || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['username'])
+            || (request.resource.data.username is string && request.resource.data.username.size() <= 32))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['bio'])
+            || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['interests'])
+            || (request.resource.data.interests is list && request.resource.data.interests.size() <= 30))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoUrl'])
+            || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 4096))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['coverPhotoUrl'])
+            || (request.resource.data.coverPhotoUrl is string && request.resource.data.coverPhotoUrl.size() <= 4096))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoOriginalUrl'])
+            || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['coverPhotoOriginalUrl'])
+            || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
       allow delete: if owns(userId);
     }
 
