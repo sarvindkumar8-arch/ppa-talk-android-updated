@@ -1807,6 +1807,7 @@ fun HomeFeed(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var selectedPost by remember { mutableStateOf<FeedPost?>(null) }
+    var selectedFeedReel by remember { mutableStateOf<FeedPost?>(null) }
     var hiddenPostIds by remember { mutableStateOf(setOf<String>()) }
     DisposableEffect(currentUid) {
         val db = FirebaseFirestore.getInstance()
@@ -1939,10 +1940,17 @@ fun HomeFeed(
         if (!loading && posts.isEmpty() && error.isBlank()) item { Text("No posts yet. Be the first to share something!") }
         items(posts.filterNot { it.id in hiddenPostIds }, key = { it.id }) { post ->
             FeedPostCard(post, currentUid, onOpenAuthorProfile = { onOpenUserProfile(post.uid) },
+                onOpenReel = { selectedFeedReel = post },
                 onHidePost = { hiddenPostIds = hiddenPostIds + post.id }) { selectedPost = post }
         }
     }
     selectedPost?.let { PostCommentsDialog(it, currentUid) { selectedPost = null } }
+    selectedFeedReel?.let { feedReel ->
+        ReelFullscreenViewer(listOf(feedReel), 0, currentUid,
+            onClose = { selectedFeedReel = null },
+            onOpenUserProfile = onOpenUserProfile,
+            onHideReel = { selectedFeedReel = null })
+    }
 }
 
 
@@ -3004,7 +3012,7 @@ Button(
 
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @Composable
-fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {},
+fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> Unit = {}, onOpenReel: () -> Unit = {},
     onHidePost: () -> Unit = {}, onCommentsClick: () -> Unit) {
     var liked by remember(post.id, currentUid) { mutableStateOf(false) }
     var selectedReaction by remember(post.id, currentUid) { mutableStateOf("") }
@@ -3192,6 +3200,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
             } else if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && (post.mediaType == "video" || post.postType == "reel")) {
                 Spacer(Modifier.height(8.dp))
+                if (post.postType == "reel") {
+                    TextButton(onClick = onOpenReel, modifier = Modifier.fillMaxWidth()) { Text("▶ Open Reel fullscreen") }
+                }
                 var reelMuted by remember(post.id) { mutableStateOf(true) }
                 var inlineVideoError by remember(post.id) { mutableStateOf("") }
                 var inlineVideoLoading by remember(post.id) { mutableStateOf(true) }
