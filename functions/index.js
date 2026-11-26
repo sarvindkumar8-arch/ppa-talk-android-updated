@@ -809,9 +809,16 @@ exports.getSecureMediaUrl = onCall({
     (mediaType === "post" || mediaType === "reel") ? "posts" : "";
   const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
   const objectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
-  if (!collection || !/^[A-Za-z0-9_-]{1,150}$/.test(documentId) ||
-      !/^(post_photos|stories|reels)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,180}$/.test(objectPath)) {
-    throw new HttpsError("invalid-argument", "Invalid media reference.");
+  if (!collection) throw new HttpsError("invalid-argument", "Unsupported media type.");
+  if (!/^[A-Za-z0-9_-]{1,150}$/.test(documentId)) {
+    console.error("Secure media invalid document ID", {mediaType, documentIdLength: documentId.length});
+    throw new HttpsError("invalid-argument", "Invalid post/story document ID.");
+  }
+  const pathMatch = /^(post_photos|stories|reels)\/([^/]+)\/([^/]+)$/.exec(objectPath);
+  if (!pathMatch || !/^[A-Za-z0-9_-]{1,128}$/.test(pathMatch[2]) ||
+      !/^[A-Za-z0-9_.-]{1,180}$/.test(pathMatch[3])) {
+    console.error("Secure media invalid object path format", {mediaType, pathPrefix: objectPath.split("/")[0], pathLength: objectPath.length});
+    throw new HttpsError("invalid-argument", "Invalid storage object path format.");
   }
 
   const docSnapshot = await db.collection(collection).doc(documentId).get();
