@@ -3180,9 +3180,6 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 }
             } else if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && (post.mediaType == "video" || post.postType == "reel")) {
                 Spacer(Modifier.height(8.dp))
-                if (post.postType == "reel") {
-                    TextButton(onClick = onOpenReel, modifier = Modifier.fillMaxWidth()) { Text("▶ Open Reel fullscreen") }
-                }
                 var reelMuted by remember(post.id) { mutableStateOf(true) }
                 var inlineVideoError by remember(post.id) { mutableStateOf("") }
                 var inlineVideoLoading by remember(post.id) { mutableStateOf(true) }
