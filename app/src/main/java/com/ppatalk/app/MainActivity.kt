@@ -902,7 +902,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Please wait..." else if (isSignUp) "Sign Up" else "Sign In")
+            Text(if (busy) "Please wait..." else if (usePhone && isSignUp && !phoneOtpSent) "Send OTP" else if (usePhone && isSignUp && phoneOtpSent) "Verify OTP & Sign Up" else if (isSignUp) "Sign Up" else "Sign In")
         }
         }
 
