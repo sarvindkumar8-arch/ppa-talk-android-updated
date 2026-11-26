@@ -183,6 +183,17 @@ async function run() {
         storagePath: "post_photos/stranger-user/post.jpg", audience: "public"
       }));
     }],
+    ["Owner can create a photo post using the exact composer payload", async () => {
+      const uid = "stranger-user";
+      const db = testEnv.authenticatedContext(uid).firestore();
+      await assertSucceeds(setDoc(doc(db, "posts/exact-composer-photo"), {
+        uid, authorName: "Stranger", text: "", mediaUrl: "",
+        storagePath: "post_photos/stranger-user/1795524047.jpg",
+        mediaType: "image", postType: "post", audience: "public",
+        location: "", taggedUsers: [], overlayText: "", sticker: "",
+        effect: "", originalAudioMuted: false, createdAt: serverTimestamp()
+      }));
+    }],
     ["User cannot create a post using another user's storage path", async () => {
       const db = testEnv.authenticatedContext("stranger-user").firestore();
       await assertFails(setDoc(doc(db, "posts/foreign-path-post"), {
