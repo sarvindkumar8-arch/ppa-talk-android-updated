@@ -188,9 +188,9 @@ private fun rememberSecureMediaUrl(
                     val secureUrl = data?.get("url") as? String
                     if (!secureUrl.isNullOrBlank()) resolvedUrl = secureUrl
                 }
-                .addOnFailureListener {
-                    // Keep the existing URL during the staged migration; direct reads
-                    // are not disabled until every media surface uses this callable.
+                .addOnFailureListener { ex ->
+                    android.util.Log.e("PpaSecureMedia", "Secure media URL failed type=$mediaType post=$documentId path=$storagePath", ex)
+                    resolvedUrl = "MEDIA_ERROR:" + (ex.localizedMessage ?: ex.toString())
                 }
         }
     }
@@ -3037,13 +3037,23 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             // Path-backed uploads intentionally store an empty mediaUrl; use storagePath as the media-presence signal.
             if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
-                AsyncImage(
-                    model = secureMediaUrl,
-                    contentDescription = "Open post photo full screen",
-                    modifier = Modifier.fillMaxWidth().wrapContentHeight()
-                        .clickable { showPhotoViewer = true },
-                    contentScale = ContentScale.Fit
-                )
+                if (secureMediaUrl.startsWith("MEDIA_ERROR:")) {
+                    Text("Photo could not load: " + secureMediaUrl.removePrefix("MEDIA_ERROR:"),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        color = MaterialTheme.colorScheme.error)
+                } else if (secureMediaUrl.isBlank()) {
+                    Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    AsyncImage(
+                        model = secureMediaUrl,
+                        contentDescription = "Open post photo full screen",
+                        modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                            .clickable { showPhotoViewer = true },
+                        contentScale = ContentScale.Fit
+                    )
+                }
             } else if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && (post.mediaType == "video" || post.postType == "reel")) {
                 Spacer(Modifier.height(8.dp))
                 var reelMuted by remember(post.id) { mutableStateOf(true) }
