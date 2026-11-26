@@ -6923,12 +6923,9 @@ fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier:
                         }
                         val chat = chats.firstOrNull { it["uid"] == person.uid }
                         val unreadCount = chat?.get("unreadCount")?.toLongOrNull() ?: 0L
-                        val unread = chat != null && (
-                            unreadCount > 0L ||
-                            (chat["lastSenderUid"] == person.uid &&
-                                (chat["lastMessageAt"]?.toLongOrNull() ?: 0L) >
-                                (chat["lastReadAt"]?.toLongOrNull() ?: 0L))
-                        )
+                        // unreadCount is the authoritative inbox unread state.
+                        // Timestamp fallback can re-show stale unread indicators after read.
+                        val unread = chat != null && unreadCount > 0L
                         val preview = if (unread) "${maxOf(1L, unreadCount)} new messages"
                             else chat?.get("lastMessage") ?: "Tap to message"
                         Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
