@@ -1687,16 +1687,9 @@ private fun ReelFullscreenViewer(
                     Text("Video unavailable\\n$playerError", color = Color.White)
                 }
             }
-            Row(Modifier.align(Alignment.TopStart).fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.32f)).padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close reels", tint = Color.White)
-                }
-                Text("Reels", color = Color.White, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.weight(1f))
-                Text("${index + 1}/${reels.size}", color = Color.White)
+            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart)
+                .padding(start = 8.dp, top = 8.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Close reels", tint = Color.White)
             }
             Column(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp, top = 34.dp, bottom = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -1741,7 +1734,7 @@ private fun ReelFullscreenViewer(
                 }
             }
             Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(0.82f)
-                .background(Color.Black.copy(alpha = 0.38f)).padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 20.dp)) {
+                .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(Modifier.size(38.dp).clickable { onOpenUserProfile(reel.uid) },
                         shape = CircleShape, color = Color.DarkGray) {
@@ -1761,9 +1754,7 @@ private fun ReelFullscreenViewer(
                 if (reel.text.isNotBlank()) Text(reel.text, color = Color.White,
                     modifier = Modifier.padding(top = 9.dp), maxLines = 3)
             }
-            Text("Swipe up for next · Swipe down for previous", color = Color.White.copy(alpha = 0.72f),
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
+
         }
     }
     if (showComments) PostCommentsDialog(reel, currentUid) { showComments = false }
