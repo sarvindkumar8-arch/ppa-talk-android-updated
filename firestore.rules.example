@@ -171,8 +171,7 @@ service cloud.firestore {
         && (!('photoUrl' in request.resource.data) || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 4096))
         && (!('coverPhotoUrl' in request.resource.data) || (request.resource.data.coverPhotoUrl is string && request.resource.data.coverPhotoUrl.size() <= 4096))
         && (!('photoOriginalUrl' in request.resource.data) || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
-        && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096))
-        && !request.resource.data.keys().hasAny(['isOnline', 'lastSeen']);
+        && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
       allow delete: if owns(userId);
     }
 
