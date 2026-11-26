@@ -3034,7 +3034,8 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             if (feedNotice.isNotBlank()) Text(feedNotice, modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(4.dp))
             if (post.text.isNotBlank()) Text(post.text, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-            if (post.mediaUrl.isNotBlank() && post.mediaType == "image") {
+            // Path-backed uploads intentionally store an empty mediaUrl; use storagePath as the media-presence signal.
+            if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && post.mediaType == "image") {
                 Spacer(Modifier.height(10.dp))
                 AsyncImage(
                     model = secureMediaUrl,
@@ -3043,7 +3044,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         .clickable { showPhotoViewer = true },
                     contentScale = ContentScale.Fit
                 )
-            } else if (post.mediaUrl.isNotBlank() && (post.mediaType == "video" || post.postType == "reel")) {
+            } else if ((post.mediaUrl.isNotBlank() || post.storagePath.isNotBlank()) && (post.mediaType == "video" || post.postType == "reel")) {
                 Spacer(Modifier.height(8.dp))
                 var reelMuted by remember(post.id) { mutableStateOf(true) }
                 var reelPlayer by remember(post.id) { mutableStateOf<MediaPlayer?>(null) }
