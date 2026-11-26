@@ -583,7 +583,9 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = authFieldColors
             )
         }
-        if (!phoneResetMode) {
+        // For mobile signup, reveal password only after the OTP has been sent.
+        // Mobile login and email signup/login continue to show password normally.
+        if (!phoneResetMode && (!usePhone || !isSignUp || phoneOtpSent)) {
         OutlinedTextField(
             value = password, onValueChange = { password = it },
             label = { Text("Password") },
