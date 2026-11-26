@@ -386,6 +386,7 @@ exports.notifyIncomingCall = onDocumentCreated({
     data: {
       title: callerName,
       body: "Incoming " + kind + " call",
+      type: "incoming_call",
       callId: event.params.callId,
       callerUid: call.callerUid,
       callType: call.callType
