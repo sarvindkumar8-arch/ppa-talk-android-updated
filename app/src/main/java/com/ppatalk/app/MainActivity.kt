@@ -1674,7 +1674,7 @@ private fun ReelFullscreenViewer(
                 androidx.media3.ui.PlayerView(viewContext).apply {
                     player = reelPlayer
                     useController = false
-                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 }
             }, update = { view -> view.player = reelPlayer },
                 modifier = Modifier.fillMaxSize())
