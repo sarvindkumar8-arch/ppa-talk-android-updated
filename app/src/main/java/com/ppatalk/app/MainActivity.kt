@@ -4019,8 +4019,10 @@ fun CreatePostScreen(
                             onPublished()
                         }
                         .addOnFailureListener { ex ->
+                            android.util.Log.e("PpaFeedUpload", "Firestore post document create failed", ex)
                             busy = false
-                            message = ex.localizedMessage ?: "Post failed. Check Firestore rules."
+                            val code = (ex as? com.google.firebase.firestore.FirebaseFirestoreException)?.code?.name ?: "UNKNOWN"
+                            message = "Firestore post save failed ($code): ${ex.localizedMessage ?: ex.message ?: ex.toString()}"
                         }
                 }
                 val uri = selectedMedia
