@@ -33,6 +33,20 @@ jobs:
         run: |
           yes | sdkmanager --licenses >/dev/null
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Safely verify repository signing certificate fingerprints
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] || [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] || [ -z "${ANDROID_KEY_ALIAS:-}" ]; then
+            echo "Signing secrets missing; fingerprint verification skipped."
+            exit 0
+          fi
+          trap 'rm -f signing-check.jks' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > signing-check.jks
+          keytool -list -v -keystore signing-check.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>/dev/null | awk '/SHA1:|SHA256:/ {print}'
       - name: Run Android lint checks
         run: gradle --no-daemon :app:lintDebug --stacktrace
       - name: Build debug APK
