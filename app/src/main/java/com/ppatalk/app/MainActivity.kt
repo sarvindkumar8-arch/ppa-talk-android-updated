@@ -5122,7 +5122,21 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             fontWeight = FontWeight.Bold, color = RoyalBlue,
             modifier = Modifier.padding(start = 20.dp, top = 16.dp))
 
-        // Photo upload progress/status is intentionally not shown on the public profile screen.
+        // Always surface profile/cover upload status and errors. Previously this was
+        // intentionally hidden, leaving Storage/Firestore failures invisible.
+        if (saving || isError || message.contains("photo", ignoreCase = true) ||
+            message.contains("cover", ignoreCase = true) || message.contains("STORAGE_") ||
+            message.contains("FIRESTORE_")) {
+            Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(message.ifBlank { "Photo save status" },
+                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
 
         // Facebook-style cover with overlapping circular profile photo.
         Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(224.dp)) {
