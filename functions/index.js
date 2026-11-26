@@ -846,7 +846,7 @@ exports.getSecureMediaUrl = onCall({
     console.error("Secure media canonical path rejected", {mediaType, documentId, pathSegmentCount: pathSegments.length, folder: objectFolder, requestPathLength: objectPath.length, canonicalPathLength: canonicalPath.length});
     throw new HttpsError("permission-denied", "Media record path is invalid or does not match the request.");
   }
-  const objectPath = canonicalPath;
+  objectPath = canonicalPath;
 
   if (mediaType === "story") {
     const expiresAt = record.expiresAt?.toMillis ? record.expiresAt.toMillis() : 0;
