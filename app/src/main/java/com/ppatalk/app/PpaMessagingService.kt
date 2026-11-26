@@ -8,6 +8,8 @@ import android.content.Intent
 import android.os.Build
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.media.Ringtone
+import com.google.firebase.firestore.ListenerRegistration
 import androidx.core.app.NotificationCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -15,6 +17,39 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 class PpaMessagingService : FirebaseMessagingService() {
+    private var incomingRingtone: Ringtone? = null
+    private var incomingCallListener: ListenerRegistration? = null
+
+    private fun stopIncomingRingtone() {
+        try { incomingRingtone?.stop() } catch (_: Exception) {}
+        incomingRingtone = null
+        incomingCallListener?.remove()
+        incomingCallListener = null
+    }
+
+    private fun startIncomingRingtone(callId: String) {
+        stopIncomingRingtone()
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            incomingRingtone = RingtoneManager.getRingtone(applicationContext, uri)?.also { tone ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) tone.isLooping = true
+                tone.play()
+            }
+        } catch (_: Exception) {}
+        incomingCallListener = FirebaseFirestore.getInstance().collection("callSessions")
+            .document(callId).addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    stopIncomingRingtone()
+                    cancelCallNotification(callId)
+                    return@addSnapshotListener
+                }
+                val status = snapshot.getString("status")
+                if (status !in listOf("ringing")) {
+                    stopIncomingRingtone()
+                    cancelCallNotification(callId)
+                }
+            }
+    }
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         saveToken(token)
@@ -154,10 +189,6 @@ class PpaMessagingService : FirebaseMessagingService() {
                 channelId, "Incoming calls", NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Ringtone and alerts for incoming PPA Talk calls"
-                setSound(ringtone, AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build())
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 1000, 500, 1000)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
