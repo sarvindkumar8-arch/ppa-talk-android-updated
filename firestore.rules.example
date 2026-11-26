@@ -310,8 +310,7 @@ service cloud.firestore {
 
     match /posts/{postId} {
       allow read: if canReadPost(resource.data);
-      // Owner-only post creation: validate the core fields but allow optional
-      // editor metadata so the photo editor does not fail on harmless fields.
+      // Owner-only creation with validation of fields produced by the composer.
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly([
@@ -328,7 +327,27 @@ service cloud.firestore {
         && request.resource.data.mediaUrl.size() <= 4096
         && request.resource.data.storagePath is string
         && (request.resource.data.storagePath == ''
-          || (request.resource.data.storagePath.matches('^post_photos/' + request.auth.uid + '/[^/]+      // A post's owner identity and audience cannot be changed by editing it.
+          || (request.resource.data.storagePath.split('/').size() == 3
+            && request.resource.data.storagePath.split('/')[0] in ['post_photos', 'reels']
+            && request.resource.data.storagePath.split('/')[1] == request.auth.uid
+            && request.resource.data.storagePath.split('/')[2].size() > 0
+            && request.resource.data.storagePath.split('/')[2].size() <= 180))
+        && request.resource.data.mediaType in ['', 'image', 'video']
+        && request.resource.data.postType in ['post', 'reel', 'photo', 'video']
+        && request.resource.data.audience in ['public', 'friends', 'private']
+        && request.resource.data.location is string
+        && request.resource.data.location.size() <= 200
+        && request.resource.data.taggedUsers is list
+        && request.resource.data.overlayText is string
+        && request.resource.data.overlayText.size() <= 1000
+        && request.resource.data.sticker is string
+        && request.resource.data.effect is string
+        && request.resource.data.originalAudioMuted is bool
+        && ((request.resource.data.text.size() > 0)
+          || request.resource.data.mediaUrl.size() > 0
+          || request.resource.data.storagePath.size() > 0);
+
+      // A post's owner identity and audience cannot be changed by editing it.
       allow update: if owns(resource.data.uid)
         && request.resource.data.uid == resource.data.uid
         && (!('authorName' in request.resource.data)
