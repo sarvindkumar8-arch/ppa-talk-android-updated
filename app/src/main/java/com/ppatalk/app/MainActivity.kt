@@ -3141,8 +3141,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 var reelMuted by remember(post.id) { mutableStateOf(true) }
                 var inlineVideoError by remember(post.id) { mutableStateOf("") }
                 var inlineVideoLoading by remember(post.id) { mutableStateOf(true) }
+                val inlineVideoContext = LocalContext.current
                 val inlinePlayer = remember(post.id) {
-                    androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+                    androidx.media3.exoplayer.ExoPlayer.Builder(inlineVideoContext).build().apply {
                         repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
                         volume = 0f
                     }
