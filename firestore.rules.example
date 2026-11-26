@@ -159,10 +159,12 @@ service cloud.firestore {
         && (!('photoOriginalUrl' in request.resource.data) || (request.resource.data.photoOriginalUrl is string && request.resource.data.photoOriginalUrl.size() <= 4096))
         && (!('coverPhotoOriginalUrl' in request.resource.data) || (request.resource.data.coverPhotoOriginalUrl is string && request.resource.data.coverPhotoOriginalUrl.size() <= 4096));
       allow update: if owns(userId)
+        // Authorization is based on the document path and authenticated owner.
+        // Legacy uid fields inside existing documents must not block owner media updates.
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'displayName', 'username', 'photoUrl', 'coverPhotoUrl', 'photoOriginalUrl', 'coverPhotoOriginalUrl', 'photoOriginalPath', 'coverPhotoOriginalPath', 'bio', 'hobby', 'school', 'favoritePlace', 'hometown', 'currentCity', 'work', 'education', 'relationshipStatus', 'interests', 'profileVisibility', 'updatedAt', 'isOnline', 'lastSeen'
         ])
-        && request.resource.data.uid == userId
+        && (!('uid' in request.resource.data) || request.resource.data.uid == userId)
         && (!('profileVisibility' in request.resource.data) || request.resource.data.profileVisibility in ['public', 'private'])
         && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
         && (!('username' in request.resource.data) || (request.resource.data.username is string && request.resource.data.username.size() <= 32))
