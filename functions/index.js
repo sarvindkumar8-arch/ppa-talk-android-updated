@@ -809,23 +809,27 @@ exports.getSecureMediaUrl = onCall({
     (mediaType === "post" || mediaType === "reel") ? "posts" : "";
   const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
   const rawObjectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
-  // Normalize common Firebase object reference forms to the canonical bucket-relative path.
+  // Normalize Firebase Storage references without decoding literal path separators.
   let objectPath = rawObjectPath.replace(/^\/+/, "");
-  objectPath = objectPath.replace(/^gs:\/\/[^/]+\//, "");
-  objectPath = objectPath.replace(/^https?:\/\/[^/]+\/(?:v0\/b\/[^/]+\/o\/)?/, "");
-  try { objectPath = decodeURIComponent(objectPath); } catch (_) {}
-  if (objectPath.includes("/o/")) objectPath = objectPath.substring(objectPath.lastIndexOf("/o/") + 3);
+  const gsMatch = /^gs:\/\/[^/]+\/(.+)$/.exec(objectPath);
+  if (gsMatch) objectPath = gsMatch[1];
+  const urlMatch = /^https?:\/\/[^/]+\/v0\/b\/[^/]+\/o\/([^?]+)/.exec(objectPath);
+  if (urlMatch) {
+    try { objectPath = decodeURIComponent(urlMatch[1]); } catch (_) { objectPath = urlMatch[1]; }
+  }
   if (objectPath.startsWith("o/")) objectPath = objectPath.substring(2);
   if (!collection) throw new HttpsError("invalid-argument", "Unsupported media type.");
   if (!/^[A-Za-z0-9_-]{1,150}$/.test(documentId)) {
     console.error("Secure media invalid document ID", {mediaType, documentIdLength: documentId.length});
     throw new HttpsError("invalid-argument", "Invalid post/story document ID.");
   }
-  // Firebase UIDs may contain characters beyond alphanumerics/underscore/hyphen.
-  // Validate the path structure and segment lengths without over-restricting the UID.
-  const pathMatch = /^(post_photos|stories|reels)\/([^/]{1,128})\/([^/]{1,180})$/.exec(objectPath);
-  if (!pathMatch) {
-    console.error("Secure media invalid object path structure", {mediaType, pathPrefix: objectPath.split("/")[0], pathLength: objectPath.length});
+  // Keep the canonical three-part structure. Preserve encoded characters in object names;
+  // decode only URL object-name components above.
+  const pathSegments = objectPath.split("/");
+  if (pathSegments.length !== 3 || !["post_photos", "stories", "reels"].includes(pathSegments[0]) ||
+      pathSegments.some((segment) => !segment || segment === "." || segment === "..") ||
+      pathSegments[1].length > 128 || pathSegments[2].length > 180) {
+    console.error("Secure media path structure rejected", {mediaType, rawLength: rawObjectPath.length, normalizedLength: objectPath.length, segmentCount: pathSegments.length, prefix: pathSegments[0]});
     throw new HttpsError("invalid-argument", "Invalid storage object path format.");
   }
 
