@@ -3983,7 +3983,7 @@ fun CreatePostScreen(
                 fun savePost(mediaUrl: String, storagePath: String = "") {
                     val post = hashMapOf(
                         "uid" to uid,
-                        "authorName" to displayName,
+                        "authorName" to displayName.trim().ifEmpty { uid },
 
                         "text" to postText.trim(),
                         "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "",
