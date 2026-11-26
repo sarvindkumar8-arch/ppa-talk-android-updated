@@ -5071,10 +5071,15 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
                                                             else "Profile photo save ho gayi aur Feed + Photos mein share ho gayi."
                                                         }
                                                         .addOnFailureListener { exception ->
+                                                            // Profile media is already saved successfully. Feed failure must not
+                                                            // roll back or block the profile/cover photo change.
                                                             saving = false
-                                                            isError = true
                                                             photoEditorUri = null
-                                                            message = "FIRESTORE_FEED_POST_FAILED: ${exception.localizedMessage ?: "permission denied"}"
+                                                            isError = false
+                                                            message = if (isCover)
+                                                                "Cover photo saved. Feed sharing failed: ${exception.localizedMessage ?: "unknown error"}"
+                                                            else
+                                                                "Profile photo saved. Feed sharing failed: ${exception.localizedMessage ?: "unknown error"}"
                                                         }
                                                 } else {
                                                     saving = false
