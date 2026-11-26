@@ -832,13 +832,19 @@ exports.getSecureMediaUrl = onCall({
   const storedReference = typeof record.storagePath === "string" ? record.storagePath.trim() :
     (typeof record.mediaUrl === "string" ? record.mediaUrl.trim() :
       (typeof record.imageUrl === "string" ? record.imageUrl.trim() : ""));
-  // Normalize legacy records that stored a Firebase URL or gs:// URI instead of a bucket-relative path.
-  let canonicalPath = storedReference.replace(/^\\/+/, "");
-  const canonicalGsMatch = /^gs:\\/\\/[^/]+\\/(.+)$/.exec(canonicalPath);
-  if (canonicalGsMatch) canonicalPath = canonicalGsMatch[1];
-  const canonicalUrlMatch = /^https?:\\/\\/[^/]+\\/v0\\/b\\/[^/]+\\/o\\/([^?]+)/.exec(canonicalPath);
-  if (canonicalUrlMatch) {
-    try { canonicalPath = decodeURIComponent(canonicalUrlMatch[1]); } catch (_) { canonicalPath = canonicalUrlMatch[1]; }
+  // Normalize legacy Firebase URLs and gs:// references using prefix parsing.
+  let canonicalPath = storedReference;
+  while (canonicalPath.startsWith("/")) canonicalPath = canonicalPath.substring(1);
+  if (canonicalPath.startsWith("gs://")) {
+    const bucketSlash = canonicalPath.indexOf("/", 5);
+    canonicalPath = bucketSlash >= 0 ? canonicalPath.substring(bucketSlash + 1) : "";
+  }
+  if (canonicalPath.startsWith("http://") || canonicalPath.startsWith("https://")) {
+    const objectMarker = canonicalPath.indexOf("/o/");
+    if (objectMarker >= 0) {
+      const encodedObject = canonicalPath.substring(objectMarker + 3).split("?")[0];
+      try { canonicalPath = decodeURIComponent(encodedObject); } catch (_) { canonicalPath = encodedObject; }
+    }
   }
   if (canonicalPath.startsWith("o/")) canonicalPath = canonicalPath.substring(2);
   const pathSegments = canonicalPath.split("/");
