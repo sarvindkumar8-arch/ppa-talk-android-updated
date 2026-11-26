@@ -261,6 +261,10 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.authorName is string
         && request.resource.data.authorName.size() <= 80
+        && (!('audience' in request.resource.data)
+          || request.resource.data.audience in ['public', 'friends', 'private'])
+        && (!('text' in request.resource.data)
+          || (request.resource.data.text is string && request.resource.data.text.size() <= 5000))
         && (
           (request.resource.data.mediaUrl is string && request.resource.data.mediaUrl.size() > 0)
           || (request.resource.data.storagePath is string && request.resource.data.storagePath.size() > 0)
