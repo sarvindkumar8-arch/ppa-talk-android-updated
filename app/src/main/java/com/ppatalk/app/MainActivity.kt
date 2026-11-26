@@ -1497,46 +1497,25 @@ fun ReelsScreen(
     }
 
     val visibleReels = reels.filterNot { it.id in hiddenReelIds }
-    Column(modifier.fillMaxSize().background(Color.Black)) {
-        Row(Modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text("Reels", color = Color.White, style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.PlayCircleFilled, contentDescription = "Reels", tint = Color.White)
-        }
+    Box(modifier.fillMaxSize().background(Color.Black)) {
         when {
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color.White)
             }
-            error.isNotBlank() -> Text(error, color = Color.White, modifier = Modifier.padding(16.dp))
+            error.isNotBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(error, color = Color.White, modifier = Modifier.padding(16.dp))
+            }
             visibleReels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Abhi koi Reel nahi hai. Create Post mein Video / Reel select karke share karein.",
                     color = Color.White, modifier = Modifier.padding(24.dp))
             }
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(visibleReels, key = { it.id }) { reel ->
-                    val secureMediaUrl = rememberSecureMediaUrl("reel", reel.id, reel.storagePath, reel.mediaUrl)
-                    Card(onClick = { selectedReelIndex = visibleReels.indexOfFirst { it.id == reel.id } },
-                        modifier = Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF171717))) {
-                        Box(Modifier.fillMaxSize()) {
-                            ReelPreviewPlayer(secureMediaUrl, Modifier.fillMaxSize())
-                            Text("▶  Open Reel", color = Color.White,
-                                modifier = Modifier.align(Alignment.BottomStart)
-                                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
-                                    .padding(horizontal = 12.dp, vertical = 7.dp))
-                        }
-                    }
-                }
-            }
+            else -> ReelFullscreenViewer(visibleReels, 0, currentUid,
+                onClose = { /* keep the Reels tab focused on its vertical reel feed */ },
+                onOpenUserProfile = onOpenUserProfile,
+                onHideReel = { id -> hiddenReelIds = hiddenReelIds + id })
         }
     }
-    if (selectedReelIndex >= 0 && visibleReels.isNotEmpty()) {
-        ReelFullscreenViewer(visibleReels, selectedReelIndex, currentUid,
-            onClose = { selectedReelIndex = -1 }, onOpenUserProfile = onOpenUserProfile,
-            onHideReel = { id -> hiddenReelIds = hiddenReelIds + id; selectedReelIndex = -1 })
-    }
+
 }
 
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
