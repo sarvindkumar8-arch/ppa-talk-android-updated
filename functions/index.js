@@ -829,7 +829,18 @@ exports.getSecureMediaUrl = onCall({
   const ownerUid = record.uid;
   // Treat Firestore's storagePath as canonical rather than rejecting client formatting.
   // The request path is only required to identify the same stored object.
-  const canonicalPath = typeof record.storagePath === "string" ? record.storagePath.trim() : "";
+  const storedReference = typeof record.storagePath === "string" ? record.storagePath.trim() :
+    (typeof record.mediaUrl === "string" ? record.mediaUrl.trim() :
+      (typeof record.imageUrl === "string" ? record.imageUrl.trim() : ""));
+  // Normalize legacy records that stored a Firebase URL or gs:// URI instead of a bucket-relative path.
+  let canonicalPath = storedReference.replace(/^\\/+/, "");
+  const canonicalGsMatch = /^gs:\\/\\/[^/]+\\/(.+)$/.exec(canonicalPath);
+  if (canonicalGsMatch) canonicalPath = canonicalGsMatch[1];
+  const canonicalUrlMatch = /^https?:\\/\\/[^/]+\\/v0\\/b\\/[^/]+\\/o\\/([^?]+)/.exec(canonicalPath);
+  if (canonicalUrlMatch) {
+    try { canonicalPath = decodeURIComponent(canonicalUrlMatch[1]); } catch (_) { canonicalPath = canonicalUrlMatch[1]; }
+  }
+  if (canonicalPath.startsWith("o/")) canonicalPath = canonicalPath.substring(2);
   const pathSegments = canonicalPath.split("/");
   const objectFolder = pathSegments[0];
   const folderMatchesType = mediaType === "story"
