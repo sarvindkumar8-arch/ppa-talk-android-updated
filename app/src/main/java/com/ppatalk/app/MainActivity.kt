@@ -3228,7 +3228,11 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                         else -> { inlineVideoLoading = false; inlineVideoError = "Invalid video URL." }
                     }
                 }
-                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).background(Color.Black)) {
+                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).background(Color.Black)
+                    .clickable(enabled = post.postType == "reel") {
+                        inlinePlayer.pause()
+                        onOpenReel()
+                    }) {
                     AndroidView(
                         factory = { viewContext ->
                             androidx.media3.ui.PlayerView(viewContext).apply {
