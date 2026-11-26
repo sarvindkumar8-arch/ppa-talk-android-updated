@@ -93,6 +93,8 @@ dependencies {
     // Restore the previously used WebRTC media engine for voice and video calls.
     implementation("io.github.webrtc-sdk:android:150.7871.04")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
