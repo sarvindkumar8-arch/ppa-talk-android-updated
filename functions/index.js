@@ -810,7 +810,7 @@ exports.getSecureMediaUrl = onCall({
   const documentId = typeof request.data?.documentId === "string" ? request.data.documentId.trim() : "";
   const rawObjectPath = typeof request.data?.objectPath === "string" ? request.data.objectPath.trim() : "";
   // Normalize common Firebase object reference forms to the canonical bucket-relative path.
-  let objectPath = rawObjectPath.replace(/^\\/+/, "");
+  let objectPath = rawObjectPath.replace(/^\/+/, "");
   objectPath = objectPath.replace(/^gs:\/\/[^/]+\//, "");
   objectPath = objectPath.replace(/^https?:\/\/[^/]+\/(?:v0\/b\/[^/]+\/o\/)?/, "");
   try { objectPath = decodeURIComponent(objectPath); } catch (_) {}
