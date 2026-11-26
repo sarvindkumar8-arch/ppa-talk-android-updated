@@ -1587,12 +1587,24 @@ private fun ReelFullscreenViewer(
                     onDragCancel = { dragAmount = 0f }
                 )
             }) {
-            AndroidView(factory = { viewContext ->
-                VideoView(viewContext).apply {
-                    setVideoURI(Uri.parse(secureMediaUrl))
-                    setOnPreparedListener { player -> player.isLooping = true; start() }
+            val reelPlayer = remember(secureMediaUrl) {
+                androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                    if (secureMediaUrl.startsWith("http")) {
+                        setMediaItem(androidx.media3.common.MediaItem.fromUri(secureMediaUrl))
+                        prepare()
+                        playWhenReady = true
+                    }
                 }
-            }, update = { view -> if (!view.isPlaying) view.start() },
+            }
+            DisposableEffect(reelPlayer) { onDispose { reelPlayer.release() } }
+            AndroidView(factory = { viewContext ->
+                androidx.media3.ui.PlayerView(viewContext).apply {
+                    player = reelPlayer
+                    useController = false
+                    setShowBuffering(androidx.media3.ui.PlayerView.SHOW_BUFFERING_ALWAYS)
+                }
+            }, update = { view -> view.player = reelPlayer },
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f).align(Alignment.Center))
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.32f)).padding(horizontal = 12.dp, vertical = 10.dp),
