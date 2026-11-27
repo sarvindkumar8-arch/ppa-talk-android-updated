@@ -376,31 +376,56 @@ private fun finishPhoneSignup(
 
 @Composable
 private fun PpaConnectSplash() {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(104.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
-                Text("P", color=Color.White, fontSize=54.sp, fontWeight=FontWeight.ExtraBold)
+    Box(Modifier.fillMaxSize().background(
+        androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF06152B), Color(0xFF061C43), Color(0xFF020A17)))
+    ), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(132.dp).background(
+                androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF18B7F7), RoyalBlue, Color(0xFF10245B))), CircleShape
+            ), contentAlignment = Alignment.Center) {
+                Text("PPA", color=Color.White, fontSize=42.sp, fontWeight=FontWeight.Black)
             }
-            Text("PPA CONNECT", fontSize=30.sp, fontWeight=FontWeight.ExtraBold, color=RoyalBlue)
-            Text("Create. Connect. Share.", color=Orange, fontWeight=FontWeight.Bold)
+            Text("PPA CONNECT", fontSize=29.sp, fontWeight=FontWeight.ExtraBold, color=Color.White)
+            Text("Create. Connect. Share.", color=Color.White, fontWeight=FontWeight.Bold)
+            Spacer(Modifier.height(20.dp))
+            CircularProgressIndicator(color=Orange, strokeWidth=3.dp, modifier=Modifier.size(36.dp))
         }
+        Box(Modifier.fillMaxWidth().height(110.dp).align(Alignment.BottomCenter).background(
+            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFF087DFF), Color(0xFF0B45C9), Color(0xFFFF7C1A)))
+        ))
     }
 }
 
 @Composable
 private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(24.dp), contentAlignment=Alignment.Center) {
-        Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(18.dp)) {
-            Box(Modifier.size(112.dp).background(RoyalBlue, CircleShape), contentAlignment=Alignment.Center) {
-                Text("P", color=Color.White, fontSize=60.sp, fontWeight=FontWeight.ExtraBold)
+    Box(Modifier.fillMaxSize().background(
+        androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF06152B), Color(0xFF071D42), Color(0xFF020A17)))
+    ).padding(22.dp), contentAlignment=Alignment.Center) {
+        Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Text("PPA CONNECT", fontSize=28.sp, fontWeight=FontWeight.ExtraBold, color=Color.White)
+            Text("Create. Connect. Share.", color=Orange, fontWeight=FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth().height(230.dp).background(
+                androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF123F86), Color(0xFF08203F), Color(0xFF0D3272))), RoundedCornerShape(28.dp)
+            ), contentAlignment=Alignment.Center) {
+                Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(14.dp)) {
+                    Row(horizontalArrangement=Arrangement.spacedBy(20.dp)) {
+                        Icon(Icons.Default.Image, contentDescription=null, tint=Color(0xFF45C6FF), modifier=Modifier.size(46.dp))
+                        Icon(Icons.Default.Groups, contentDescription=null, tint=Orange, modifier=Modifier.size(54.dp))
+                        Icon(Icons.Default.Chat, contentDescription=null, tint=Color(0xFF65B6FF), modifier=Modifier.size(46.dp))
+                    }
+                    Row(horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+                        Box(Modifier.size(76.dp).background(Color(0xFF1E90E8),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,contentDescription=null,tint=Color.White,modifier=Modifier.size(48.dp))}
+                        Box(Modifier.size(76.dp).background(Orange,CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,contentDescription=null,tint=Color.White,modifier=Modifier.size(48.dp))}
+                        Box(Modifier.size(76.dp).background(Color(0xFF2B5BBD),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,contentDescription=null,tint=Color.White,modifier=Modifier.size(48.dp))}
+                    }
+                    Text("Your people. Your moments. Your community.", color=Color.White, fontWeight=FontWeight.SemiBold, textAlign= androidx.compose.ui.text.style.TextAlign.Center)
+                }
             }
-            Text("PPA CONNECT", fontSize=32.sp, fontWeight=FontWeight.ExtraBold, color=RoyalBlue)
-            Text("Create. Connect. Share.", color=Orange, fontWeight=FontWeight.Bold, fontSize=18.sp)
-            Spacer(Modifier.height(12.dp))
-            Text("Connect with friends, share moments and build your community.", textAlign= androidx.compose.ui.text.style.TextAlign.Center, color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick=onLogin, modifier=Modifier.fillMaxWidth(), shape=RoundedCornerShape(16.dp)) { Text("Sign In") }
-            OutlinedButton(onClick=onCreate, modifier=Modifier.fillMaxWidth(), shape=RoundedCornerShape(16.dp), border=BorderStroke(1.dp,Orange)) { Text("Create Account", color=Orange) }
-            Text("A place to create, connect and share.", color=MaterialTheme.colorScheme.onSurfaceVariant, fontSize=12.sp)
+            Text("Connect with friends, share your moments and be part of your community.", textAlign= androidx.compose.ui.text.style.TextAlign.Center, color=Color.White)
+            Spacer(Modifier.height(8.dp))
+            Button(onClick=onLogin, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(28.dp)) { Text("Sign In", fontWeight=FontWeight.Bold) }
+            OutlinedButton(onClick=onCreate, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(28.dp), border=BorderStroke(2.dp,Orange)) { Text("Create Account", color=Color.White, fontWeight=FontWeight.Bold) }
         }
     }
 }
