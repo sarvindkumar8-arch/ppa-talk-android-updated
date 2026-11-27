@@ -421,7 +421,7 @@ private fun PpaConnectSplash() {
                 cubicTo(w*.79f,h*.22f,w*.90f,h*.12f,w,h*.38f)
             }
             drawPath(wave,Color(0xFF44C7FF),style=androidx.compose.ui.graphics.drawscope.Stroke(width=4f))
-        })
+        }
     }
 }
 @Composable
