@@ -376,71 +376,14 @@ private fun finishPhoneSignup(
 
 @Composable
 private fun PpaConnectSplash() {
-    val navy = Color(0xFF020817)
-    Box(Modifier.fillMaxSize().background(
-        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF061A3B), Color(0xFF020817), Color(0xFF010611)))
-    )) {
-        // Electric-blue light beam and soft logo spotlight.
-        Box(Modifier.fillMaxSize().background(
-            androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF123D91).copy(alpha=.70f), Color(0xFF071C44).copy(alpha=.25f), Color.Transparent), radius=1100f)
-        ))
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val beam=androidx.compose.ui.graphics.Path().apply {
-                moveTo(size.width*.70f,0f); lineTo(size.width*.98f,0f); lineTo(size.width*.70f,size.height*.46f); lineTo(size.width*.44f,size.height*.46f); close()
-            }
-            drawPath(beam, androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color.Transparent,Color(0xFF0647B9).copy(alpha=.18f),Color(0xFF008CFF).copy(alpha=.42f)), start=androidx.compose.ui.geometry.Offset(size.width*.75f,0f), end=androidx.compose.ui.geometry.Offset(size.width*.55f,size.height*.48f)))
-        }
-        Column(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 22.dp).offset(y=(-34).dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // A more integrated emblem: three community figures, golden arc and oversized PPA mark.
-            Box(Modifier.size(230.dp), contentAlignment=Alignment.Center) {
-                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                    val w=size.width; val h=size.height
-                    val cyan=Color(0xFF00B9F5); val gold=Color(0xFFFFB51F)
-                    // golden rising arc/crown and central person
-                    drawArc(gold, startAngle=205f, sweepAngle=130f, useCenter=false, topLeft=androidx.compose.ui.geometry.Offset(w*.19f,h*.02f), size=androidx.compose.ui.geometry.Size(w*.62f,h*.43f), style=androidx.compose.ui.graphics.drawscope.Stroke(width=w*.045f))
-                    drawCircle(gold,w*.075f,androidx.compose.ui.geometry.Offset(w*.50f,h*.20f))
-                    drawCircle(cyan,w*.065f,androidx.compose.ui.geometry.Offset(w*.23f,h*.32f))
-                    drawCircle(cyan,w*.065f,androidx.compose.ui.geometry.Offset(w*.77f,h*.32f))
-                    val center=androidx.compose.ui.graphics.Path().apply { moveTo(w*.35f,h*.34f); cubicTo(w*.36f,h*.26f,w*.64f,h*.26f,w*.65f,h*.34f); cubicTo(w*.73f,h*.43f,w*.72f,h*.49f,w*.70f,h*.52f); lineTo(w*.30f,h*.52f); cubicTo(w*.28f,h*.49f,w*.27f,h*.43f,w*.35f,h*.34f); close() }
-                    val l=androidx.compose.ui.graphics.Path().apply { moveTo(w*.13f,h*.42f); cubicTo(w*.14f,h*.34f,w*.31f,h*.34f,w*.35f,h*.45f); lineTo(w*.42f,h*.57f); lineTo(w*.12f,h*.57f); close() }
-                    val rpath=androidx.compose.ui.graphics.Path().apply { moveTo(w*.65f,h*.45f); cubicTo(w*.69f,h*.34f,w*.86f,h*.34f,w*.87f,h*.42f); lineTo(w*.88f,h*.57f); lineTo(w*.58f,h*.57f); close() }
-                    drawPath(center,gold); drawPath(l,cyan); drawPath(rpath,cyan)
-                    // blue diagonal light streaks behind the wordmark
-                    drawLine(Color(0xFF168AFF).copy(alpha=.55f),androidx.compose.ui.geometry.Offset(w*.85f,h*.14f),androidx.compose.ui.geometry.Offset(w*.97f,h*.62f),w*.025f)
-                    drawLine(Color(0xFF168AFF).copy(alpha=.40f),androidx.compose.ui.geometry.Offset(w*.12f,h*.22f),androidx.compose.ui.geometry.Offset(w*.04f,h*.60f),w*.018f)
-                }
-                Text("PPA", color=Color(0xFF06162E), fontSize=78.sp, fontWeight=FontWeight.Black, modifier=Modifier.offset(y=16.dp), style= androidx.compose.ui.text.TextStyle(shadow=androidx.compose.ui.graphics.Shadow(Color.Black, blurRadius=15f)))
-                Text("PPA", color=Color(0xFF12B9FF), fontSize=78.sp, fontWeight=FontWeight.Black, style= androidx.compose.ui.text.TextStyle(shadow=androidx.compose.ui.graphics.Shadow(Color(0xFF00132F), blurRadius=17f)))
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(text=androidx.compose.ui.text.buildAnnotatedString { pushStyle(androidx.compose.ui.text.SpanStyle(color=Color.White)); append("PPA "); pop(); pushStyle(androidx.compose.ui.text.SpanStyle(color=Color(0xFFFFA51B))); append("CONNECT"); pop() }, fontSize=30.sp, fontWeight=FontWeight.ExtraBold, fontStyle=androidx.compose.ui.text.font.FontStyle.Italic, letterSpacing=(-1).sp)
-            Text("Create. Connect. Share.", color=Color.White, fontSize=17.sp, fontWeight=FontWeight.SemiBold)
-            Spacer(Modifier.height(22.dp))
-            androidx.compose.foundation.Canvas(Modifier.size(48.dp)) { drawArc(Color(0xFF078BFF), 0f, 205f, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=9f, cap=androidx.compose.ui.graphics.StrokeCap.Round)); drawArc(Color(0xFFFFA51B), 205f, 145f, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=9f, cap=androidx.compose.ui.graphics.StrokeCap.Round)) }
-        }
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(190.dp).align(Alignment.BottomCenter)) {
-            val w=size.width; val h=size.height
-            val blue=androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f,h*.28f); cubicTo(w*.18f,h*.02f,w*.34f,h*.80f,w*.53f,h*.48f)
-                cubicTo(w*.72f,h*.15f,w*.86f,h*.02f,w,h*.24f); lineTo(w,h); lineTo(0f,h); close()
-            }
-            drawPath(blue, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF009BFF),Color(0xFF0051DB),Color(0xFF03142E))))
-            val orange=androidx.compose.ui.graphics.Path().apply {
-                moveTo(w*.52f,h*.96f); cubicTo(w*.73f,h*.72f,w*.87f,h*.52f,w,h*.34f); lineTo(w,h); lineTo(w*.48f,h); close()
-            }
-            drawPath(orange, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFFFFA323),Color(0xFFFF650D),Color(0xFFFF9A24))))
-            val wave=androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f,h*.56f); cubicTo(w*.24f,h*.13f,w*.39f,h*.90f,w*.58f,h*.48f)
-                cubicTo(w*.77f,h*.18f,w*.91f,h*.05f,w,h*.28f)
-            }
-            drawPath(wave,Color(0xFF42C7FF),style=androidx.compose.ui.graphics.drawscope.Stroke(width=3.5f))
-        }
-    }
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(id = R.drawable.ppa_splash_art),
+        contentDescription = "PPA CONNECT splash screen",
+        modifier = Modifier.fillMaxSize(),
+        contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
+    )
 }
+
 @Composable
 private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
     Box(Modifier.fillMaxSize().background(
