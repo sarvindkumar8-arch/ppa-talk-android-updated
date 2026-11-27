@@ -317,7 +317,16 @@ fun PPATalkApp() {
     MaterialTheme(colorScheme = if (isDarkMode) darkColors else lightColors) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (user == null) {
-                AuthScreen(onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
+                var authEntry by remember { mutableStateOf("splash") }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(1400)
+                    authEntry = "welcome"
+                }
+                when (authEntry) {
+                    "splash" -> PpaConnectSplash()
+                    "welcome" -> PpaConnectWelcome(onLogin = { authEntry = "login" }, onCreate = { authEntry = "signup" })
+                    else -> AuthScreen(initialIsSignUp = authEntry == "signup", onBackToWelcome = { authEntry = "welcome" }, onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
+                }
             } else {
                 MainSocialApp(
                     uid = user!!.uid,
@@ -365,10 +374,41 @@ private fun finishPhoneSignup(
         .addOnFailureListener { onResult(false, it.localizedMessage ?: "OTP verification failed.") }
 }
 
+@Composable
+private fun PpaConnectSplash() {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(104.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
+                Text("P", color=Color.White, fontSize=54.sp, fontWeight=FontWeight.ExtraBold)
+            }
+            Text("PPA CONNECT", fontSize=30.sp, fontWeight=FontWeight.ExtraBold, color=RoyalBlue)
+            Text("Create. Connect. Share.", color=Orange, fontWeight=FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(24.dp), contentAlignment=Alignment.Center) {
+        Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(18.dp)) {
+            Box(Modifier.size(112.dp).background(RoyalBlue, CircleShape), contentAlignment=Alignment.Center) {
+                Text("P", color=Color.White, fontSize=60.sp, fontWeight=FontWeight.ExtraBold)
+            }
+            Text("PPA CONNECT", fontSize=32.sp, fontWeight=FontWeight.ExtraBold, color=RoyalBlue)
+            Text("Create. Connect. Share.", color=Orange, fontWeight=FontWeight.Bold, fontSize=18.sp)
+            Spacer(Modifier.height(12.dp))
+            Text("Connect with friends, share moments and build your community.", textAlign= androidx.compose.ui.text.style.TextAlign.Center, color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick=onLogin, modifier=Modifier.fillMaxWidth(), shape=RoundedCornerShape(16.dp)) { Text("Sign In") }
+            OutlinedButton(onClick=onCreate, modifier=Modifier.fillMaxWidth(), shape=RoundedCornerShape(16.dp), border=BorderStroke(1.dp,Orange)) { Text("Create Account", color=Orange) }
+            Text("A place to create, connect and share.", color=MaterialTheme.colorScheme.onSurfaceVariant, fontSize=12.sp)
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AuthScreen(onAuthenticated: () -> Unit) {
-    var isSignUp by remember { mutableStateOf(false) }
+fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {}, onAuthenticated: () -> Unit) {
+    var isSignUp by remember { mutableStateOf(initialIsSignUp) }
     var usePhone by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
