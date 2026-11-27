@@ -645,7 +645,10 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         if (!isSignUp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("PPA ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text("CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = Orange)
+                Text("CONNECT", style = MaterialTheme.typography.headlineMedium.copy(
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFFFF9A26), Color(0xFFFFD21F), Color(0xFFFF7A00)))
+                ), fontWeight = FontWeight.ExtraBold)
             }
         } else Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
