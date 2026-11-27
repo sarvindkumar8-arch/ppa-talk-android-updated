@@ -610,8 +610,10 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         if (isSignUp) {
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
-                label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface), colors = authFieldColors
+                label = { Text("Full Name") }, placeholder = { Text("Enter your full name") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+                shape = RoundedCornerShape(14.dp), colors = authFieldColors
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -647,8 +649,8 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         } else {
             OutlinedTextField(
                 value = email, onValueChange = { email = it.trim() },
-                label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                label = { Text("Email Address") }, placeholder = { Text("you@example.com") }, modifier = Modifier.fillMaxWidth(),
+                singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 colors = authFieldColors
             )
         }
@@ -667,9 +669,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         if (!phoneResetMode && (!usePhone || !isSignUp || phoneOtpSent)) {
         OutlinedTextField(
             value = password, onValueChange = { password = it },
-            label = { Text("Password") },
-            placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+            label = { Text(if (isSignUp) "Password" else "Password") },
+            placeholder = { Text(if (isSignUp) "Create a password (8+ characters)" else "Enter your password") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
