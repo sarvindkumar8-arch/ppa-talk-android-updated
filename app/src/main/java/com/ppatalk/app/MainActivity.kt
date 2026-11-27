@@ -390,13 +390,21 @@ private fun PpaConnectSplash() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Brand mark treatment, centered like the supplied reference
-            Box(Modifier.size(174.dp), contentAlignment = Alignment.Center) {
-                Text("✦", modifier=Modifier.align(Alignment.TopCenter).padding(top=2.dp), color=Color(0xFFFFC629), fontSize=34.sp)
-                Text("PPA", color=Color(0xFF13B9F5), fontSize=68.sp, fontWeight=FontWeight.Black,
-                    style= androidx.compose.ui.text.TextStyle(shadow=androidx.compose.ui.graphics.Shadow(Color(0xFF00132F), blurRadius=18f)))
-                Text("PPA", color=Color(0xFF07152C), fontSize=66.sp, fontWeight=FontWeight.Black,
-                    modifier=Modifier.offset(y=3.dp))
-                Text("PPA", color=Color(0xFF17B9FF), fontSize=66.sp, fontWeight=FontWeight.Black)
+            Box(Modifier.size(208.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                    val w=size.width; val h=size.height
+                    drawCircle(Color(0xFFFFC629), w*.055f, androidx.compose.ui.geometry.Offset(w*.50f,h*.15f))
+                    drawCircle(Color(0xFF12B9F5), w*.065f, androidx.compose.ui.geometry.Offset(w*.25f,h*.30f))
+                    drawCircle(Color(0xFF12B9F5), w*.065f, androidx.compose.ui.geometry.Offset(w*.75f,h*.30f))
+                    val centerBody=androidx.compose.ui.graphics.Path().apply { moveTo(w*.34f,h*.35f); cubicTo(w*.36f,h*.24f,w*.64f,h*.24f,w*.66f,h*.35f); lineTo(w*.73f,h*.54f); lineTo(w*.27f,h*.54f); close() }
+                    val leftBody=androidx.compose.ui.graphics.Path().apply { moveTo(w*.10f,h*.43f); cubicTo(w*.12f,h*.31f,w*.37f,h*.32f,w*.36f,h*.47f); lineTo(w*.43f,h*.60f); lineTo(w*.12f,h*.60f); close() }
+                    val rightBody=androidx.compose.ui.graphics.Path().apply { moveTo(w*.64f,h*.47f); cubicTo(w*.63f,h*.32f,w*.88f,h*.31f,w*.90f,h*.43f); lineTo(w*.88f,h*.60f); lineTo(w*.57f,h*.60f); close() }
+                    drawPath(centerBody,Color(0xFFFFA923)); drawPath(leftBody,Color(0xFF00B9F5)); drawPath(rightBody,Color(0xFF00B9F5))
+                }
+                Text("PPA", color=Color(0xFF07152C), fontSize=70.sp, fontWeight=FontWeight.Black, modifier=Modifier.offset(y=4.dp))
+                Text("PPA", color=Color(0xFF16B9FF), fontSize=70.sp, fontWeight=FontWeight.Black,
+                    style= androidx.compose.ui.text.TextStyle(shadow=androidx.compose.ui.graphics.Shadow(Color(0xFF00132F), blurRadius=16f)))
+                Text("✦", modifier=Modifier.align(Alignment.TopCenter).padding(top=2.dp), color=Color(0xFFFFC629), fontSize=28.sp)
             }
             Spacer(Modifier.height(18.dp))
             Text("PPA CONNECT", fontSize=30.sp, fontWeight=FontWeight.ExtraBold, fontStyle=androidx.compose.ui.text.font.FontStyle.Italic,
