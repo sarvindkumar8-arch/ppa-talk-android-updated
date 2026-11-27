@@ -640,11 +640,13 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
-                label = { Text("✉ Email") }, modifier = Modifier.weight(1f))
-            FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
-                label = { Text("☎ Phone") }, modifier = Modifier.weight(1f))
+        if (isSignUp) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
+                    label = { Text("✉ Email") }, modifier = Modifier.weight(1f))
+                FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
+                    label = { Text("☎ Phone") }, modifier = Modifier.weight(1f))
+            }
         }
         Spacer(Modifier.height(10.dp))
 
@@ -690,7 +692,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         } else {
             OutlinedTextField(
                 value = email, onValueChange = { email = it.trim() },
-                label = { Text("Email Address") }, placeholder = { Text("you@example.com") }, modifier = Modifier.fillMaxWidth(),
+                label = { Text(if (!isSignUp && !usePhone) "Email or Username" else "Email Address") }, placeholder = { Text(if (!isSignUp && !usePhone) "Email or Username" else "you@example.com") }, modifier = Modifier.fillMaxWidth(),
                 singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 colors = authFieldColors
             )
@@ -1029,14 +1031,35 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         }
         }
 
+        if (!isSignUp && !usePhone && !phoneResetMode) {
+            Spacer(Modifier.height(6.dp))
+            Text("Or continue with", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = { usePhone = true; message = "" },
+                enabled = !busy, modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Icon(Icons.Default.Phone, contentDescription = null)
+                Spacer(Modifier.width(10.dp))
+                Text("Sign in with Phone")
+            }
+        }
         OutlinedButton(
             onClick = {
                 message = ""
                 busy = true
                 googleSignInLauncher.launch(googleSignInClient.signInIntent)
             },
-            enabled = !busy, modifier = Modifier.fillMaxWidth()
-        ) { Text(if (busy) "Please wait..." else "Continue with Google") }
+            enabled = !busy, modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        ) {
+            Text("G", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4))
+            Spacer(Modifier.width(10.dp))
+            Text(if (busy) "Please wait..." else "Continue with Google")
+        }
 
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
             Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
