@@ -386,34 +386,120 @@ private fun PpaConnectSplash() {
 
 @Composable
 private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(
-        androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF06152B), Color(0xFF071D42), Color(0xFF020A17)))
-    ).padding(22.dp), contentAlignment=Alignment.Center) {
-        Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text("PPA CONNECT", fontSize=28.sp, fontWeight=FontWeight.ExtraBold, color=Color.White)
-            Text("Create. Connect. Share.", color=Orange, fontWeight=FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.fillMaxWidth().height(230.dp).background(
-                androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF123F86), Color(0xFF08203F), Color(0xFF0D3272))), RoundedCornerShape(28.dp)
-            ), contentAlignment=Alignment.Center) {
-                Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(14.dp)) {
-                    Row(horizontalArrangement=Arrangement.spacedBy(20.dp)) {
-                        Icon(Icons.Default.Image, contentDescription=null, tint=Color(0xFF45C6FF), modifier=Modifier.size(46.dp))
-                        Icon(Icons.Default.Groups, contentDescription=null, tint=Orange, modifier=Modifier.size(54.dp))
-                        Icon(Icons.Default.Chat, contentDescription=null, tint=Color(0xFF65B6FF), modifier=Modifier.size(46.dp))
+    Box(
+        Modifier.fillMaxSize().background(
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(Color(0xFF06152B), Color(0xFF071D42), Color(0xFF020A17))
+            )
+        ).padding(horizontal = 22.dp, vertical = 18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White))
+                    append("PPA ")
+                    pop()
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = Orange))
+                    append("CONNECT")
+                    pop()
+                },
+                fontSize = 30.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+            )
+
+            Text(
+                "Create. Connect. Share.",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Box(
+                Modifier.fillMaxWidth().height(250.dp).background(
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(Color(0xFF123F86), Color(0xFF08203F), Color(0xFF0D3272))
+                    ),
+                    RoundedCornerShape(28.dp)
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Icon(Icons.Default.Image, contentDescription = null,
+                            tint = Color(0xFF45C6FF), modifier = Modifier.size(42.dp))
+                        Icon(Icons.Default.Chat, contentDescription = null,
+                            tint = Orange, modifier = Modifier.size(46.dp))
+                        Icon(Icons.Default.Groups, contentDescription = null,
+                            tint = Color(0xFF65B6FF), modifier = Modifier.size(44.dp))
                     }
-                    Row(horizontalArrangement=Arrangement.spacedBy(14.dp)) {
-                        Box(Modifier.size(76.dp).background(Color(0xFF1E90E8),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,contentDescription=null,tint=Color.White,modifier=Modifier.size(48.dp))}
-                        Box(Modifier.size(76.dp).background(Orange,CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,contentDescription=null,tint=Color.White,modifier=Modifier.size(48.dp))}
-                        Box(Modifier.size(76.dp).background(Color(0xFF2B5BBD),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,contentDescription=null,tint=Color.White,modifier=Modifier.size(48.dp))}
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(72.dp).background(Color(0xFF1E90E8), CircleShape),
+                            contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, contentDescription = null,
+                                tint = Color.White, modifier = Modifier.size(46.dp))
+                        }
+                        Box(Modifier.size(82.dp).background(Orange, CircleShape),
+                            contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, contentDescription = null,
+                                tint = Color.White, modifier = Modifier.size(52.dp))
+                        }
+                        Box(Modifier.size(72.dp).background(Color(0xFF2B5BBD), CircleShape),
+                            contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, contentDescription = null,
+                                tint = Color.White, modifier = Modifier.size(46.dp))
+                        }
                     }
-                    Text("Your people. Your moments. Your community.", color=Color.White, fontWeight=FontWeight.SemiBold, textAlign= androidx.compose.ui.text.style.TextAlign.Center)
+
+                    Text(
+                        "Your people. Your moments. Your community.",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                 }
             }
-            Text("Connect with friends, share your moments and be part of your community.", textAlign= androidx.compose.ui.text.style.TextAlign.Center, color=Color.White)
-            Spacer(Modifier.height(8.dp))
-            Button(onClick=onLogin, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(28.dp)) { Text("Sign In", fontWeight=FontWeight.Bold) }
-            OutlinedButton(onClick=onCreate, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(28.dp), border=BorderStroke(2.dp,Orange)) { Text("Create Account", color=Color.White, fontWeight=FontWeight.Bold) }
+
+            Text(
+                "Connect with friends, share your moments and be part of your community.",
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = Color.White,
+                fontSize = 15.sp
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Button(
+                onClick = onLogin,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(28.dp)
+            ) {
+                Text("Sign In", fontWeight = FontWeight.Bold)
+            }
+
+            OutlinedButton(
+                onClick = onCreate,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(28.dp),
+                border = BorderStroke(2.dp, Orange),
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color(0xFF06152B)
+                )
+            ) {
+                Text("Create Account", color = Color.White, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
