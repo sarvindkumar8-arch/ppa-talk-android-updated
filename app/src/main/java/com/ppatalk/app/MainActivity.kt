@@ -876,6 +876,25 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 resetConfirmPassword = ""
                 message = ""
             }) { Text("Back to Phone Login") }
+        if (!isSignUp && !usePhone && !phoneResetMode) {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    message = ""
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                        message = "Enter your email address first."
+                    } else {
+                        busy = true
+                        authSendPasswordReset(email.trim()) { success, detail ->
+                            busy = false
+                            message = detail
+                        }
+                    }
+                },
+                modifier = Modifier.align(Alignment.End)
+            ) { Text("Forgot Password?", color = authCyan) }
+        }
+
         } else {
         Button(
             onClick = {
@@ -1099,24 +1118,6 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 resetConfirmPassword = ""
                 message = "Enter your registered mobile number to reset your password."
             }) { Text("Forgot password?") }
-        }
-        if (!isSignUp && !usePhone && !phoneResetMode) {
-            TextButton(
-                enabled = !busy,
-                onClick = {
-                    message = ""
-                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-                        message = "Enter your email address first."
-                    } else {
-                        busy = true
-                        authSendPasswordReset(email.trim()) { success, detail ->
-                            busy = false
-                            message = detail
-                        }
-                    }
-                },
-                modifier = Modifier.align(Alignment.End)
-            ) { Text("Forgot Password?", color = authCyan) }
         }
         if (message.startsWith("Verification email sent")) {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
