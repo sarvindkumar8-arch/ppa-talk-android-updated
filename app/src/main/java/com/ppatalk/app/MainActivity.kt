@@ -512,7 +512,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("PPA Talk", style = MaterialTheme.typography.displaySmall,
+        Text("PPA CONNECT", style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
         Text("Create. Connect. Share.", color = Orange)
         Spacer(Modifier.height(24.dp))
@@ -1150,7 +1150,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     ),
                     title = {
                         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                            Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
+                            Text("PPA CONNECT", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.headlineSmall)
                             Text("Create. Connect. Share.", color = Orange,
                                 style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
