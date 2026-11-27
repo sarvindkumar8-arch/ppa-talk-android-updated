@@ -622,7 +622,6 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
     Column(
         modifier = Modifier.fillMaxSize()
             .background(if (!isSignUp) authNavy else MaterialTheme.colorScheme.background)
-            .then(if (!isSignUp) Modifier.border(2.dp, Color(0xFF168BFF), RoundedCornerShape(30.dp)) else Modifier)
             .padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -758,6 +757,25 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors
             )
         }
+        if (!isSignUp && !usePhone && !phoneResetMode) {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    message = ""
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                        message = "Enter your email address first."
+                    } else {
+                        busy = true
+                        authSendPasswordReset(email.trim()) { success, detail ->
+                            busy = false
+                            message = detail
+                        }
+                    }
+                },
+                modifier = Modifier.align(Alignment.End),
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
+            ) { Text("Forgot Password?", color = authCyan) }
+        }
         Spacer(Modifier.height(if (!isSignUp) 10.dp else 14.dp))
 
         if (phoneResetMode) {
@@ -876,25 +894,6 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 resetConfirmPassword = ""
                 message = ""
             }) { Text("Back to Phone Login") }
-        if (!isSignUp && !usePhone && !phoneResetMode) {
-            TextButton(
-                enabled = !busy,
-                onClick = {
-                    message = ""
-                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-                        message = "Enter your email address first."
-                    } else {
-                        busy = true
-                        authSendPasswordReset(email.trim()) { success, detail ->
-                            busy = false
-                            message = detail
-                        }
-                    }
-                },
-                modifier = Modifier.align(Alignment.End)
-            ) { Text("Forgot Password?", color = authCyan) }
-        }
-
         } else {
         Button(
             onClick = {
