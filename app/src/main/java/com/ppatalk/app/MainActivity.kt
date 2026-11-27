@@ -711,7 +711,8 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             OutlinedTextField(
                 value = email, onValueChange = { email = it.trim() },
                 label = { Text(if (!isSignUp && !usePhone) "Email or Username" else "Email Address") }, placeholder = { Text(if (!isSignUp && !usePhone) "Email or Username" else "you@example.com") }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 12.dp else 14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = authMuted) },
+                singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 24.dp else 14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 colors = authFieldColors
             )
         }
@@ -732,8 +733,10 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             value = password, onValueChange = { password = it },
             label = { Text(if (isSignUp) "Password" else "Password") },
             placeholder = { Text(if (isSignUp) "Create a password (8+ characters)" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 12.dp else 14.dp), textStyle = LocalTextStyle.current.copy(color = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface),
-            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 24.dp else 14.dp), textStyle = LocalTextStyle.current.copy(color = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface),
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = authMuted) },
+            trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) { Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (showPassword) "Hide password" else "Show password", tint = authMuted) } },
+            visualTransformation = if (showPassword) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
         )
