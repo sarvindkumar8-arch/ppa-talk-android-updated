@@ -633,19 +633,23 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             }
             Spacer(Modifier.weight(1f))
         }
-        Box(Modifier.size(66.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
-            Text("P", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold)
+        if (isSignUp) {
+            Box(Modifier.size(66.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
+                Text("P", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(Modifier.height(10.dp))
+        } else {
+            Spacer(Modifier.height(18.dp))
         }
-        Spacer(Modifier.height(10.dp))
         Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else RoyalBlue)
         Text("Create. Connect. Share.", color = if (!isSignUp) Orange else Orange, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(if (!isSignUp) 20.dp else 26.dp))
         Text(if (isSignUp) "Create Account" else "Sign In",
             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else MaterialTheme.colorScheme.onSurface)
         Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
             style = MaterialTheme.typography.bodyMedium, color = if (!isSignUp) authMuted else MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(if (!isSignUp) 22.dp else 16.dp))
 
         if (isSignUp) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -700,7 +704,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             OutlinedTextField(
                 value = email, onValueChange = { email = it.trim() },
                 label = { Text(if (!isSignUp && !usePhone) "Email or Username" else "Email Address") }, placeholder = { Text(if (!isSignUp && !usePhone) "Email or Username" else "you@example.com") }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 12.dp else 14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 colors = authFieldColors
             )
         }
@@ -721,7 +725,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             value = password, onValueChange = { password = it },
             label = { Text(if (isSignUp) "Password" else "Password") },
             placeholder = { Text(if (isSignUp) "Create a password (8+ characters)" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 12.dp else 14.dp), textStyle = LocalTextStyle.current.copy(color = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface),
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
@@ -1065,7 +1069,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             shape = RoundedCornerShape(28.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Text("G", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4))
+            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                Text("G", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4))
+            }
             Spacer(Modifier.width(10.dp))
             Text(if (busy) "Please wait..." else "Continue with Google")
         }
