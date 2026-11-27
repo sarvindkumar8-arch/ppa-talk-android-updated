@@ -598,31 +598,38 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         }
     }
 
+    val authNavy = Color(0xFF07182D)
+    val authField = Color(0xFF102A46)
+    val authText = Color(0xFFF3F7FC)
+    val authMuted = Color(0xFFB8C7D9)
+    val authCyan = Color(0xFF22D3EE)
     val authFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-        focusedPlaceholderColor = Color(0xFF65676B),
-        unfocusedPlaceholderColor = Color(0xFF65676B),
-        disabledTextColor = Color(0xFF65676B),
-        cursorColor = RoyalBlue,
-        focusedBorderColor = RoyalBlue,
-        unfocusedBorderColor = Color(0xFFCED0D4),
-        focusedLabelColor = RoyalBlue,
-        unfocusedLabelColor = Color(0xFF65676B),
-        focusedContainerColor = MaterialTheme.colorScheme.surface,
-        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+        focusedTextColor = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface,
+        focusedPlaceholderColor = if (!isSignUp) authMuted else Color(0xFF65676B),
+        unfocusedPlaceholderColor = if (!isSignUp) authMuted else Color(0xFF65676B),
+        disabledTextColor = if (!isSignUp) authMuted else Color(0xFF65676B),
+        cursorColor = if (!isSignUp) authCyan else RoyalBlue,
+        focusedBorderColor = if (!isSignUp) authCyan else RoyalBlue,
+        unfocusedBorderColor = if (!isSignUp) Color(0xFF54718D) else Color(0xFFCED0D4),
+        focusedLabelColor = if (!isSignUp) authCyan else RoyalBlue,
+        unfocusedLabelColor = if (!isSignUp) authMuted else Color(0xFF65676B),
+        focusedContainerColor = if (!isSignUp) authField else MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = if (!isSignUp) authField else MaterialTheme.colorScheme.surface
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize()
+            .background(if (!isSignUp) authNavy else MaterialTheme.colorScheme.background)
+            .padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBackToWelcome, enabled = !busy) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = if (!isSignUp) authCyan else MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(6.dp))
-                Text("Back")
+                Text("Back", color = if (!isSignUp) authCyan else MaterialTheme.colorScheme.primary)
             }
             Spacer(Modifier.weight(1f))
         }
@@ -631,13 +638,13 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         }
         Spacer(Modifier.height(10.dp))
         Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
-        Text("Create. Connect. Share.", color = Orange, fontWeight = FontWeight.SemiBold)
+            fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else RoyalBlue)
+        Text("Create. Connect. Share.", color = if (!isSignUp) Orange else Orange, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(26.dp))
         Text(if (isSignUp) "Create Account" else "Sign In",
-            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else MaterialTheme.colorScheme.onSurface)
         Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = MaterialTheme.typography.bodyMedium, color = if (!isSignUp) authMuted else MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
 
         if (isSignUp) {
@@ -1025,7 +1032,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 }
             },
             enabled = !busy,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = if (!isSignUp) Color(0xFF087BFF) else MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(28.dp)
         ) {
             Text(if (busy) "Please wait..." else if (usePhone && isSignUp && !phoneOtpSent) "Send OTP" else if (usePhone && isSignUp && phoneOtpSent) "Verify OTP & Sign Up" else if (isSignUp) "Sign Up" else "Sign In")
         }
@@ -1033,13 +1042,13 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
 
         if (!isSignUp && !usePhone && !phoneResetMode) {
             Spacer(Modifier.height(6.dp))
-            Text("Or continue with", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Or continue with", color = authMuted)
             Spacer(Modifier.height(6.dp))
             OutlinedButton(
                 onClick = { usePhone = true; message = "" },
                 enabled = !busy, modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                border = BorderStroke(1.dp, Color(0xFF54718D))
             ) {
                 Icon(Icons.Default.Phone, contentDescription = null)
                 Spacer(Modifier.width(10.dp))
