@@ -376,26 +376,54 @@ private fun finishPhoneSignup(
 
 @Composable
 private fun PpaConnectSplash() {
+    val navy = Color(0xFF020B1B)
     Box(Modifier.fillMaxSize().background(
-        androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF06152B), Color(0xFF061C43), Color(0xFF020A17)))
-    ), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(132.dp).background(
-                androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF18B7F7), RoyalBlue, Color(0xFF10245B))), CircleShape
-            ), contentAlignment = Alignment.Center) {
-                Text("PPA", color=Color.White, fontSize=42.sp, fontWeight=FontWeight.Black)
-            }
-            Text("PPA CONNECT", fontSize=29.sp, fontWeight=FontWeight.ExtraBold, color=Color.White)
-            Text("Create. Connect. Share.", color=Color.White, fontWeight=FontWeight.Bold)
-            Spacer(Modifier.height(20.dp))
-            CircularProgressIndicator(color=Orange, strokeWidth=3.dp, modifier=Modifier.size(36.dp))
-        }
-        Box(Modifier.fillMaxWidth().height(110.dp).align(Alignment.BottomCenter).background(
-            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFF087DFF), Color(0xFF0B45C9), Color(0xFFFF7C1A)))
+        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF071A38), Color(0xFF020817), navy))
+    )) {
+        // Deep blue spotlight behind the brand
+        Box(Modifier.fillMaxSize().background(
+            androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF123F8A), Color.Transparent), radius = 850f)
         ))
+        Column(
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Brand mark treatment, centered like the supplied reference
+            Box(Modifier.size(174.dp), contentAlignment = Alignment.Center) {
+                Text("✦", modifier=Modifier.align(Alignment.TopCenter).padding(top=2.dp), color=Color(0xFFFFC629), fontSize=34.sp)
+                Text("PPA", color=Color(0xFF13B9F5), fontSize=68.sp, fontWeight=FontWeight.Black,
+                    style= androidx.compose.ui.text.TextStyle(shadow=androidx.compose.ui.graphics.Shadow(Color(0xFF00132F), blurRadius=18f)))
+                Text("PPA", color=Color(0xFF07152C), fontSize=66.sp, fontWeight=FontWeight.Black,
+                    modifier=Modifier.offset(y=3.dp))
+                Text("PPA", color=Color(0xFF17B9FF), fontSize=66.sp, fontWeight=FontWeight.Black)
+            }
+            Spacer(Modifier.height(18.dp))
+            Text("PPA CONNECT", fontSize=30.sp, fontWeight=FontWeight.ExtraBold, fontStyle=androidx.compose.ui.text.font.FontStyle.Italic,
+                color=Color.White, letterSpacing=(-1).sp)
+            Text("Create. Connect. Share.", color=Color.White, fontSize=17.sp, fontWeight=FontWeight.SemiBold)
+            Spacer(Modifier.height(24.dp))
+            CircularProgressIndicator(color=Color(0xFF078BFF), strokeWidth=4.dp, modifier=Modifier.size(42.dp))
+        }
+        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(155.dp).align(Alignment.BottomCenter) {
+            val w=size.width; val h=size.height
+            val blue=androidx.compose.ui.graphics.Path().apply {
+                moveTo(0f,h*.43f); cubicTo(w*.20f,h*.05f,w*.35f,h*.95f,w*.56f,h*.62f)
+                cubicTo(w*.73f,h*.30f,w*.84f,h*.10f,w,h*.25f); lineTo(w,h); lineTo(0f,h); close()
+            }
+            drawPath(blue, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF00A8FF),Color(0xFF0055D9),Color(0xFF03142E))))
+            val orange=androidx.compose.ui.graphics.Path().apply {
+                moveTo(w*.64f,h*.86f); cubicTo(w*.82f,h*.68f,w*.89f,h*.50f,w,h*.43f); lineTo(w,h); lineTo(w*.52f,h); close()
+            }
+            drawPath(orange, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFFFFA323),Color(0xFFFF650D),Color(0xFFFF9A24))))
+            val wave=androidx.compose.ui.graphics.Path().apply {
+                moveTo(0f,h*.65f); cubicTo(w*.25f,h*.18f,w*.38f,h*.95f,w*.60f,h*.55f)
+                cubicTo(w*.79f,h*.22f,w*.90f,h*.12f,w,h*.38f)
+            }
+            drawPath(wave,Color(0xFF44C7FF),style=androidx.compose.ui.graphics.drawscope.Stroke(width=4f))
+        })
     }
 }
-
 @Composable
 private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
     Box(Modifier.fillMaxSize().background(
