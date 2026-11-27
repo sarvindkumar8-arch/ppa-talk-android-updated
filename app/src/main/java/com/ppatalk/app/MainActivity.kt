@@ -593,17 +593,17 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
         Text("Create. Connect. Share.", color = Orange, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(26.dp))
-        Text(if (isSignUp) "Create your account" else "Welcome back",
-            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(if (isSignUp) "Join the community" else "Sign in to continue",
+        Text(if (isSignUp) "Create Account" else "Sign In",
+            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+        Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
-                label = { Text("Email") }, modifier = Modifier.weight(1f))
+                label = { Text("✉ Email") }, modifier = Modifier.weight(1f))
             FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
-                label = { Text("Mobile") }, modifier = Modifier.weight(1f))
+                label = { Text("☎ Phone") }, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
 
