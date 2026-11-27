@@ -548,16 +548,30 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("PPA CONNECT", style = MaterialTheme.typography.displaySmall,
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBackToWelcome, enabled = !busy) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(6.dp))
+                Text("Back")
+            }
+            Spacer(Modifier.weight(1f))
+        }
+        Box(Modifier.size(66.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
+            Text("P", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
-        Text("Create. Connect. Share.", color = Orange)
-        Spacer(Modifier.height(24.dp))
+        Text("Create. Connect. Share.", color = Orange, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(26.dp))
         Text(if (isSignUp) "Create your account" else "Welcome back",
             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(if (isSignUp) "Join the community" else "Sign in to continue",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
