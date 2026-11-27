@@ -49,37 +49,43 @@ jobs:
           keytool -list -v -keystore signing-check.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>/dev/null | awk '/SHA1:|SHA256:/ {print}'
       - name: Run Android lint checks
         run: gradle --no-daemon :app:lintDebug --stacktrace
-      - name: Restore signing keystore for APK builds
+      - name: Restore signing keystore when configured
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
-          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] || [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] || [ -z "${ANDROID_KEY_ALIAS:-}" ]; then
-            echo "Required signing secrets missing." >&2
-            exit 1
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/ppa-talk-debug-new.jks
+            chmod 600 app/ppa-talk-debug-new.jks
+            keytool -list -keystore app/ppa-talk-debug-new.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+            echo "Signing keystore restored."
+          else
+            echo "Signing secrets unavailable; debug APK will use standard debug signing."
           fi
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/ppa-talk-debug-new.jks
-          chmod 600 app/ppa-talk-debug-new.jks
-          keytool -list -keystore app/ppa-talk-debug-new.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
-      - name: Build debug and release APKs
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: gradle --no-daemon :app:assembleDebug :app:assembleRelease --stacktrace
+      - name: Build APKs
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleDebug --stacktrace
+          if [ -s app/ppa-talk-debug-new.jks ]; then
+            gradle --no-daemon :app:assembleRelease --stacktrace
+          else
+            echo "Skipping release APK; no custom signing keystore."
+          fi
       - name: Verify release APK signature
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
-      - name: Upload debug and release APKs
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ppa-talk-signed-apks
+          name: ppa-talk-apks
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
