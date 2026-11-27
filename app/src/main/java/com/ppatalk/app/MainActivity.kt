@@ -1028,7 +1028,48 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 }
             ) { Text("Forgot password?") }
         }
-        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) RoyalBlue else MaterialTheme.colorScheme.error)
+        if (message.startsWith("Verification email sent")) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(76.dp).background(RoyalBlue.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.MarkEmailRead, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(44.dp))
+                    }
+                    Text("Verify Your Email", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("We've sent a verification link to your email address.",
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (email.isNotBlank()) Text(email, color = RoyalBlue, fontWeight = FontWeight.SemiBold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text("Please check your inbox and spam folder, then tap the link to verify your account.",
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = {
+                        try {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_APP_EMAIL))
+                        } catch (_: Exception) {
+                            message = "Email app unavailable. Open your mailbox manually and tap the verification link."
+                        }
+                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
+                        Text("Open Email App")
+                    }
+                    OutlinedButton(onClick = {
+                        val pending = FirebaseAuth.getInstance().currentUser
+                        if (pending != null && !pending.isEmailVerified) {
+                            busy = true
+                            pending.sendEmailVerification().addOnCompleteListener { task ->
+                                busy = false
+                                message = if (task.isSuccessful) "Verification email sent again. Check your inbox and spam folder."
+                                    else task.exception?.localizedMessage ?: "Could not resend verification email."
+                            }
+                        } else message = "Please sign up again or sign in to request a verification link."
+                    }, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp),
+                        border = BorderStroke(2.dp, Orange)) {
+                        Text(if (busy) "Please wait..." else "Resend Link", color = Orange)
+                    }
+                }
+            }
+        } else if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) RoyalBlue else MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
         Text("Public community • Be respectful and stay safe",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
