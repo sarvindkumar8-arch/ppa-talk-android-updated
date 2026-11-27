@@ -646,7 +646,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         if (!isSignUp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("PPA ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text("CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Orange)
+                Text("CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = Orange)
             }
         } else Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
@@ -1103,7 +1103,16 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             border = BorderStroke(1.dp, Color(0xFF54718D))
         ) {
             Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                Text("G", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34A853))
+                Text(
+                    text = "G",
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = androidx.compose.ui.text.TextStyle(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(Color(0xFF4285F4), Color(0xFFEA4335), Color(0xFFFBBC05), Color(0xFF34A853), Color(0xFF4285F4))
+                        )
+                    )
+                )
             }
             Spacer(Modifier.width(10.dp))
             Text(if (busy) "Please wait..." else "Continue with Google")
