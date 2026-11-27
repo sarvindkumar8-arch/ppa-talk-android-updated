@@ -67,20 +67,22 @@ jobs:
       - name: Build APKs
         run: |
           set -euo pipefail
-          gradle --no-daemon :app:assembleDebug --stacktrace
-          if [ -s app/ppa-talk-debug-new.jks ]; then
-            gradle --no-daemon :app:assembleRelease --stacktrace
-          else
-            echo "Skipping release APK; no custom signing keystore."
-          fi
+          # Always build both APK variants. Release is signed with the configured
+          # keystore when available; otherwise Gradle emits an unsigned release APK.
+          gradle --no-daemon :app:assembleDebug :app:assembleRelease --stacktrace
       - name: Verify release APK signature when present
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
           if [ -s "$APK" ]; then
-            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+            if [ -s app/ppa-talk-debug-new.jks ]; then
+              "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+            else
+              echo "Release APK exists but is unsigned; signature verification skipped."
+            fi
           else
-            echo "Release APK absent (no signing keystore); skipping signature verification."
+            echo "ERROR: Release APK was not generated."
+            exit 1
           fi
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
@@ -89,5 +91,5 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
