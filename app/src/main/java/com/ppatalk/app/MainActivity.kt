@@ -482,6 +482,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
     var countryCode by remember { mutableStateOf("+91") }
     var countryMenuExpanded by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var phoneVerificationId by remember { mutableStateOf<String?>(null) }
@@ -621,6 +622,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
     Column(
         modifier = Modifier.fillMaxSize()
             .background(if (!isSignUp) authNavy else MaterialTheme.colorScheme.background)
+            .then(if (!isSignUp) Modifier.border(2.dp, Color(0xFF168BFF), RoundedCornerShape(30.dp)) else Modifier)
             .padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -641,8 +643,13 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         } else {
             Spacer(Modifier.height(6.dp))
         }
-        Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else RoyalBlue)
+        if (!isSignUp) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("PPA ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                Text("CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Orange)
+            }
+        } else Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
         Text("Create. Connect. Share.", color = if (!isSignUp) Orange else Orange, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(if (!isSignUp) 12.dp else 26.dp))
         Text(if (isSignUp) "Create Account" else "Sign In",
