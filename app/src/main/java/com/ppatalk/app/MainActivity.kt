@@ -391,11 +391,13 @@ private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
             androidx.compose.ui.graphics.Brush.verticalGradient(
                 listOf(Color(0xFF06152B), Color(0xFF071D42), Color(0xFF020A17))
             )
-        ).padding(horizontal = 22.dp, vertical = 18.dp),
-        contentAlignment = Alignment.Center
+        )
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 22.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -416,70 +418,33 @@ private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
             Text(
                 "Create. Connect. Share.",
                 color = Color.White,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
 
-            Box(
-                Modifier.fillMaxWidth().height(250.dp).background(
-                    androidx.compose.ui.graphics.Brush.linearGradient(
-                        listOf(Color(0xFF123F86), Color(0xFF08203F), Color(0xFF0D3272))
-                    ),
-                    RoundedCornerShape(28.dp)
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(
+                    id = R.drawable.ppa_welcome_community
                 ),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Icon(Icons.Default.Image, contentDescription = null,
-                            tint = Color(0xFF45C6FF), modifier = Modifier.size(42.dp))
-                        Icon(Icons.Default.Chat, contentDescription = null,
-                            tint = Orange, modifier = Modifier.size(46.dp))
-                        Icon(Icons.Default.Groups, contentDescription = null,
-                            tint = Color(0xFF65B6FF), modifier = Modifier.size(44.dp))
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(72.dp).background(Color(0xFF1E90E8), CircleShape),
-                            contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, contentDescription = null,
-                                tint = Color.White, modifier = Modifier.size(46.dp))
-                        }
-                        Box(Modifier.size(82.dp).background(Orange, CircleShape),
-                            contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, contentDescription = null,
-                                tint = Color.White, modifier = Modifier.size(52.dp))
-                        }
-                        Box(Modifier.size(72.dp).background(Color(0xFF2B5BBD), CircleShape),
-                            contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, contentDescription = null,
-                                tint = Color.White, modifier = Modifier.size(46.dp))
-                        }
-                    }
-
-                    Text(
-                        "Your people. Your moments. Your community.",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-            }
+                contentDescription = "Friends sharing moments on PPA CONNECT",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
 
             Text(
                 "Connect with friends, share your moments and be part of your community.",
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 color = Color.White,
-                fontSize = 15.sp
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium
             )
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(12.dp))
 
             Button(
                 onClick = onLogin,
@@ -500,6 +465,8 @@ private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
             ) {
                 Text("Create Account", color = Color.White, fontWeight = FontWeight.Bold)
             }
+
+            Spacer(Modifier.height(12.dp))
         }
     }
 }
