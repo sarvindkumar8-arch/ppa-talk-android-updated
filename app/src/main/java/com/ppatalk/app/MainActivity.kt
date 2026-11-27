@@ -5693,16 +5693,19 @@ fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Mod
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Profile Setup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text("Complete Your Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
+                    Text("Choose your username and profile details", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 TextButton(onClick = { showProfileSetup = false }) { Text("Close") }
             }
             if (loading) CircularProgressIndicator()
             OutlinedTextField(value = displayName, onValueChange = { displayName = it },
                 label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = username, onValueChange = { username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '.' } },
-                label = { Text("Username") }, prefix = { Text("@") },
-                supportingText = { Text("4–20 characters: a-z, 0-9, underscore or dot. Must be unique.") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true)
+                label = { Text("Choose Username") }, placeholder = { Text("yourname") }, prefix = { Text("@") },
+                supportingText = { Text("4–20 characters • letters, numbers, dots or underscore • unique") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
             if (usernameCheckMessage.isNotBlank()) {
                 Text(
                     usernameCheckMessage,
