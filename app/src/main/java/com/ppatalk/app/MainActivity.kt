@@ -405,7 +405,7 @@ private fun PpaConnectSplash() {
             Spacer(Modifier.height(24.dp))
             CircularProgressIndicator(color=Color(0xFF078BFF), strokeWidth=4.dp, modifier=Modifier.size(42.dp))
         }
-        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(155.dp).align(Alignment.BottomCenter) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(155.dp).align(Alignment.BottomCenter)) {
             val w=size.width; val h=size.height
             val blue=androidx.compose.ui.graphics.Path().apply {
                 moveTo(0f,h*.43f); cubicTo(w*.20f,h*.05f,w*.35f,h*.95f,w*.56f,h*.62f)
