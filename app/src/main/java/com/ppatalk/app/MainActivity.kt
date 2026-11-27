@@ -417,11 +417,10 @@ private fun PpaConnectSplash() {
                 Text("PPA", color=Color(0xFF12B9FF), fontSize=78.sp, fontWeight=FontWeight.Black, style= androidx.compose.ui.text.TextStyle(shadow=androidx.compose.ui.graphics.Shadow(Color(0xFF00132F), blurRadius=17f)))
             }
             Spacer(Modifier.height(10.dp))
-            Text("PPA CONNECT", fontSize=30.sp, fontWeight=FontWeight.ExtraBold, fontStyle=androidx.compose.ui.text.font.FontStyle.Italic,
-                color=Color.White, letterSpacing=(-1).sp)
+            Text(text=androidx.compose.ui.text.buildAnnotatedString { pushStyle(androidx.compose.ui.text.SpanStyle(color=Color.White)); append("PPA "); pop(); pushStyle(androidx.compose.ui.text.SpanStyle(color=Color(0xFFFFA51B))); append("CONNECT"); pop() }, fontSize=30.sp, fontWeight=FontWeight.ExtraBold, fontStyle=androidx.compose.ui.text.font.FontStyle.Italic, letterSpacing=(-1).sp)
             Text("Create. Connect. Share.", color=Color.White, fontSize=17.sp, fontWeight=FontWeight.SemiBold)
             Spacer(Modifier.height(22.dp))
-            CircularProgressIndicator(color=Color(0xFF078BFF), strokeWidth=4.dp, modifier=Modifier.size(42.dp))
+            androidx.compose.foundation.Canvas(Modifier.size(48.dp)) { drawArc(Color(0xFF078BFF), 0f, 205f, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=9f, cap=androidx.compose.ui.graphics.StrokeCap.Round)); drawArc(Color(0xFFFFA51B), 205f, 145f, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=9f, cap=androidx.compose.ui.graphics.StrokeCap.Round)) }
         }
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(190.dp).align(Alignment.BottomCenter)) {
             val w=size.width; val h=size.height
