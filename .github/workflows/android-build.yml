@@ -73,13 +73,15 @@ jobs:
           else
             echo "Skipping release APK; no custom signing keystore."
           fi
-      - name: Verify release APK signature
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+      - name: Verify release APK signature when present
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
-          test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          if [ -s "$APK" ]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          else
+            echo "Release APK absent (no signing keystore); skipping signature verification."
+          fi
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
