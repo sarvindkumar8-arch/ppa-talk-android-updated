@@ -625,31 +625,31 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBackToWelcome, enabled = !busy) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = if (!isSignUp) authCyan else MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(6.dp))
-                Text("Back", color = if (!isSignUp) authCyan else MaterialTheme.colorScheme.primary)
-            }
-            Spacer(Modifier.weight(1f))
-        }
         if (isSignUp) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBackToWelcome, enabled = !busy) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Back", color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.weight(1f))
+            }
             Box(Modifier.size(66.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
                 Text("P", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.height(10.dp))
         } else {
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(6.dp))
         }
         Text("PPA CONNECT", style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else RoyalBlue)
         Text("Create. Connect. Share.", color = if (!isSignUp) Orange else Orange, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(if (!isSignUp) 20.dp else 26.dp))
+        Spacer(Modifier.height(if (!isSignUp) 12.dp else 26.dp))
         Text(if (isSignUp) "Create Account" else "Sign In",
             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else MaterialTheme.colorScheme.onSurface)
         Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
             style = MaterialTheme.typography.bodyMedium, color = if (!isSignUp) authMuted else MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(if (!isSignUp) 22.dp else 16.dp))
+        Spacer(Modifier.height(if (!isSignUp) 14.dp else 16.dp))
 
         if (isSignUp) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -659,7 +659,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                     label = { Text("☎ Phone") }, modifier = Modifier.weight(1f))
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(if (!isSignUp) 4.dp else 10.dp))
 
         if (isSignUp) {
             OutlinedTextField(
@@ -748,7 +748,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors
             )
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(if (!isSignUp) 10.dp else 14.dp))
 
         if (phoneResetMode) {
             Button(
@@ -1067,7 +1067,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             },
             enabled = !busy, modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            border = BorderStroke(1.dp, Color(0xFF54718D))
         ) {
             Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
                 Text("G", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4))
@@ -1104,8 +1104,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                             message = detail
                         }
                     }
-                }
-            ) { Text("Forgot password?") }
+                },
+                modifier = Modifier.align(Alignment.End)
+            ) { Text("Forgot Password?", color = authCyan) }
         }
         if (message.startsWith("Verification email sent")) {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
