@@ -1075,7 +1075,11 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
 
         if (!isSignUp && !usePhone && !phoneResetMode) {
             Spacer(Modifier.height(6.dp))
-            Text("Or continue with", color = authMuted)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Divider(Modifier.weight(1f), color = Color(0xFF54718D))
+                Text("Or continue with", color = authMuted, modifier = Modifier.padding(horizontal = 12.dp))
+                Divider(Modifier.weight(1f), color = Color(0xFF54718D))
+            }
             Spacer(Modifier.height(6.dp))
             OutlinedButton(
                 onClick = { usePhone = true; message = "" },
@@ -1083,9 +1087,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 shape = RoundedCornerShape(28.dp),
                 border = BorderStroke(1.dp, Color(0xFF54718D))
             ) {
-                Icon(Icons.Default.Phone, contentDescription = null)
+                Icon(Icons.Default.Phone, contentDescription = null, tint = Color.White)
                 Spacer(Modifier.width(10.dp))
-                Text("Sign in with Phone")
+                Text("Sign in with Phone", color = Color.White)
             }
         }
         OutlinedButton(
@@ -1099,14 +1103,17 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             border = BorderStroke(1.dp, Color(0xFF54718D))
         ) {
             Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                Text("G", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4))
+                Text("G", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34A853))
             }
             Spacer(Modifier.width(10.dp))
             Text(if (busy) "Please wait..." else "Continue with Google")
         }
 
-        TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
-            Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (isSignUp) "Already have an account? " else "Don't have an account? ", color = if (!isSignUp) Color.White else MaterialTheme.colorScheme.onSurface)
+            TextButton(onClick = { isSignUp = !isSignUp; message = "" }, contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
+                Text(if (isSignUp) "Sign In" else "Create Account", color = if (!isSignUp) authCyan else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            }
         }
         if (!isSignUp && usePhone && !phoneResetMode) {
             TextButton(enabled = !busy, onClick = {
