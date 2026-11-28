@@ -377,28 +377,14 @@ private fun finishPhoneSignup(
 
 @Composable
 private fun PpaConnectSplash() {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(id = R.drawable.ppa_splash_art),
-            contentDescription = "PPA CONNECT splash screen",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
-        )
-        // Mask the baked-in loading ring on the splash artwork without changing other app behavior.
-        Box(
-            Modifier
-                .align(Alignment.Center)
-                .offset(y = maxHeight * 0.16f)
-                .size(124.dp)
-                .background(
-                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                        colors = listOf(Color(0xFF03112D), Color(0xFF03112D), Color.Transparent),
-                        radius = 210f
-                    ),
-                    shape = CircleShape
-                )
-        )
-    }
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(
+            id = R.drawable.ppa_splash_art
+        ),
+        contentDescription = "PPA CONNECT splash screen",
+        modifier = Modifier.fillMaxSize(),
+        contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
+    )
 }
 
 @Composable
