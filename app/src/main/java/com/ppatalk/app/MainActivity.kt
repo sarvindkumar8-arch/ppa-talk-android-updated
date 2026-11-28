@@ -389,24 +389,18 @@ private fun PpaConnectSplash() {
 
 @Composable
 private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
-    Box(
-        Modifier.fillMaxSize().background(
-            androidx.compose.ui.graphics.Brush.verticalGradient(
-                listOf(Color(0xFF06152B), Color(0xFF071D42), Color(0xFF020A17))
-            )
-        )
-    ) {
+    Box(Modifier.fillMaxSize().background(Color.White)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                .padding(horizontal = 22.dp, vertical = 24.dp),
+                .padding(horizontal = 24.dp, vertical = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = androidx.compose.ui.text.buildAnnotatedString {
-                    pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White))
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFF123B78)))
                     append("PPA ")
                     pop()
                     pushStyle(androidx.compose.ui.text.SpanStyle(color = Orange))
@@ -420,7 +414,7 @@ private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
 
             Text(
                 "Create. Connect. Share.",
-                color = Color.White,
+                color = Color(0xFF182238),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
@@ -429,32 +423,32 @@ private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
             Spacer(Modifier.height(4.dp))
 
             androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(
-                    id = R.drawable.ppa_welcome_community
-                ),
+                painter = androidx.compose.ui.res.painterResource(id = R.drawable.ppa_welcome_community),
                 contentDescription = "Friends sharing moments on PPA CONNECT",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp),
+                modifier = Modifier.fillMaxWidth().height(290.dp),
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit
             )
 
             Text(
-                "Connect with friends, share your moments and be part of your community.",
+                "Connect with friends, share your moments and be part of our community.",
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                color = Color.White,
+                color = Color(0xFF172033),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Medium
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
 
             Button(
                 onClick = onLogin,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(28.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF0878F9),
+                    contentColor = Color.White
+                )
             ) {
-                Text("Sign In", fontWeight = FontWeight.Bold)
+                Text("Sign In", fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
 
             OutlinedButton(
@@ -463,13 +457,14 @@ private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
                 shape = RoundedCornerShape(28.dp),
                 border = BorderStroke(2.dp, Orange),
                 colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color(0xFF06152B)
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF172033)
                 )
             ) {
-                Text("Create Account", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Create Account", fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
