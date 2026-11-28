@@ -1374,71 +1374,56 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (activeChatUid == null) {
-                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = RoyalBlue,
-                        actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                        containerColor = Color(0xFF06182B),
+                        titleContentColor = Color.White,
+                        actionIconContentColor = Color.White
                     ),
                     title = {
                         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                            Text("PPA CONNECT", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
-                                style = MaterialTheme.typography.headlineSmall)
-                            Text("Create. Connect. Share.", color = Orange,
-                                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("PPA ", color = Color.White, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineSmall)
+                                Text("CONNECT", color = Orange, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineSmall)
+                            }
+                            Text("Create. Connect. Share.", color = Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     },
                     actions = {
-                        IconButton(onClick = { navigateTo("Search") }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search",
-                                modifier = Modifier.size(27.dp))
-                        }
-                        IconButton(onClick = { navigateTo("Messenger") }) {
-                            Surface(shape = CircleShape, color = RoyalBlue, modifier = Modifier.size(36.dp)) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Forum, contentDescription = "Messenger",
-                                        tint = Color.White, modifier = Modifier.size(21.dp))
-                                }
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { menuExpanded = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                            }
-                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                DropdownMenuItem(text = { Text("Settings") },
-                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = { menuExpanded = false; navigateTo("Settings") })
-                                DropdownMenuItem(text = { Text("Log out") },
-                                    leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
-                                    onClick = { menuExpanded = false; onSignOut() })
-                            }
-                        }
+                        IconButton(onClick = { navigateTo("Create") }) { Icon(Icons.Default.Add, contentDescription = "Create", modifier = Modifier.size(30.dp)) }
+                        IconButton(onClick = { navigateTo("Search") }) { Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(28.dp)) }
+                        IconButton(onClick = { navigateTo("Notifications") }) { Icon(Icons.Default.Notifications, contentDescription = "Notifications", modifier = Modifier.size(28.dp)) }
                     }
                 )
-                HorizontalDivider(color = Color(0xFF284A68))
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    listOf(
+                HorizontalDivider(color = Color(0xFF234C72))
+            }
+        },
+        bottomBar = {
+            if (activeChatUid == null) {
+                NavigationBar(containerColor = Color(0xFF06182B), contentColor = Color.White) {
+                    val homeTabs = listOf(
                         "Home" to Icons.Default.Home,
                         "Friends" to Icons.Default.PeopleAlt,
+                        "Messenger" to Icons.Default.Forum,
                         "Reels" to Icons.Default.PlayCircle,
-                        "Marketplace" to Icons.Default.Storefront,
                         "Notifications" to Icons.Default.Notifications,
                         "Menu" to Icons.Default.Menu
-                    ).forEach { (label, icon) ->
-                        IconButton(onClick = { navigateTo(label) }, modifier = Modifier.weight(1f)) {
-                            Icon(icon, contentDescription = label,
-                                tint = if (selected == label) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(25.dp))
-                        }
+                    )
+                    homeTabs.forEach { (label, icon) ->
+                        NavigationBarItem(
+                            selected = (selected == label) || (label == "Messenger" && selected == "Chat"),
+                            onClick = { navigateTo(label) },
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(if (label == "Messenger") "Chat" else label, maxLines = 1) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color(0xFF21C5F5),
+                                selectedTextColor = Color(0xFF21C5F5),
+                                indicatorColor = Color(0xFF123D67),
+                                unselectedIconColor = Color.White,
+                                unselectedTextColor = Color.White
+                            )
+                        )
                     }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                 }
             }
         },
@@ -2092,9 +2077,9 @@ fun HomeFeed(
             ownerRegistrations.values.forEach { it.remove() }
         }
     }
-    LazyColumn(modifier.fillMaxSize().background(Color(0xFF06182B)), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(modifier.fillMaxSize().background(Color(0xFF06182B)), contentPadding = PaddingValues(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0C2238)).padding(12.dp)) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0C2238)).padding(6.dp)) {
                 StoriesStrip(uid = currentUid, displayName = displayName)
             }
         }
