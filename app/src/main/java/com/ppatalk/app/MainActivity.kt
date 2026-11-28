@@ -407,24 +407,36 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                         val verifiedUser = auth.currentUser
                         if (verifiedUser?.isEmailVerified == true) {
                             val db = FirebaseFirestore.getInstance()
-                            val profileName = verifiedUser.displayName?.takeIf { it.isNotBlank() }
-                                ?: verifiedUser.email?.substringBefore("@") ?: "PPA Talk user"
+                            val profileRef = db.collection("publicProfiles").document(verifiedUser.uid)
+                            val profileNameFromAuth = verifiedUser.displayName?.trim().takeIf { !it.isNullOrBlank() }
+                                ?: "PPA Talk user"
                             val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                            val batch = db.batch()
-                            batch.set(db.collection("users").document(verifiedUser.uid), mapOf(
-                                "uid" to verifiedUser.uid,
-                                "email" to (verifiedUser.email ?: ""),
-                                "updatedAt" to timestamp
-                            ), com.google.firebase.firestore.SetOptions.merge())
-                            batch.set(db.collection("publicProfiles").document(verifiedUser.uid), mapOf(
-                                "uid" to verifiedUser.uid,
-                                "displayName" to profileName,
-                                "updatedAt" to timestamp
-                            ), com.google.firebase.firestore.SetOptions.merge())
-                            batch.commit().addOnSuccessListener { onAuthenticated() }
-                                .addOnFailureListener { exception ->
-                                    message = exception.localizedMessage ?: "Email verified, but profile setup failed. Please sign in again."
+                            profileRef.get().addOnSuccessListener { existingProfile ->
+                                // Preserve the user's already-saved Firestore name; Auth fallback
+                                // is used only if the public profile has no nonblank name.
+                                val savedName = existingProfile.getString("displayName")?.trim()
+                                    .takeIf { !it.isNullOrBlank() } ?: profileNameFromAuth
+                                val batch = db.batch()
+                                batch.set(db.collection("users").document(verifiedUser.uid), mapOf(
+                                    "uid" to verifiedUser.uid,
+                                    "email" to (verifiedUser.email ?: ""),
+                                    "updatedAt" to timestamp
+                                ), com.google.firebase.firestore.SetOptions.merge())
+                                val profileUpdates = mutableMapOf<String, Any>(
+                                    "uid" to verifiedUser.uid,
+                                    "updatedAt" to timestamp
+                                )
+                                if (existingProfile.getString("displayName").isNullOrBlank()) {
+                                    profileUpdates["displayName"] = savedName
                                 }
+                                batch.set(profileRef, profileUpdates, com.google.firebase.firestore.SetOptions.merge())
+                                batch.commit().addOnSuccessListener { onAuthenticated() }
+                                    .addOnFailureListener { exception ->
+                                        message = exception.localizedMessage ?: "Email verified, but profile setup failed. Please sign in again."
+                                    }
+                            }.addOnFailureListener { exception ->
+                                message = exception.localizedMessage ?: "Could not load profile after email verification."
+                            }
                         }
                     }
                 }
