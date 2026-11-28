@@ -508,16 +508,42 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize().background(Color.White).padding(horizontal = 18.dp, vertical = 12.dp)
+            .imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("PPA CONNECT", style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
-        Text("Create. Connect. Share.", color = Orange)
-        Spacer(Modifier.height(24.dp))
-        Text(if (isSignUp) "Create your account" else "Welcome back",
-            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Text("PPA ", style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.ExtraBold, color = Color(0xFF123B86))
+            Text("CONNECT", style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.ExtraBold, color = Color(0xFFF06412))
+        }
+        Text("Create. Connect. Share.", color = Color(0xFF101828),
+            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth().height(142.dp)
+                .background(brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(Color(0xFFBDE7FF), Color.White, Color(0xFFFFE0B0))),
+                    shape = RoundedCornerShape(22.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                listOf(Icons.Filled.People, Icons.Filled.VideoCall, Icons.Filled.Image, Icons.Filled.Chat).forEachIndexed { index, icon ->
+                    Box(modifier = Modifier.size(48.dp).background(
+                        if (index % 2 == 0) Color(0xFF0788E8) else Color(0xFFF06412), CircleShape),
+                        contentAlignment = Alignment.Center) {
+                        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(if (isSignUp) "Create Account" else "Sign In",
+            style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF101828))
+        Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
+            style = MaterialTheme.typography.bodyLarge, color = Color(0xFF101828))
         Spacer(Modifier.height(16.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -917,7 +943,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
         ) { Text(if (busy) "Please wait..." else "Continue with Google") }
 
         TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
-            Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
+            Text(if (isSignUp) "Already have an account? Sign In" else "Don’t have an account? Create Account")
         }
         if (!isSignUp && usePhone && !phoneResetMode) {
             TextButton(enabled = !busy, onClick = {
@@ -928,7 +954,7 @@ fun AuthScreen(onAuthenticated: () -> Unit) {
                 resetPassword = ""
                 resetConfirmPassword = ""
                 message = "Enter your registered mobile number to reset your password."
-            }) { Text("Forgot password?") }
+            }) { Text("Forgot Password?") }
         }
         if (!isSignUp && !usePhone && !phoneResetMode) {
             TextButton(
