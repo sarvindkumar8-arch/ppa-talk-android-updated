@@ -1176,8 +1176,12 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                     ),
                     title = {
                         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                            Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
-                                style = MaterialTheme.typography.headlineSmall)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("PPA ", color = Color(0xFF123B86), fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.headlineSmall)
+                                Text("CONNECT", color = Color(0xFFF06412), fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.headlineSmall)
+                            }
                             Text("Create. Connect. Share.", color = Orange,
                                 style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
