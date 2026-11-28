@@ -604,24 +604,19 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
     val authText = Color(0xFFF3F7FC)
     val authMuted = Color(0xFFB8C7D9)
     val authCyan = Color(0xFF22D3EE)
+    // Unified dark PPA CONNECT theme for both Sign In and Create Account screens.
     val authFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface,
-        unfocusedTextColor = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface,
-        focusedPlaceholderColor = if (!isSignUp) authMuted else Color(0xFF65676B),
-        unfocusedPlaceholderColor = if (!isSignUp) authMuted else Color(0xFF65676B),
-        disabledTextColor = if (!isSignUp) authMuted else Color(0xFF65676B),
-        cursorColor = if (!isSignUp) authCyan else RoyalBlue,
-        focusedBorderColor = if (!isSignUp) authCyan else RoyalBlue,
-        unfocusedBorderColor = if (!isSignUp) Color(0xFF54718D) else Color(0xFFCED0D4),
-        focusedLabelColor = if (!isSignUp) authCyan else RoyalBlue,
-        unfocusedLabelColor = if (!isSignUp) authMuted else Color(0xFF65676B),
-        focusedContainerColor = if (!isSignUp) authField else MaterialTheme.colorScheme.surface,
-        unfocusedContainerColor = if (!isSignUp) authField else MaterialTheme.colorScheme.surface
+        focusedTextColor = authText, unfocusedTextColor = authText,
+        focusedPlaceholderColor = authMuted, unfocusedPlaceholderColor = authMuted,
+        disabledTextColor = authMuted, cursorColor = authCyan,
+        focusedBorderColor = authCyan, unfocusedBorderColor = Color(0xFF54718D),
+        focusedLabelColor = authCyan, unfocusedLabelColor = authMuted,
+        focusedContainerColor = authField, unfocusedContainerColor = authField
     )
 
     Column(
         modifier = Modifier.fillMaxSize()
-            .background(if (!isSignUp) authNavy else MaterialTheme.colorScheme.background)
+            .background(authNavy)
             .padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -662,17 +657,17 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         Text("Create. Connect. Share.", style = MaterialTheme.typography.bodyLarge.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Color.White, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(if (!isSignUp) 12.dp else 26.dp))
         Text(if (isSignUp) "Create Account" else "Sign In",
-            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (!isSignUp) Color.White else MaterialTheme.colorScheme.onSurface)
+            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color.White)
         Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
-            style = MaterialTheme.typography.bodyMedium, color = if (!isSignUp) authMuted else MaterialTheme.colorScheme.onSurfaceVariant)
+            style = MaterialTheme.typography.bodyMedium, color = authMuted)
         Spacer(Modifier.height(if (!isSignUp) 14.dp else 16.dp))
 
         if (isSignUp) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
-                    label = { Text("✉ Email") }, modifier = Modifier.weight(1f))
+                    label = { Text("✉ Email", color = Color.White) }, modifier = Modifier.weight(1f), colors = FilterChipDefaults.filterChipColors(containerColor = authField, selectedContainerColor = RoyalBlue, labelColor = Color.White, selectedLabelColor = Color.White))
                 FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
-                    label = { Text("☎ Phone") }, modifier = Modifier.weight(1f))
+                    label = { Text("☎ Phone", color = Color.White) }, modifier = Modifier.weight(1f), colors = FilterChipDefaults.filterChipColors(containerColor = authField, selectedContainerColor = RoyalBlue, labelColor = Color.White, selectedLabelColor = Color.White))
             }
         }
         Spacer(Modifier.height(if (!isSignUp) 4.dp else 10.dp))
@@ -742,7 +737,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             value = password, onValueChange = { password = it },
             label = { Text(if (isSignUp) "Password" else "Password") },
             placeholder = { Text(if (isSignUp) "Create a password (8+ characters)" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 24.dp else 14.dp), textStyle = LocalTextStyle.current.copy(color = if (!isSignUp) authText else MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 24.dp else 14.dp), textStyle = LocalTextStyle.current.copy(color = authText),
             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = authMuted) },
             trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) { Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (showPassword) "Hide password" else "Show password", tint = authMuted) } },
             visualTransformation = if (showPassword) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
@@ -1075,7 +1070,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
             },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = if (!isSignUp) Color(0xFF087BFF) else MaterialTheme.colorScheme.primary),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF087BFF)),
             shape = RoundedCornerShape(28.dp)
         ) {
             Text(if (busy) "Please wait..." else if (usePhone && isSignUp && !phoneOtpSent) "Send OTP" else if (usePhone && isSignUp && phoneOtpSent) "Verify OTP & Sign Up" else if (isSignUp) "Sign Up" else "Sign In")
@@ -1128,9 +1123,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (isSignUp) "Already have an account? " else "Don't have an account? ", color = if (!isSignUp) Color.White else MaterialTheme.colorScheme.onSurface)
+            Text(if (isSignUp) "Already have an account? " else "Don't have an account? ", color = Color.White)
             TextButton(onClick = { isSignUp = !isSignUp; message = "" }, contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                Text(if (isSignUp) "Sign In" else "Create Account", color = if (!isSignUp) authCyan else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Text(if (isSignUp) "Sign In" else "Create Account", color = authCyan, fontWeight = FontWeight.SemiBold)
             }
         }
         if (!isSignUp && usePhone && !phoneResetMode) {
