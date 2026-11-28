@@ -2311,7 +2311,9 @@ fun StoriesStrip(uid: String, displayName: String) {
             Card(
                 onClick = { showCreate = true },
                 modifier = Modifier.width(116.dp).fillMaxHeight(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(1.dp, Color(0xFF27B9F4)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))
             ) {
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -2640,13 +2642,15 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
             userReg.remove()
         }
     }
-    Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight()) {
-        Box(Modifier.fillMaxSize()) {
+    Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight(),
+        shape = RoundedCornerShape(22.dp), border = BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFF12D4F5), Color(0xFF8A2BE2), Color(0xFFFFA51E))),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))) {
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) {
             AsyncImage(model = secureStoryUrl, contentDescription = "Story",
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(42.dp),
-                shape = CircleShape, color = RoyalBlue, border = BorderStroke(2.dp, Color.White)
+                shape = CircleShape, color = RoyalBlue, border = BorderStroke(3.dp, Brush.linearGradient(listOf(Color.Cyan, Color.Magenta, Color(0xFFFFA51E))))
             ) {
                 if (profilePhotoUrl.isNotBlank()) AsyncImage(model = profilePhotoUrl,
                     contentDescription = "Story author profile photo",
@@ -3275,7 +3279,10 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             .addSnapshotListener { snapshot, _ -> if (snapshot != null) commentCount = snapshot.size() }
         onDispose { likeListener.remove(); commentsListener.remove() }
     }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
+    Card(Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Color(0xFF173D60)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF06182B), contentColor = Color.White)) {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
