@@ -2643,7 +2643,7 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
         }
     }
     Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight(),
-        shape = RoundedCornerShape(22.dp), border = BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFF12D4F5), Color(0xFF8A2BE2), Color(0xFFFFA51E))),
+        shape = RoundedCornerShape(22.dp), border = BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFF12D4F5), Color(0xFF8A2BE2), Color(0xFFFFA51E)))),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))) {
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) {
             AsyncImage(model = secureStoryUrl, contentDescription = "Story",
