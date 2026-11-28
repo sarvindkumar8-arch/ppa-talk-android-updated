@@ -1417,7 +1417,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                         }
                     }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                HorizontalDivider(color = Color(0xFF284A68))
                 Row(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -2092,7 +2092,7 @@ fun HomeFeed(
             ownerRegistrations.values.forEach { it.remove() }
         }
     }
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+    LazyColumn(modifier.fillMaxSize().background(Color(0xFF06182B)), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             HomeComposerCard(
                 uid = currentUid,
@@ -2103,7 +2103,7 @@ fun HomeFeed(
             )
         }
         item {
-            StoriesStrip(uid = currentUid, displayName = displayName)
+            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0C2238)).padding(12.dp)) { StoriesStrip(uid = currentUid, displayName = displayName) }
         }
         if (reelUploadStatus.isNotBlank()) {
             item {
@@ -2142,10 +2142,12 @@ fun HomeFeed(
             }
         }
         item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("PPA CONNECT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(Modifier.weight(1f))
-                Text("For You", color = RoyalBlue, style = MaterialTheme.typography.labelMedium)
+                Surface(shape = CircleShape, color = Color(0xFF102D49)) {
+                    Text("For You", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = Color(0xFF35C5E5), style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
         if (loading) item { CircularProgressIndicator() }
@@ -2196,15 +2198,17 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onCreatePhoto: () ->
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Color(0xFF234C72)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(42.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = Color(0xFF173650),
                     onClick = onOpenProfile
                 ) {
                     if (profilePhotoUrl.isNotBlank()) {
@@ -2227,26 +2231,26 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onCreatePhoto: () ->
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.background,
+                    color = Color(0xFF102D49),
                     onClick = onCreatePost
                 ) {
-                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = Color(0xFFB9CCDF))
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 TextButton(onClick = onCreatePhoto) {
-                    Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue)
+                    Icon(Icons.Default.Photo, contentDescription = null, tint = Color(0xFF36C5E5))
                     Spacer(Modifier.width(5.dp))
                     Text("Photo")
                 }
                 TextButton(onClick = onCreateVideo) {
-                    Icon(Icons.Default.VideoCall, contentDescription = null, tint = Orange)
+                    Icon(Icons.Default.VideoCall, contentDescription = null, tint = Color(0xFFFFA51E))
                     Spacer(Modifier.width(5.dp))
                     Text("Video")
                 }
                 TextButton(onClick = onCreatePost) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = RoyalBlue)
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF36C5E5))
                     Spacer(Modifier.width(5.dp))
                     Text("Write")
                 }
