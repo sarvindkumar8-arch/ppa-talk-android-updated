@@ -2303,10 +2303,9 @@ fun StoriesStrip(uid: String, displayName: String) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(210.dp).horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().height(178.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Card(
@@ -3278,7 +3277,7 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
     }
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
         Column(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(38.dp), shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant, onClick = onOpenAuthorProfile
@@ -3304,10 +3303,10 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     TextButton(onClick = onOpenAuthorProfile, contentPadding = PaddingValues(0.dp)) {
-                        Text(post.authorName, fontWeight = FontWeight.SemiBold)
+                        Text(post.authorName, fontWeight = FontWeight.SemiBold, color = Color.White)
                     }
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9CCDF))
                 }
                 if (post.uid != currentUid && post.postType == "reel") {
                     OutlinedButton(onClick = onOpenAuthorProfile, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
