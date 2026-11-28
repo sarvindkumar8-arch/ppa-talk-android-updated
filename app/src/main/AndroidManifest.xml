@@ -14,7 +14,7 @@
 <uses-permission android:name="android.permission.CAMERA"/>
 <uses-feature android:name="android.hardware.camera" android:required="false"/>
 <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-<application android:name=".PpaTalkApplication" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="PPA Talk" android:icon="@drawable/ppa_talk_launcher" android:roundIcon="@drawable/ppa_talk_launcher" android:allowBackup="false" android:supportsRtl="true">
+<application android:name=".PpaTalkApplication" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="PPA Connect" android:icon="@drawable/ppa_talk_launcher" android:roundIcon="@drawable/ppa_talk_launcher" android:allowBackup="false" android:supportsRtl="true">
 <activity android:name=".MainActivity" android:exported="true">
 <intent-filter>
 <action android:name="android.intent.action.MAIN"/>
