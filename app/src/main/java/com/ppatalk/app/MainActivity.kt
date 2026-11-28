@@ -2094,6 +2094,11 @@ fun HomeFeed(
     }
     LazyColumn(modifier.fillMaxSize().background(Color(0xFF06182B)), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0C2238)).padding(12.dp)) {
+                StoriesStrip(uid = currentUid, displayName = displayName)
+            }
+        }
+        item {
             HomeComposerCard(
                 uid = currentUid,
                 onCreatePost = onCreatePost,
@@ -2101,9 +2106,6 @@ fun HomeFeed(
                 onCreateVideo = onCreateVideo,
                 onOpenProfile = onOpenProfile
             )
-        }
-        item {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0C2238)).padding(12.dp)) { StoriesStrip(uid = currentUid, displayName = displayName) }
         }
         if (reelUploadStatus.isNotBlank()) {
             item {
@@ -2138,15 +2140,6 @@ fun HomeFeed(
                         Spacer(Modifier.height(7.dp))
                         LinearProgressIndicator(progress = { reelUploadProgress / 100f }, modifier = Modifier.fillMaxWidth())
                     }
-                }
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("PPA CONNECT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                Spacer(Modifier.weight(1f))
-                Surface(shape = CircleShape, color = Color(0xFF102D49)) {
-                    Text("For You", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = Color(0xFF35C5E5), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
