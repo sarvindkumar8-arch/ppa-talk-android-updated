@@ -65,7 +65,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -318,16 +317,7 @@ fun PPATalkApp() {
     MaterialTheme(colorScheme = if (isDarkMode) darkColors else lightColors) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (user == null) {
-                var authEntry by remember { mutableStateOf("splash") }
-                LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(1400)
-                    authEntry = "welcome"
-                }
-                when (authEntry) {
-                    "splash" -> PpaConnectSplash()
-                    "welcome" -> PpaConnectWelcome(onLogin = { authEntry = "login" }, onCreate = { authEntry = "signup" })
-                    else -> AuthScreen(initialIsSignUp = authEntry == "signup", onBackToWelcome = { authEntry = "welcome" }, onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
-                }
+                AuthScreen(onAuthenticated = { user = FirebaseAuth.getInstance().currentUser })
             } else {
                 MainSocialApp(
                     uid = user!!.uid,
@@ -375,104 +365,10 @@ private fun finishPhoneSignup(
         .addOnFailureListener { onResult(false, it.localizedMessage ?: "OTP verification failed.") }
 }
 
-@Composable
-private fun PpaConnectSplash() {
-    androidx.compose.foundation.Image(
-        painter = androidx.compose.ui.res.painterResource(
-            id = R.drawable.ppa_splash_art
-        ),
-        contentDescription = "PPA CONNECT splash screen",
-        modifier = Modifier.fillMaxSize(),
-        contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
-    )
-}
-
-@Composable
-private fun PpaConnectWelcome(onLogin: () -> Unit, onCreate: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color.White)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = androidx.compose.ui.text.buildAnnotatedString {
-                    pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFF123B78)))
-                    append("PPA ")
-                    pop()
-                    pushStyle(androidx.compose.ui.text.SpanStyle(color = Orange))
-                    append("CONNECT")
-                    pop()
-                },
-                fontSize = 30.sp,
-                fontWeight = FontWeight.ExtraBold,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-            )
-
-            Text(
-                "Create. Connect. Share.",
-                color = Color(0xFF182238),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(id = R.drawable.ppa_welcome_community),
-                contentDescription = "Friends sharing moments on PPA CONNECT",
-                modifier = Modifier.fillMaxWidth().height(290.dp),
-                contentScale = androidx.compose.ui.layout.ContentScale.Fit
-            )
-
-            Text(
-                "Connect with friends, share your moments and be part of our community.",
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                color = Color(0xFF172033),
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Button(
-                onClick = onLogin,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF0878F9),
-                    contentColor = Color.White
-                )
-            ) {
-                Text("Sign In", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            }
-
-            OutlinedButton(
-                onClick = onCreate,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(2.dp, Orange),
-                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White,
-                    contentColor = Color(0xFF172033)
-                )
-            ) {
-                Text("Create Account", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            }
-
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {}, onAuthenticated: () -> Unit) {
-    var isSignUp by remember { mutableStateOf(initialIsSignUp) }
+fun AuthScreen(onAuthenticated: () -> Unit) {
+    var isSignUp by remember { mutableStateOf(false) }
     var usePhone by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -480,7 +376,6 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
     var countryCode by remember { mutableStateOf("+91") }
     var countryMenuExpanded by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var phoneVerificationId by remember { mutableStateOf<String?>(null) }
@@ -597,86 +492,47 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         }
     }
 
-    val authNavy = Color(0xFF07182D)
-    val authField = Color(0xFF102A46)
-    val authText = Color(0xFFF3F7FC)
-    val authMuted = Color(0xFFB8C7D9)
-    val authCyan = Color(0xFF22D3EE)
-    // Unified dark PPA CONNECT theme for both Sign In and Create Account screens.
     val authFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = authText, unfocusedTextColor = authText,
-        focusedPlaceholderColor = authMuted, unfocusedPlaceholderColor = authMuted,
-        disabledTextColor = authMuted, cursorColor = authCyan,
-        focusedBorderColor = authCyan, unfocusedBorderColor = Color(0xFF54718D),
-        focusedLabelColor = authCyan, unfocusedLabelColor = authMuted,
-        focusedContainerColor = authField, unfocusedContainerColor = authField
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        focusedPlaceholderColor = Color(0xFF65676B),
+        unfocusedPlaceholderColor = Color(0xFF65676B),
+        disabledTextColor = Color(0xFF65676B),
+        cursorColor = RoyalBlue,
+        focusedBorderColor = RoyalBlue,
+        unfocusedBorderColor = Color(0xFFCED0D4),
+        focusedLabelColor = RoyalBlue,
+        unfocusedLabelColor = Color(0xFF65676B),
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface
     )
 
     Column(
-        modifier = Modifier.fillMaxSize()
-            .background(authNavy)
-            .padding(horizontal = 22.dp, vertical = 18.dp).imePadding().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize().padding(24.dp).imePadding().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (isSignUp) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBackToWelcome, enabled = !busy) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = authCyan)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Back", color = authCyan)
-                }
-                Spacer(Modifier.weight(1f))
-            }
-            Box(Modifier.size(66.dp).background(RoyalBlue, CircleShape), contentAlignment = Alignment.Center) {
-                Text("P", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold)
-            }
-            Spacer(Modifier.height(10.dp))
-        } else {
-            Spacer(Modifier.height(6.dp))
-        }
-        if (!isSignUp) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("PPA ", style = MaterialTheme.typography.headlineMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text("CONNECT", style = MaterialTheme.typography.headlineMedium.copy(
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFFFD21F), Color(0xFFFF8A00)))
-                ), fontWeight = FontWeight.ExtraBold)
-            }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("PPA ", style = MaterialTheme.typography.headlineMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text("CONNECT", style = MaterialTheme.typography.headlineMedium.copy(
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFFFD21F), Color(0xFFFF8A00)))
-                ), fontWeight = FontWeight.ExtraBold)
-            }
-        }
-        Text("Create. Connect. Share.", style = MaterialTheme.typography.bodyLarge.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Color.White, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(if (!isSignUp) 12.dp else 26.dp))
-        Text(if (isSignUp) "Create Account" else "Sign In",
-            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color.White)
-        Text(if (isSignUp) "Join PPA CONNECT in a few steps." else "Welcome back! Sign in to continue.",
-            style = MaterialTheme.typography.bodyMedium, color = authMuted)
-        Spacer(Modifier.height(if (!isSignUp) 14.dp else 16.dp))
+        Text("PPA CONNECT", style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.ExtraBold, color = RoyalBlue)
+        Text("Create. Connect. Share.", color = Orange)
+        Spacer(Modifier.height(24.dp))
+        Text(if (isSignUp) "Create your account" else "Welcome back",
+            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
 
-        if (isSignUp) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
-                    label = { Text("✉ Email", color = Color.White) }, modifier = Modifier.weight(1f), colors = FilterChipDefaults.filterChipColors(containerColor = authField, selectedContainerColor = RoyalBlue, labelColor = Color.White, selectedLabelColor = Color.White))
-                FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
-                    label = { Text("☎ Phone", color = Color.White) }, modifier = Modifier.weight(1f), colors = FilterChipDefaults.filterChipColors(containerColor = authField, selectedContainerColor = RoyalBlue, labelColor = Color.White, selectedLabelColor = Color.White))
-            }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !usePhone, onClick = { usePhone = false; message = "" },
+                label = { Text("Email") }, modifier = Modifier.weight(1f))
+            FilterChip(selected = usePhone, onClick = { usePhone = true; message = "" },
+                label = { Text("Mobile") }, modifier = Modifier.weight(1f))
         }
-        Spacer(Modifier.height(if (!isSignUp) 4.dp else 10.dp))
+        Spacer(Modifier.height(10.dp))
 
         if (isSignUp) {
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
-                label = { Text("Full Name") }, placeholder = { Text("Enter your full name") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                textStyle = LocalTextStyle.current.copy(color = authText),
-                shape = RoundedCornerShape(14.dp), colors = authFieldColors
+                label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(),
+                singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface), colors = authFieldColors
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -706,15 +562,14 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 value = phoneNumber,
                 onValueChange = { phoneNumber = it.filter(Char::isDigit).take(14) },
                 label = { Text("Mobile number") }, placeholder = { Text("Enter mobile number") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = authText),
+                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors
             )
         } else {
             OutlinedTextField(
                 value = email, onValueChange = { email = it.trim() },
-                label = { Text(if (!isSignUp && !usePhone) "Email or Username" else "Email Address") }, placeholder = { Text(if (!isSignUp && !usePhone) "Email or Username" else "you@example.com") }, modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = authMuted) },
-                singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 24.dp else 14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(),
+                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 colors = authFieldColors
             )
         }
@@ -733,12 +588,10 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         if (!phoneResetMode && (!usePhone || !isSignUp || phoneOtpSent)) {
         OutlinedTextField(
             value = password, onValueChange = { password = it },
-            label = { Text(if (isSignUp) "Password" else "Password") },
-            placeholder = { Text(if (isSignUp) "Create a password (8+ characters)" else "Enter your password") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(if (!isSignUp) 24.dp else 14.dp), textStyle = LocalTextStyle.current.copy(color = authText),
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = authMuted) },
-            trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) { Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (showPassword) "Hide password" else "Show password", tint = authMuted) } },
-            visualTransformation = if (showPassword) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+            label = { Text("Password") },
+            placeholder = { Text(if (isSignUp) "At least 8 characters" else "Enter your password") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+            visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authFieldColors
         )
@@ -760,26 +613,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = authFieldColors
             )
         }
-        if (!isSignUp && !usePhone && !phoneResetMode) {
-            TextButton(
-                enabled = !busy,
-                onClick = {
-                    message = ""
-                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-                        message = "Enter your email address first."
-                    } else {
-                        busy = true
-                        authSendPasswordReset(email.trim()) { success, detail ->
-                            busy = false
-                            message = detail
-                        }
-                    }
-                },
-                modifier = Modifier.align(Alignment.End),
-                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
-            ) { Text("Forgot Password?", color = authCyan) }
-        }
-        Spacer(Modifier.height(if (!isSignUp) 10.dp else 14.dp))
+        Spacer(Modifier.height(14.dp))
 
         if (phoneResetMode) {
             Button(
@@ -1067,64 +901,23 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 }
             },
             enabled = !busy,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF087BFF)),
-            shape = RoundedCornerShape(28.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(if (busy) "Please wait..." else if (usePhone && isSignUp && !phoneOtpSent) "Send OTP" else if (usePhone && isSignUp && phoneOtpSent) "Verify OTP & Sign Up" else if (isSignUp) "Sign Up" else "Sign In")
         }
         }
 
-        if (!isSignUp && !usePhone && !phoneResetMode) {
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Divider(Modifier.weight(1f), color = Color(0xFF54718D))
-                Text("Or continue with", color = authMuted, modifier = Modifier.padding(horizontal = 12.dp))
-                Divider(Modifier.weight(1f), color = Color(0xFF54718D))
-            }
-            Spacer(Modifier.height(6.dp))
-            OutlinedButton(
-                onClick = { usePhone = true; message = "" },
-                enabled = !busy, modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color(0xFF54718D))
-            ) {
-                Icon(Icons.Default.Phone, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(10.dp))
-                Text("Sign in with Phone", color = Color.White)
-            }
-        }
         OutlinedButton(
             onClick = {
                 message = ""
                 busy = true
                 googleSignInLauncher.launch(googleSignInClient.signInIntent)
             },
-            enabled = !busy, modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            border = BorderStroke(1.dp, Color(0xFF54718D))
-        ) {
-            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "G",
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.Bold,
-                    style = androidx.compose.ui.text.TextStyle(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(Color(0xFF4285F4), Color(0xFFEA4335), Color(0xFFFBBC05), Color(0xFF34A853), Color(0xFF4285F4))
-                        )
-                    )
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            Text(if (busy) "Please wait..." else "Continue with Google")
-        }
+            enabled = !busy, modifier = Modifier.fillMaxWidth()
+        ) { Text(if (busy) "Please wait..." else "Continue with Google") }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (isSignUp) "Already have an account? " else "Don't have an account? ", color = Color.White)
-            TextButton(onClick = { isSignUp = !isSignUp; message = "" }, contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                Text(if (isSignUp) "Sign In" else "Create Account", color = authCyan, fontWeight = FontWeight.SemiBold)
-            }
+        TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
+            Text(if (isSignUp) "Already have an account? Sign In" else "Create account")
         }
         if (!isSignUp && usePhone && !phoneResetMode) {
             TextButton(enabled = !busy, onClick = {
@@ -1137,48 +930,24 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 message = "Enter your registered mobile number to reset your password."
             }) { Text("Forgot password?") }
         }
-        if (message.startsWith("Verification email sent")) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.size(76.dp).background(RoyalBlue.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.MarkEmailRead, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(44.dp))
-                    }
-                    Text("Verify Your Email", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("We've sent a verification link to your email address.",
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    if (email.isNotBlank()) Text(email, color = RoyalBlue, fontWeight = FontWeight.SemiBold,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    Text("Please check your inbox and spam folder, then tap the link to verify your account.",
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = {
-                        try {
-                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_APP_EMAIL))
-                        } catch (_: Exception) {
-                            message = "Email app unavailable. Open your mailbox manually and tap the verification link."
+        if (!isSignUp && !usePhone && !phoneResetMode) {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    message = ""
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                        message = "Enter your email address first."
+                    } else {
+                        busy = true
+                        authSendPasswordReset(email.trim()) { success, detail ->
+                            busy = false
+                            message = detail
                         }
-                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
-                        Text("Open Email App")
-                    }
-                    OutlinedButton(onClick = {
-                        val pending = FirebaseAuth.getInstance().currentUser
-                        if (pending != null && !pending.isEmailVerified) {
-                            busy = true
-                            pending.sendEmailVerification().addOnCompleteListener { task ->
-                                busy = false
-                                message = if (task.isSuccessful) "Verification email sent again. Check your inbox and spam folder."
-                                    else task.exception?.localizedMessage ?: "Could not resend verification email."
-                            }
-                        } else message = "Please sign up again or sign in to request a verification link."
-                    }, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp),
-                        border = BorderStroke(2.dp, Orange)) {
-                        Text(if (busy) "Please wait..." else "Resend Link", color = Orange)
                     }
                 }
-            }
-        } else if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) RoyalBlue else MaterialTheme.colorScheme.error)
+            ) { Text("Forgot password?") }
+        }
+        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Password reset link sent")) RoyalBlue else MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
         Text("Public community • Be respectful and stay safe",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1372,56 +1141,71 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (activeChatUid == null) {
+                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF06182B),
-                        titleContentColor = Color.White,
-                        actionIconContentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = RoyalBlue,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurface
                     ),
                     title = {
                         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("PPA ", color = Color.White, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineSmall)
-                                Text("CONNECT", color = Orange, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineSmall)
-                            }
-                            Text("Create. Connect. Share.", color = Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("PPA Talk", color = RoyalBlue, fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.headlineSmall)
+                            Text("Create. Connect. Share.", color = Orange,
+                                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     },
                     actions = {
-                        IconButton(onClick = { navigateTo("Create") }) { Icon(Icons.Default.Add, contentDescription = "Create", modifier = Modifier.size(30.dp)) }
-                        IconButton(onClick = { navigateTo("Search") }) { Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(28.dp)) }
-                        IconButton(onClick = { navigateTo("Notifications") }) { Icon(Icons.Default.Notifications, contentDescription = "Notifications", modifier = Modifier.size(28.dp)) }
+                        IconButton(onClick = { navigateTo("Search") }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search",
+                                modifier = Modifier.size(27.dp))
+                        }
+                        IconButton(onClick = { navigateTo("Messenger") }) {
+                            Surface(shape = CircleShape, color = RoyalBlue, modifier = Modifier.size(36.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Forum, contentDescription = "Messenger",
+                                        tint = Color.White, modifier = Modifier.size(21.dp))
+                                }
+                            }
+                        }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                DropdownMenuItem(text = { Text("Settings") },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = { menuExpanded = false; navigateTo("Settings") })
+                                DropdownMenuItem(text = { Text("Log out") },
+                                    leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
+                                    onClick = { menuExpanded = false; onSignOut() })
+                            }
+                        }
                     }
                 )
-                HorizontalDivider(color = Color(0xFF234C72))
-            }
-        },
-        bottomBar = {
-            if (activeChatUid == null) {
-                NavigationBar(containerColor = Color(0xFF06182B), contentColor = Color.White) {
-                    val homeTabs = listOf(
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf(
                         "Home" to Icons.Default.Home,
                         "Friends" to Icons.Default.PeopleAlt,
-                        "Messenger" to Icons.Default.Forum,
                         "Reels" to Icons.Default.PlayCircle,
+                        "Marketplace" to Icons.Default.Storefront,
                         "Notifications" to Icons.Default.Notifications,
                         "Menu" to Icons.Default.Menu
-                    )
-                    homeTabs.forEach { (label, icon) ->
-                        NavigationBarItem(
-                            selected = (selected == label) || (label == "Messenger" && selected == "Chat"),
-                            onClick = { navigateTo(label) },
-                            icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(if (label == "Messenger") "Chat" else label, maxLines = 1) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color(0xFF21C5F5),
-                                selectedTextColor = Color(0xFF21C5F5),
-                                indicatorColor = Color(0xFF123D67),
-                                unselectedIconColor = Color.White,
-                                unselectedTextColor = Color.White
-                            )
-                        )
+                    ).forEach { (label, icon) ->
+                        IconButton(onClick = { navigateTo(label) }, modifier = Modifier.weight(1f)) {
+                            Icon(icon, contentDescription = label,
+                                tint = if (selected == label) RoyalBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(25.dp))
+                        }
                     }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                 }
             }
         },
@@ -2075,12 +1859,7 @@ fun HomeFeed(
             ownerRegistrations.values.forEach { it.remove() }
         }
     }
-    LazyColumn(modifier.fillMaxSize().background(Color(0xFF06182B)), contentPadding = PaddingValues(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0C2238)).padding(6.dp)) {
-                StoriesStrip(uid = currentUid, displayName = displayName)
-            }
-        }
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         item {
             HomeComposerCard(
                 uid = currentUid,
@@ -2089,6 +1868,9 @@ fun HomeFeed(
                 onCreateVideo = onCreateVideo,
                 onOpenProfile = onOpenProfile
             )
+        }
+        item {
+            StoriesStrip(uid = currentUid, displayName = displayName)
         }
         if (reelUploadStatus.isNotBlank()) {
             item {
@@ -2124,6 +1906,13 @@ fun HomeFeed(
                         LinearProgressIndicator(progress = { reelUploadProgress / 100f }, modifier = Modifier.fillMaxWidth())
                     }
                 }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("News Feed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue)
+                Spacer(Modifier.weight(1f))
+                Text("For You", color = RoyalBlue, style = MaterialTheme.typography.labelMedium)
             }
         }
         if (loading) item { CircularProgressIndicator() }
@@ -2174,17 +1963,15 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onCreatePhoto: () ->
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, Color(0xFF234C72)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(42.dp),
                     shape = CircleShape,
-                    color = Color(0xFF173650),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     onClick = onOpenProfile
                 ) {
                     if (profilePhotoUrl.isNotBlank()) {
@@ -2207,26 +1994,26 @@ fun HomeComposerCard(uid: String, onCreatePost: () -> Unit, onCreatePhoto: () ->
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
-                    color = Color(0xFF102D49),
+                    color = MaterialTheme.colorScheme.background,
                     onClick = onCreatePost
                 ) {
-                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = Color(0xFFB9CCDF))
+                    Text("What's on your mind?", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 TextButton(onClick = onCreatePhoto) {
-                    Icon(Icons.Default.Photo, contentDescription = null, tint = Color(0xFF36C5E5))
+                    Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue)
                     Spacer(Modifier.width(5.dp))
                     Text("Photo")
                 }
                 TextButton(onClick = onCreateVideo) {
-                    Icon(Icons.Default.VideoCall, contentDescription = null, tint = Color(0xFFFFA51E))
+                    Icon(Icons.Default.VideoCall, contentDescription = null, tint = Orange)
                     Spacer(Modifier.width(5.dp))
                     Text("Video")
                 }
                 TextButton(onClick = onCreatePost) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF36C5E5))
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = RoyalBlue)
                     Spacer(Modifier.width(5.dp))
                     Text("Write")
                 }
@@ -2285,17 +2072,16 @@ fun StoriesStrip(uid: String, displayName: String) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(
-            modifier = Modifier.fillMaxWidth().height(178.dp).horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().height(210.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Card(
                 onClick = { showCreate = true },
                 modifier = Modifier.width(116.dp).fillMaxHeight(),
-                shape = RoundedCornerShape(22.dp),
-                border = BorderStroke(1.dp, Color(0xFF27B9F4)),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -2624,15 +2410,13 @@ fun StoryPreviewCard(story: Map<String, Any>, onClick: () -> Unit) {
             userReg.remove()
         }
     }
-    Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight(),
-        shape = RoundedCornerShape(22.dp), border = BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFF12D4F5), Color(0xFF8A2BE2), Color(0xFFFFA51E)))),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2238))) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) {
+    Card(onClick = onClick, modifier = Modifier.width(116.dp).fillMaxHeight()) {
+        Box(Modifier.fillMaxSize()) {
             AsyncImage(model = secureStoryUrl, contentDescription = "Story",
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(42.dp),
-                shape = CircleShape, color = RoyalBlue, border = BorderStroke(3.dp, Brush.linearGradient(listOf(Color.Cyan, Color.Magenta, Color(0xFFFFA51E))))
+                shape = CircleShape, color = RoyalBlue, border = BorderStroke(2.dp, Color.White)
             ) {
                 if (profilePhotoUrl.isNotBlank()) AsyncImage(model = profilePhotoUrl,
                     contentDescription = "Story author profile photo",
@@ -3261,12 +3045,9 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
             .addSnapshotListener { snapshot, _ -> if (snapshot != null) commentCount = snapshot.size() }
         onDispose { likeListener.remove(); commentsListener.remove() }
     }
-    Card(Modifier.fillMaxWidth().padding(horizontal = 5.dp),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, Color(0xFF173D60)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF06182B), contentColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
         Column(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(38.dp), shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant, onClick = onOpenAuthorProfile
@@ -3292,10 +3073,10 @@ fun FeedPostCard(post: FeedPost, currentUid: String, onOpenAuthorProfile: () -> 
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     TextButton(onClick = onOpenAuthorProfile, contentPadding = PaddingValues(0.dp)) {
-                        Text(post.authorName, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(post.authorName, fontWeight = FontWeight.SemiBold)
                     }
                     if (post.createdAt != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(post.createdAt),
-                        style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9CCDF))
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (post.uid != currentUid && post.postType == "reel") {
                     OutlinedButton(onClick = onOpenAuthorProfile, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
@@ -3998,3 +3779,3895 @@ fun CreatePostScreen(
                             }
                         }
                     }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("Gallery  ▾", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { gallerySelectMultiple = !gallerySelectMultiple }) {
+                            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Collections, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (gallerySelectMultiple) "Cancel multiple" else "Select multiple",
+                                    style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
+                    if (!galleryPermissionGranted) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Allow access to photos and videos to create a Reel.")
+                                Button(onClick = {
+                                    val permissions = if (Build.VERSION.SDK_INT >= 34) arrayOf(
+                                        Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO,
+                                        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                                    ) else if (Build.VERSION.SDK_INT >= 33) arrayOf(
+                                        Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO
+                                    ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                    mediaPermissionLauncher.launch(permissions)
+                                }) { Text("Allow gallery access") }
+                            }
+                        }
+                    } else if (deviceGalleryItems.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No photos or videos found on this device.")
+                        }
+                    } else {
+                        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(1.dp), verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            items(deviceGalleryItems.size) { index ->
+                                val item = deviceGalleryItems[index]
+                                val chosen = gallerySelectedUris.contains(item.uri.toString())
+                                Box(Modifier.fillMaxWidth().aspectRatio(0.78f).clickable {
+                                    if (gallerySelectMultiple) {
+                                        gallerySelectedUris = if (chosen) gallerySelectedUris - item.uri.toString()
+                                            else gallerySelectedUris + item.uri.toString()
+                                    } else {
+                                        selectedMedia = item.uri
+                                        mediaType = item.type
+                                        reelStage = "editor"
+                                    }
+                                }) {
+                                    AsyncImage(model = item.uri, contentDescription = "Gallery ${item.type}",
+                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                    if (item.type == "video") {
+                                        Row(Modifier.align(Alignment.BottomEnd).padding(5.dp)
+                                            .clip(RoundedCornerShape(5.dp)).background(Color.Black.copy(alpha = 0.65f))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White,
+                                                modifier = Modifier.size(14.dp))
+                                            Text(String.format("%d:%02d", item.durationMs / 60000, (item.durationMs / 1000) % 60),
+                                                color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                    if (gallerySelectMultiple) {
+                                        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(25.dp)
+                                            .clip(CircleShape).background(if (chosen) RoyalBlue else Color.Black.copy(alpha = 0.35f))
+                                            .border(1.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                                            if (chosen) Icon(Icons.Default.Check, contentDescription = "Selected",
+                                                tint = Color.White, modifier = Modifier.size(17.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (gallerySelectMultiple) {
+                            Button(onClick = {
+                                val first = deviceGalleryItems.firstOrNull { gallerySelectedUris.contains(it.uri.toString()) }
+                                if (first != null) {
+                                    selectedMedia = first.uri
+                                    mediaType = first.type
+                                    reelStage = "editor"
+                                }
+                            }, enabled = gallerySelectedUris.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text("Next (${gallerySelectedUris.size})")
+                            }
+                        }
+                    }
+                    if (message.isNotBlank()) Text(message, modifier = Modifier.padding(10.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = {
+                if (initialPicker == "media") onClose()
+                else { postText = ""; selectedMedia = null; mediaType = ""; message = "" }
+            }) {
+                Icon(Icons.Default.Close, contentDescription = "Close")
+            }
+            Text(if (mediaType == "video" || isReelComposer) {
+                if (reelStage == "settings") "Reel Settings" else "Create Reel"
+            } else "New post", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            if (mediaType == "video" && reelStage == "settings") {
+                TextButton(onClick = { reelStage = "editor" }) { Text("Back") }
+            } else TextButton(onClick = { showReelCreator = true }, enabled = !busy) {
+                Icon(Icons.Default.PlayCircle, contentDescription = "Create Reel", tint = RoyalBlue)
+                Text("Reel", color = RoyalBlue)
+            }
+            if (!(mediaType == "video" && reelStage == "settings")) {
+                TextButton(enabled = !busy && (postText.isNotBlank() || selectedMedia != null) && postText.trim().length <= 5000,
+                    onClick = {
+                        if (mediaType == "video") reelStage = "settings"
+                        else message = "Add media or caption, then Share."
+                    }) { Text("Next", color = RoyalBlue) }
+            }
+        }
+        HorizontalDivider()
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(52.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Icon(Icons.Default.AccountCircle, contentDescription = "Your profile", tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("♫  Music", "♙  Tag/collaborate", "⌖  Location", "☺  Feeling").forEach { item ->
+                SuggestionChip(onClick = { message = "$item option coming soon." }, label = { Text(item) })
+            }
+        }
+        OutlinedTextField(
+            value = postText, onValueChange = { postText = it; success = false; message = "" },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(horizontal = 18.dp),
+            placeholder = { Text("What's on your mind?", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            maxLines = 12, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color.Transparent, focusedBorderColor = Color.Transparent)
+        )
+        if (mediaType == "video" && reelStage == "settings") {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Describe your reel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                OutlinedTextField(value = postText, onValueChange = { postText = it },
+                    modifier = Modifier.fillMaxWidth(), placeholder = { Text("Write a caption and add hashtags...") },
+                    minLines = 3, maxLines = 6)
+                Text("Cover", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(width = 76.dp, height = 112.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black),
+                        contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.PlayCircleFilled, contentDescription = "Reel cover preview", tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("First video frame will be used as the cover.")
+                        Text("Custom cover editing can be added in a later update.", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                HorizontalDivider()
+                Text("Audience", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Public", "Friends", "Private").forEach { audience ->
+                        FilterChip(selected = reelAudience == audience, onClick = { reelAudience = audience },
+                            label = { Text(audience) })
+                    }
+                }
+                OutlinedTextField(value = reelLocation, onValueChange = { reelLocation = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Location (optional)") })
+                OutlinedTextField(value = reelTags, onValueChange = { reelTags = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Tag people (usernames, optional)") })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = reelShareToStory, onCheckedChange = { reelShareToStory = it })
+                    Text("Also share to my Story")
+                }
+                Text("More settings", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Your Reel will appear in your profile and the Reels feed.", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else selectedMedia?.let { uri ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(if (mediaType == "video") "Video selected" else "Photo preview", color = RoyalBlue,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                TextButton(onClick = { selectedMedia = null; mediaType = ""; selectedPhotoFilter = "Original"; photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f }) { Text("Remove") }
+            }
+            if (mediaType == "image") {
+                AsyncImage(
+                    model = uri, contentDescription = "Full photo preview",
+                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = if (selectedPhotoFilter == "Original") null else
+                        androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                            androidx.compose.ui.graphics.ColorMatrix(photoFilterMatrix(selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation))
+                        )
+                )
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("AI Enhance", "AI Portrait", "BG Replace", "BG Blur", "Erase", "Filters", "Adjust", "Crop").forEach { tool ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(82.dp).clickable {
+                                when (tool) {
+                                    "AI Enhance" -> {
+                                        selectedPhotoTool = "AI Studio"
+                                        selectedPhotoFilter = "Vivid"
+                                        photoBrightness = 0.08f; photoContrast = 1.15f; photoSaturation = 1.18f
+                                    }
+                                    "Filters" -> selectedPhotoTool = "Filters"
+                                    "Adjust" -> selectedPhotoTool = "Adjust"
+                                    "Crop" -> { showPostCropDialog = true; message = "" }
+                                    else -> {
+                                        selectedPhotoTool = "AI Studio"
+                                        message = when (tool) {
+                                            "AI Portrait" -> "AI Portrait — Coming soon!"
+                                            "BG Replace" -> "AI Background Replace — Coming soon!"
+                                            "BG Blur" -> "AI Background Blur — Coming soon!"
+                                            "Erase" -> "AI Object Eraser — Coming soon!"
+                                            else -> ""
+                                        }
+                                    }
+                                }
+                            }.padding(vertical = 6.dp)) {
+                            Icon(when (tool) {
+                                "AI Enhance" -> Icons.Default.AutoAwesome
+                                "AI Portrait" -> Icons.Default.Face
+                                "BG Replace" -> Icons.Default.Image
+                                "BG Blur" -> Icons.Default.BlurOn
+                                "Erase" -> Icons.Default.AutoFixOff
+                                "Filters" -> Icons.Default.FilterVintage
+                                "Adjust" -> Icons.Default.Tune
+                                else -> Icons.Default.Crop
+                            }, contentDescription = tool, tint = if (tool == "AI Enhance") RoyalBlue else MaterialTheme.colorScheme.onSurface)
+                            Text(tool, style = MaterialTheme.typography.labelSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                }
+                if (selectedPhotoTool == "AI Studio") {
+                    Text("AI Enhance applies smart on-device adjustments. Portrait, background and object tools need a connected AI service.",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
+                } else if (selectedPhotoTool == "Filters") {
+                    Text("Choose a filter", modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf("Original", "Natural", "Cinematic", "Portrait", "Vivid", "Warm", "Cool", "B&W", "Soft", "Drama").forEach { filter ->
+                            Column(
+                                modifier = Modifier.width(78.dp).clickable { selectedPhotoFilter = filter },
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = "$filter filter preview",
+                                    modifier = Modifier.fillMaxWidth().height(68.dp),
+                                    contentScale = ContentScale.Crop,
+                                    colorFilter = if (filter == "Original") null else
+                                        androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                            androidx.compose.ui.graphics.ColorMatrix(photoFilterMatrix(filter, photoBrightness, photoContrast, photoSaturation))
+                                        )
+                                )
+                                Text(
+                                    filter,
+                                    modifier = Modifier.padding(top = 5.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (selectedPhotoFilter == filter) RoyalBlue else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (selectedPhotoFilter == filter) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text("Photo adjustments", modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Text("Brightness  ${(photoBrightness * 100).toInt()}")
+                        Slider(value = photoBrightness, onValueChange = { photoBrightness = it }, valueRange = -0.5f..0.5f)
+                        Text("Contrast  ${(photoContrast * 100).toInt()}")
+                        Slider(value = photoContrast, onValueChange = { photoContrast = it }, valueRange = 0.5f..1.8f)
+                        Text("Saturation  ${(photoSaturation * 100).toInt()}")
+                        Slider(value = photoSaturation, onValueChange = { photoSaturation = it }, valueRange = 0f..2f)
+                        TextButton(onClick = { photoBrightness = 0f; photoContrast = 1f; photoSaturation = 1f }) {
+                            Text("Reset adjustments")
+                        }
+                    }
+                }
+                Text("Edits and filters will be applied to the uploaded photo.",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Text("Video editor", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(9f / 16f)
+                    .clip(RoundedCornerShape(16.dp)).background(Color.Black)) {
+                    AndroidView(
+                        factory = { viewContext ->
+                            VideoView(viewContext).apply {
+                                setVideoURI(uri)
+                                setOnPreparedListener { player ->
+                                    player.isLooping = true
+                                    videoPlayer = player
+                                    player.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                                    start()
+                                }
+                            }
+                        },
+                        update = { view ->
+                            videoPlayer?.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                            if (!view.isPlaying) view.start()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly) {
+                    listOf("Audio", "Edit", "Effects", "Text", "Stickers").forEach { tool ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(64.dp).clickable { reelTool = tool }) {
+                            Icon(when (tool) {
+                                "Audio" -> Icons.Default.MusicNote
+                                "Edit" -> Icons.Default.ContentCut
+                                "Effects" -> Icons.Default.AutoAwesome
+                                "Text" -> Icons.Default.TextFields
+                                else -> Icons.Default.EmojiEmotions
+                            }, contentDescription = tool,
+                                tint = if (reelTool == tool) RoyalBlue else MaterialTheme.colorScheme.onSurface)
+                            Text(tool, style = MaterialTheme.typography.labelSmall,
+                                color = if (reelTool == tool) RoyalBlue else MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+                when (reelTool) {
+                    "Audio" -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Audio", fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = videoMuted, onCheckedChange = {
+                                videoMuted = it
+                                videoPlayer?.setVolume(if (it) 0f else 1f, if (it) 0f else 1f)
+                            })
+                            Text("Mute original video audio")
+                        }
+                        Text("Music library and licensed tracks are not connected yet.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    "Edit" -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Video preview and original clip", fontWeight = FontWeight.SemiBold)
+                        Text("The selected video is kept intact in this version. Clip trimming and speed controls are not yet available.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    "Effects" -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Choose an effect style", fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Original", "Warm", "Cool", "B&W", "Vivid").forEach { effect ->
+                                FilterChip(selected = reelEffect == effect, onClick = { reelEffect = effect }, label = { Text(effect) })
+                            }
+                        }
+                        Text("Effect selection is a preview preference; export processing is not enabled yet.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    "Text" -> OutlinedTextField(value = reelOverlayText, onValueChange = { reelOverlayText = it },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        label = { Text("Text overlay") }, placeholder = { Text("Add text to your Reel") })
+                    "Stickers" -> Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("❤️", "😂", "🔥", "😍", "👏", "🎉").forEach { sticker ->
+                            AssistChip(onClick = { reelSticker = sticker }, label = { Text(sticker) })
+                        }
+                    }
+                }
+                if (reelOverlayText.isNotBlank() || reelSticker.isNotBlank()) {
+                    Text("Overlay preview: $reelOverlayText $reelSticker", modifier = Modifier.padding(horizontal = 16.dp),
+                        color = RoyalBlue, fontWeight = FontWeight.SemiBold)
+                }
+                Text("Tap Next to add caption, cover and sharing settings.",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.weight(1f), enabled = !busy) {
+                Icon(Icons.Default.Photo, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Gallery")
+            }
+            OutlinedButton(onClick = { message = "GIF picker coming soon." }, modifier = Modifier.weight(1f), enabled = !busy) {
+                Icon(Icons.Default.Gif, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("GIF")
+            }
+            OutlinedButton(onClick = { videoPicker.launch("video/*") }, modifier = Modifier.weight(1f), enabled = !busy) {
+                Icon(Icons.Default.Videocam, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Live")
+            }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(onClick = { message = "Audience: Public" }, label = { Text("🌐 Public") })
+            AssistChip(onClick = { message = "Instagram sharing option coming soon." }, label = { Text("◎ Instagram Off") })
+            AssistChip(onClick = { message = "Threads sharing option coming soon." }, label = { Text("@ Threads Off") })
+        }
+        Button(
+            enabled = !busy && (postText.isNotBlank() || selectedMedia != null) &&
+                postText.trim().length <= 5000 && (mediaType != "video" || reelStage == "settings"),
+            onClick = {
+                busy = true
+                message = ""
+                success = false
+                val db = FirebaseFirestore.getInstance()
+                fun savePost(mediaUrl: String, storagePath: String = "") {
+                    val post = hashMapOf(
+                        "uid" to uid,
+                        "authorName" to displayName.trim().ifEmpty { uid },
+
+                        "text" to postText.trim(),
+                        "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "",
+                        "storagePath" to storagePath,
+                        "mediaType" to mediaType,
+                        "postType" to if (mediaType == "video") "reel" else "post",
+                        "audience" to if (mediaType == "video") reelAudience.lowercase() else "public",
+                        "location" to reelLocation.trim(),
+                        "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
+                        "overlayText" to reelOverlayText,
+                        "sticker" to reelSticker,
+                        "effect" to reelEffect,
+                        "originalAudioMuted" to videoMuted,
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    db.collection("posts").add(post)
+                        .addOnSuccessListener {
+                            if (mediaType == "video" && reelShareToStory) {
+                                val story = hashMapOf(
+                                    "uid" to uid, "authorName" to displayName,
+                                    "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "", "storagePath" to storagePath, "mediaType" to "video",
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                    "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
+                                )
+                                db.collection("stories").add(story)
+                            }
+                            busy = false
+                            postText = ""
+                            selectedMedia = null
+                            mediaType = ""
+                            success = true
+                            message = "Your post was published!"
+                            onPublished()
+                        }
+                        .addOnFailureListener { ex ->
+                            android.util.Log.e("PpaFeedUpload", "Firestore post document create failed", ex)
+                            busy = false
+                            val code = (ex as? com.google.firebase.firestore.FirebaseFirestoreException)?.code?.name ?: "UNKNOWN"
+                            message = "Firestore post save failed ($code): ${ex.localizedMessage ?: ex.message ?: ex.toString()}"
+                        }
+                }
+                val uri = selectedMedia
+                if (uri == null) {
+                    savePost("")
+                } else {
+                    val extension = if (mediaType == "video") "mp4" else "jpg"
+                    val folder = if (mediaType == "video") "reels" else "post_photos"
+                    val mediaRef = FirebaseStorage.getInstance().reference.child("$folder/$uid/${System.currentTimeMillis()}.$extension")
+                    try {
+                        // Persist the selected URI into app-private cache before upload. This avoids
+                        // transient gallery/provider URI permission failures across devices/accounts.
+                        val sourceUri = if (mediaType == "image" && (selectedPhotoFilter != "Original" || photoBrightness != 0f || photoContrast != 1f || photoSaturation != 1f)) {
+                            createFilteredPhotoUri(context, uri, selectedPhotoFilter, photoBrightness, photoContrast, photoSaturation) ?: uri
+                        } else uri
+                        val suffix = if (mediaType == "video") ".mp4" else ".jpg"
+                        val cachedMedia = java.io.File(context.cacheDir, "ppa_upload_${System.currentTimeMillis()}$suffix")
+                        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                            cachedMedia.outputStream().use { output -> input.copyTo(output) }
+                        } ?: throw java.io.IOException("Selected media could not be opened.")
+                        if (!cachedMedia.exists() || cachedMedia.length() <= 0L) throw java.io.IOException("Selected media file is empty.")
+                        val uploadUri = Uri.fromFile(cachedMedia)
+                        val uploadMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                            .setContentType(if (mediaType == "video") "video/mp4" else "image/jpeg")
+                            .build()
+                        message = "Uploading media…"
+                        android.util.Log.i("PpaFeedUpload", "Start upload uid=$uid type=$mediaType path=${mediaRef.path} cachedBytes=${cachedMedia.length()}")
+                        mediaRef.putFile(uploadUri, uploadMetadata)
+                            .addOnProgressListener { snapshot ->
+                                val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                                val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                                message = "Uploading media: $percent%"
+                            }
+                            .addOnSuccessListener {
+                                android.util.Log.i("PpaFeedUpload", "Storage upload succeeded path=${mediaRef.path}")
+                                cachedMedia.delete()
+                                message = "Upload complete. Publishing post…"
+                                savePost("", mediaRef.path)
+                            }
+                            .addOnFailureListener { ex ->
+                                android.util.Log.e("PpaFeedUpload", "Storage upload failed path=${mediaRef.path}", ex)
+                                cachedMedia.delete()
+                                busy = false
+                                val detail = "code=${(ex as? com.google.firebase.storage.StorageException)?.errorCode}, ${ex.localizedMessage ?: ex.message ?: ex.toString()}"
+                                message = "Storage upload failed: $detail"
+                            }
+                    } catch (ex: Exception) {
+                        android.util.Log.e("PpaFeedUpload", "Media preparation failed uid=$uid uri=$uri", ex)
+                        busy = false
+                        message = "Photo could not be prepared: ${ex.localizedMessage ?: ex.message ?: "unknown error"}"
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
+        ) { Text(if (busy) "Uploading..." else if (mediaType == "video") "Share now" else "Share") }
+        if (postText.trim().length > 5000) Text("Post must be 5,000 characters or less.", color = MaterialTheme.colorScheme.error)
+        if (message.isNotBlank()) Text(message, color = if (success) RoyalBlue else MaterialTheme.colorScheme.error)
+    }
+    if (mediaType == "video" && reelStage == "settings") {
+        Dialog(
+            onDismissRequest = { reelStage = "editor" },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { reelStage = "editor" }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back to editor")
+                        }
+                        Text("Reel Settings", modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(48.dp))
+                    }
+                    HorizontalDivider()
+                    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Box(Modifier.size(112.dp, 168.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black),
+                                contentAlignment = Alignment.Center) {
+                                AsyncImage(model = selectedMedia, contentDescription = "Reel thumbnail",
+                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                Icon(Icons.Default.PlayCircleFilled, contentDescription = null, tint = Color.White,
+                                    modifier = Modifier.size(36.dp))
+                            }
+                            OutlinedTextField(value = postText, onValueChange = { postText = it },
+                                modifier = Modifier.weight(1f).heightIn(min = 130.dp),
+                                placeholder = { Text("Describe your reel. You can also add hashtags here.") },
+                                minLines = 4, maxLines = 7)
+                        }
+                        HorizontalDivider()
+                        @Composable
+                        fun SettingRow(emoji: String, title: String, subtitle: String = "", trailing: String = "›", onClick: () -> Unit) {
+                            Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                                    if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(trailing, style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        SettingRow("➦", "Share to groups", if (reelShareToGroups) "On · Relevant suggestions" else "Off",
+                            if (reelShareToGroups) "✓" else "›") { reelShareToGroups = !reelShareToGroups }
+                        SettingRow("⌖", "Location", reelLocation.ifBlank { "Add a location" }) { reelSettingsNotice = "location" }
+                        Row(Modifier.fillMaxWidth().clickable { reelAiLabel = !reelAiLabel }
+                            .padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center) { Text("✧", style = MaterialTheme.typography.titleLarge) }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Add AI Label", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                                Text("Label realistic content made with AI.", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = reelAiLabel, onCheckedChange = { reelAiLabel = it })
+                        }
+                        Row(Modifier.fillMaxWidth().clickable { reelBoost = !reelBoost }
+                            .padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center) { Text("📣", style = MaterialTheme.typography.titleLarge) }
+                            Spacer(Modifier.width(14.dp))
+                            Text("Boost reel", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            Switch(checked = reelBoost, onCheckedChange = { reelBoost = it })
+                        }
+                        SettingRow("▤", "Add to playlist", reelPlaylist.ifBlank { "Choose a playlist" }) { reelSettingsNotice = "playlist" }
+                        SettingRow("▣", "Share to your story", if (reelShareToStory) "On · Story privacy is set to Public" else "Off · Story privacy is set to Public",
+                            if (reelShareToStory) "✓" else "›") { reelShareToStory = !reelShareToStory }
+                        SettingRow("◎", "Instagram", "Sharing as " + displayName + " · Audience is " + reelAudience + ".") { reelSettingsNotice = "instagram" }
+                        SettingRow("文", "Translate your voice with AI", "Reach viewers in more languages.") { reelSettingsNotice = "translate" }
+                        SettingRow("♟", "Tag people", "This also includes Pages · " + reelTags.ifBlank { "Add people" }) { reelSettingsNotice = "tags" }
+                        SettingRow("🛍", "Add affiliate link", reelAffiliateLink.ifBlank { "Add a product link to earn commissions" }) { reelSettingsNotice = "affiliate" }
+                        SettingRow("①", "Add a link + more features", "Some features may require eligibility", "🔒") { reelSettingsNotice = "link" }
+                        SettingRow("⚗", "A/B tests", "Compare different Reel versions") { reelSettingsNotice = "ab" }
+                        SettingRow("▤", "Monetization", "Your profile can earn") { reelSettingsNotice = "monetization" }
+                        HorizontalDivider()
+                        SettingRow("🌐", "Who can see this?", reelAudience) {
+                            reelAudience = when (reelAudience) { "Public" -> "Friends"; "Friends" -> "Private"; else -> "Public" }
+                        }
+                        SettingRow("◷", "Scheduling options", "Post now. You can not schedule this post.") { reelSettingsNotice = "schedule" }
+                        SettingRow("©", "Copyright check", "Check your Reel for potential copyright issues") { reelSettingsNotice = "copyright" }
+                        SettingRow("CC", "Closed captions", if (reelClosedCaptions) "On" else "Off",
+                            if (reelClosedCaptions) "✓" else "›") { reelClosedCaptions = !reelClosedCaptions }
+                        SettingRow("⌄", "See more settings", if (reelSettingsExpanded) "Hide additional settings" else "More publishing options",
+                            if (reelSettingsExpanded) "⌃" else "⌄") { reelSettingsExpanded = !reelSettingsExpanded }
+                        if (reelSettingsExpanded) {
+                            SettingRow("🔒", "Allow remixing", "Other people can remix your Reel") { reelSettingsNotice = "remix" }
+                            SettingRow("💬", "Allow comments", "Comments are enabled") { reelSettingsNotice = "comments" }
+                            SettingRow("⬇", "Allow downloads", "Control whether viewers can download") { reelSettingsNotice = "downloads" }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+                    HorizontalDivider()
+                    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IconButton(onClick = { reelSettingsNotice = "draft" },
+                            modifier = Modifier.size(54.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))) {
+                            Icon(Icons.Default.SaveAlt, contentDescription = "Save draft")
+                        }
+                        Button(onClick = {
+                            busy = true
+                            reelSettingsNotice = ""
+                            onReelUploadProgress("Uploading Reel to PPA Talk", 0)
+                            val db = FirebaseFirestore.getInstance()
+                            fun saveReel(mediaUrl: String, storagePath: String) {
+                                val reelAuthorName = displayName.trim().ifBlank { "PPA Talk user" }.take(80)
+                                val post = hashMapOf(
+                                    "uid" to uid, "authorName" to reelAuthorName, "text" to postText.trim(),
+                                    "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "", "storagePath" to storagePath, "mediaType" to "video", "postType" to "reel",
+                                    "audience" to reelAudience.lowercase(), "location" to reelLocation.trim(),
+                                    "taggedUsers" to reelTags.split(",").map { it.trim().removePrefix("@") }.filter { it.isNotBlank() },
+                                    "affiliateLink" to reelAffiliateLink.trim(), "playlist" to reelPlaylist,
+                                    "shareToGroups" to reelShareToGroups, "aiLabel" to reelAiLabel,
+                                    "boostRequested" to reelBoost, "closedCaptions" to reelClosedCaptions,
+                                    "overlayText" to reelOverlayText, "sticker" to reelSticker, "effect" to reelEffect,
+                                    "originalAudioMuted" to videoMuted,
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )
+                                db.collection("posts").add(post).addOnSuccessListener {
+                                    fun finishPublishing(storyUploaded: Boolean) {
+                                        busy = false
+                                        onReelUploadProgress("", 0)
+                                        success = true
+                                        message = if (storyUploaded) "Your Reel was published to Feed and Story!" else "Your Reel was published to Feed. Story upload failed."
+                                        selectedMedia = null
+                                        mediaType = ""
+                                        postText = ""
+                                        onPublished()
+                                        if (initialPicker == "media" || initialPicker == "video") onClose()
+                                    }
+                                    if (reelShareToStory) {
+                                        onReelUploadProgress("Uploading Reel to Story", 100)
+                                        val story = hashMapOf(
+                                            "uid" to uid, "authorName" to displayName, "mediaUrl" to if (storagePath.isBlank()) mediaUrl else "",
+                                            "mediaType" to "video", "storagePath" to storagePath,
+                                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                            "expiresAt" to com.google.firebase.Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
+                                        )
+                                        db.collection("stories").add(story)
+                                            .addOnSuccessListener { finishPublishing(true) }
+                                            .addOnFailureListener { ex ->
+                                                finishPublishing(false)
+                                                reelSettingsNotice = ex.localizedMessage ?: "Reel is on Feed, but Story upload failed."
+                                            }
+                                    } else {
+                                        finishPublishing(true)
+                                    }
+                                }.addOnFailureListener { ex ->
+                                    busy = false
+                                    val detail = ex.localizedMessage ?: ex.message ?: "Unknown Firestore error"
+                                    onReelUploadProgress("Reel publish failed: $detail", 0)
+                                    reelSettingsNotice = "error: $detail"
+                                }
+                            }
+                            val uri = selectedMedia
+                            if (uri == null) {
+                                busy = false
+                                reelSettingsNotice = "Select a video before publishing."
+                            } else {
+                                val mediaRef = FirebaseStorage.getInstance().reference
+                                    .child("reels/" + uid + "/" + System.currentTimeMillis() + ".mp4")
+                                val reelMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                                    .setContentType("video/mp4")
+                                    .build()
+                                mediaRef.putFile(uri, reelMetadata)
+                                    .addOnProgressListener { snapshot ->
+                                        val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                                        val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                                        onReelUploadProgress("Uploading Reel to PPA Talk", percent)
+                                    }
+                                    .addOnSuccessListener {
+                                        onReelUploadProgress("Saving Reel to Feed", 100)
+                                        // Path-based secure media uses getSecureMediaUrl when rendering.
+                                        // A public download-token URL is not needed to publish the Reel.
+                                        saveReel("", mediaRef.path)
+                                    }.addOnFailureListener { ex ->
+                                        busy = false
+                                        val detail = ex.localizedMessage ?: ex.message ?: "Unknown Firebase Storage error"
+                                        onReelUploadProgress("Reel upload failed: $detail", 0)
+                                        reelSettingsNotice = "error: $detail"
+                                    }
+                            }
+                        }, enabled = !busy && selectedMedia != null && postText.trim().length <= 5000,
+                            modifier = Modifier.weight(1f).height(54.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0866FF)),
+                            shape = RoundedCornerShape(14.dp)) {
+                            Text(if (busy) "Uploading..." else "Share now", color = Color.White,
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (reelSettingsNotice.isNotBlank()) {
+                        AlertDialog(
+                            onDismissRequest = { reelSettingsNotice = "" },
+                            title = { Text(when {
+                                reelSettingsNotice.startsWith("error:") -> "Reel publish failed"
+                                reelSettingsNotice == "location" -> "Add location"
+                                reelSettingsNotice == "tags" -> "Tag people"
+                                reelSettingsNotice == "affiliate" -> "Add affiliate link"
+                                reelSettingsNotice == "playlist" -> "Add to playlist"
+                                reelSettingsNotice == "draft" -> "Draft saved"
+                                else -> "Reel setting"
+                            }) },
+                            text = {
+                                when {
+                                    reelSettingsNotice.startsWith("error:") ->
+                                        Text(reelSettingsNotice.removePrefix("error:").trim())
+                                    reelSettingsNotice == "location" -> OutlinedTextField(value = reelLocation, onValueChange = { reelLocation = it }, label = { Text("Location") })
+                                    reelSettingsNotice == "tags" -> OutlinedTextField(value = reelTags, onValueChange = { reelTags = it }, label = { Text("Usernames, comma separated") })
+                                    reelSettingsNotice == "affiliate" -> OutlinedTextField(value = reelAffiliateLink, onValueChange = { reelAffiliateLink = it }, label = { Text("Product URL") })
+                                    reelSettingsNotice == "playlist" -> OutlinedTextField(value = reelPlaylist, onValueChange = { reelPlaylist = it }, label = { Text("Playlist name") })
+                                    reelSettingsNotice == "draft" -> Text("Your Reel draft details are retained while this screen remains open.")
+                                    else -> Text("This option is shown in the settings UI. Its external service or eligibility workflow is not connected yet.")
+                                }
+                            },
+                            confirmButton = { TextButton(onClick = { reelSettingsNotice = "" }) { Text("Done") } }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (selectedMedia != null && mediaType == "video" && reelStage == "editor") {
+        var editorPlayer by remember(selectedMedia) { mutableStateOf<MediaPlayer?>(null) }
+        var editorPlaying by remember(selectedMedia) { mutableStateOf(true) }
+        var editorProgress by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var editorDuration by remember(selectedMedia) { mutableIntStateOf(0) }
+        var editorToolPanel by remember { mutableStateOf("Edit") }
+        var selectedMusicUri by remember(selectedMedia) { mutableStateOf<Uri?>(null) }
+        var selectedMusicName by remember(selectedMedia) { mutableStateOf("") }
+        var trimStart by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var trimEnd by remember(selectedMedia) { mutableFloatStateOf(1f) }
+        var reelSpeed by remember(selectedMedia) { mutableFloatStateOf(1f) }
+        var textColor by remember(selectedMedia) { mutableStateOf(Color.White) }
+        var textStyleIndex by remember(selectedMedia) { mutableIntStateOf(0) }
+        var textOffsetX by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var textOffsetY by remember(selectedMedia) { mutableFloatStateOf(0f) }
+        var textScale by remember(selectedMedia) { mutableFloatStateOf(1f) }
+        var stickerCategory by remember { mutableStateOf("Emoji") }
+        val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            selectedMusicUri = uri
+            selectedMusicName = uri?.lastPathSegment?.substringAfterLast('/') ?: ""
+            if (uri != null) runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        }
+        Dialog(
+            onDismissRequest = {
+                selectedMedia = null
+                mediaType = ""
+                if (initialPicker == "media") onClose()
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                Column(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = {
+                            selectedMedia = null
+                            mediaType = ""
+                            if (initialPicker == "media") onClose()
+                        }) { Text("Cancel", color = Color.White, style = MaterialTheme.typography.titleMedium) }
+                        Text("Edit Reel", color = Color.White, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(64.dp))
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        AndroidView(
+                            factory = { viewContext ->
+                                VideoView(viewContext).apply {
+                                    setVideoURI(selectedMedia)
+                                    setOnPreparedListener { player ->
+                                        player.isLooping = true
+                                        editorPlayer = player
+                                        editorDuration = player.duration.coerceAtLeast(0)
+                                        player.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                                        start()
+                                    }
+                                }
+                            },
+                            update = { view ->
+                                editorPlayer?.setVolume(if (videoMuted) 0f else 1f, if (videoMuted) 0f else 1f)
+                                if (editorPlaying && !view.isPlaying) view.start()
+                                if (!editorPlaying && view.isPlaying) view.pause()
+                            },
+                            modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f)
+                        )
+                        if (reelOverlayText.isNotBlank()) {
+                            Text(
+                                reelOverlayText,
+                                color = textColor,
+                                fontWeight = if (textStyleIndex == 0) FontWeight.Bold else FontWeight.Medium,
+                                fontStyle = if (textStyleIndex == 1) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+                                style = MaterialTheme.typography.headlineSmall.copy(fontSize = (28f * textScale).sp),
+                                modifier = Modifier.align(Alignment.Center)
+                                    .graphicsLayer {
+                                        translationX = textOffsetX
+                                        translationY = textOffsetY
+                                    }
+                                    .pointerInput(reelOverlayText) {
+                                        detectTransformGestures { _, pan, zoomChange, _ ->
+                                            textOffsetX += pan.x
+                                            textOffsetY += pan.y
+                                            textScale = (textScale * zoomChange).coerceIn(0.45f, 3.5f)
+                                        }
+                                    }
+                                    .border(1.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+                                    .padding(8.dp)
+                            )
+                        }
+                        if (reelSticker.isNotBlank()) {
+                            Text(reelSticker, style = MaterialTheme.typography.displayMedium,
+                                modifier = Modifier.align(Alignment.Center).graphicsLayer {
+                                    translationX = textOffsetX
+                                    translationY = textOffsetY + 72f
+                                })
+                        }
+                        if (editorToolPanel == "Text") {
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.92f).padding(10.dp),
+                                color = Color.Black.copy(alpha = 0.78f), shape = RoundedCornerShape(14.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = reelOverlayText,
+                                    onValueChange = { reelOverlayText = it },
+                                    modifier = Modifier.fillMaxWidth().padding(6.dp),
+                                    placeholder = { Text("Write text on your Reel...", color = Color.LightGray) },
+                                    singleLine = false,
+                                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.White, unfocusedIndicatorColor = Color.LightGray
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center) {
+                        IconButton(onClick = {
+                            editorPlaying = !editorPlaying
+                            if (editorPlaying) editorPlayer?.start() else editorPlayer?.pause()
+                        }) {
+                            Icon(if (editorPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play or pause", tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
+                        Text(if (editorDuration > 0) "00:" + (editorDuration / 1000).toString().padStart(2, '0') else "Video preview",
+                            color = Color.White)
+                    }
+                    Box(Modifier.fillMaxWidth().height(72.dp).padding(vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp)).background(Color(0xFF242424))) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            repeat(7) { index ->
+                                Box(Modifier.weight(1f).fillMaxHeight(0.78f).clip(RoundedCornerShape(4.dp))
+                                    .background(if (index % 2 == 0) Color(0xFF555555) else Color(0xFF383838)),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Movie, contentDescription = null, tint = Color.LightGray)
+                                }
+                            }
+                        }
+                    }
+                    Slider(
+                        value = editorProgress,
+                        onValueChange = {
+                            editorProgress = it
+                            if (editorDuration > 0) editorPlayer?.seekTo((editorDuration * it).toInt())
+                        },
+                        valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.DarkGray)
+                    )
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly) {
+                        listOf("Audio", "Edit", "Effects", "Text", "Stickers").forEach { tool ->
+                            Column(Modifier.width(62.dp).clickable { editorToolPanel = tool },
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(48.dp).clip(CircleShape)
+                                    .background(if (editorToolPanel == tool) Color(0xFF444444) else Color(0xFF1D1D1D)),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(when (tool) {
+                                        "Audio" -> Icons.Default.MusicNote
+                                        "Edit" -> Icons.Default.ContentCut
+                                        "Effects" -> Icons.Default.AutoAwesome
+                                        "Text" -> Icons.Default.TextFields
+                                        else -> Icons.Default.EmojiEmotions
+                                    }, contentDescription = tool, tint = Color.White, modifier = Modifier.size(26.dp))
+                                }
+                                Text(tool, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                    Surface(Modifier.fillMaxWidth().weight(0.62f, fill = false), color = Color(0xFF151515),
+                        shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (editorToolPanel) {
+                                "Audio" -> {
+                                    Text("Audio", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Default.MusicNote, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(if (selectedMusicUri == null) "Add audio from device" else "Change audio")
+                                    }
+                                    if (selectedMusicName.isNotBlank()) Text("Selected: $selectedMusicName", color = Color.White)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(checked = videoMuted, onCheckedChange = {
+                                            videoMuted = it
+                                            editorPlayer?.setVolume(if (it) 0f else 1f, if (it) 0f else 1f)
+                                        })
+                                        Text("Mute original video audio", color = Color.White)
+                                    }
+                                    Text("Music selection is saved as an edit choice; audio mixing into the exported video is not yet enabled.",
+                                        color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                "Edit" -> {
+                                    Text("Trim clip", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Start " + (trimStart * 100).toInt() + "%  •  End " + (trimEnd * 100).toInt() + "%",
+                                        color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                    Text("Start point", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                    Slider(value = trimStart, onValueChange = { trimStart = it.coerceAtMost(trimEnd - 0.05f) },
+                                        valueRange = 0f..0.95f)
+                                    Text("End point", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                    Slider(value = trimEnd, onValueChange = { trimEnd = it.coerceAtLeast(trimStart + 0.05f) },
+                                        valueRange = 0.05f..1f)
+                                    Text("Speed", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf(0.5f, 1f, 1.5f, 2f).forEach { speed ->
+                                            FilterChip(selected = reelSpeed == speed, onClick = { reelSpeed = speed },
+                                                label = { Text(speed.toString() + "x") })
+                                        }
+                                    }
+                                    Text("Trim and speed controls are selection previews; final video rendering is not connected yet.",
+                                        color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                "Effects" -> {
+                                    Text("Choose an effect", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf("Original", "Warm", "Cool", "B&W", "Vivid", "Vintage", "Fade", "Glow").forEach { effect ->
+                                            FilterChip(selected = reelEffect == effect, onClick = { reelEffect = effect },
+                                                label = { Text(effect) })
+                                        }
+                                    }
+                                    Text("Selected: $reelEffect", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                "Text" -> {
+                                    Text("Type in the box on the Reel, then drag the text or pinch to resize it.",
+                                        color = Color.White, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf(Color.White, Color.Yellow, Color.Cyan, Color(0xFFFF6B6B)).forEach { color ->
+                                            Box(Modifier.size(30.dp).clip(CircleShape).background(color)
+                                                .border(if (textColor == color) 3.dp else 1.dp, Color.White, CircleShape)
+                                                .clickable { textColor = color })
+                                        }
+                                        listOf("Bold", "Italic", "Outline").forEachIndexed { index, style ->
+                                            FilterChip(selected = textStyleIndex == index, onClick = { textStyleIndex = index },
+                                                label = { Text(style) })
+                                        }
+                                    }
+                                }
+                                "Stickers" -> {
+                                    Text("Stickers", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf("Emoji", "Reactions", "Love", "Celebration", "Objects").forEach { category ->
+                                            FilterChip(selected = stickerCategory == category,
+                                                onClick = { stickerCategory = category }, label = { Text(category) })
+                                        }
+                                    }
+                                    val stickers = when (stickerCategory) {
+                                        "Reactions" -> listOf("👍","👏","🙏","😂","😍","😮","😢","🔥","💯","❤️")
+                                        "Love" -> listOf("❤️","💕","💖","💘","💝","💞","💗","💓")
+                                        "Celebration" -> listOf("🎉","🎂","🎊","🥳","🎈","✨","🏆","🌟")
+                                        "Objects" -> listOf("🎧","🎸","⚽","📱","🚗","☕","🌹","🎁")
+                                        else -> listOf("😀","😂","🥰","😍","😎","🤔","😜","😭","🔥","👏","🙏","💯")
+                                    }
+                                    LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.height(112.dp)) {
+                                        items(stickers.size) { index ->
+                                            Text(stickers[index], modifier = Modifier.fillMaxWidth().clickable {
+                                                reelSticker = stickers[index]
+                                            }.padding(6.dp), style = MaterialTheme.typography.headlineSmall,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                        }
+                                    }
+                                    if (reelSticker.isNotBlank()) Text("Selected: $reelSticker", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = { reelStage = "settings" },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1685FF)),
+                            shape = CircleShape, contentPadding = PaddingValues(horizontal = 22.dp, vertical = 14.dp)) {
+                            Text("Next", color = Color.White, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.ArrowForward, contentDescription = "Next to post settings", tint = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showReelCreator) {
+        CreateStoryDialog(uid, displayName, onDismiss = { showReelCreator = false }, publishAsReel = true)
+    }
+    if (showPostCropDialog && selectedMedia != null && mediaType == "image") {
+        PhotoCropDialog(
+            uri = selectedMedia!!,
+            isCover = true,
+            onCancel = { showPostCropDialog = false },
+            onSave = { _, croppedBytes ->
+                val croppedFile = java.io.File(context.cacheDir, "ppa_post_crop_" + System.currentTimeMillis() + ".jpg")
+                croppedFile.writeBytes(croppedBytes)
+                selectedMedia = Uri.fromFile(croppedFile)
+                selectedPhotoFilter = "Original"
+                photoBrightness = 0f
+                photoContrast = 1f
+                photoSaturation = 1f
+                showPostCropDialog = false
+                message = "Photo cropped. You can now share it."
+            }
+        )
+    }
+}
+
+@Composable
+private fun PhotoCropDialog(
+    uri: Uri,
+    isCover: Boolean,
+    onCancel: () -> Unit,
+    onSave: (ByteArray, ByteArray) -> Unit
+) {
+    val context = LocalContext.current
+    val bitmap = remember(uri) {
+        runCatching { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }.getOrNull()
+    }
+    var zoom by remember(uri) { mutableFloatStateOf(1f) }
+    var offsetX by remember(uri) { mutableFloatStateOf(0f) }
+    var offsetY by remember(uri) { mutableFloatStateOf(0f) }
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    var viewportHeight by remember { mutableIntStateOf(0) }
+    var isCropping by remember(uri) { mutableStateOf(true) }
+    var originalBytes by remember(uri) { mutableStateOf<ByteArray?>(null) }
+    var croppedBytes by remember(uri) { mutableStateOf<ByteArray?>(null) }
+
+    fun makeCrop(source: Bitmap): ByteArray {
+        val outWidth = if (isCover) 1600 else 1080
+        val outHeight = if (isCover) 900 else 1080
+        val output = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(output)
+        canvas.drawColor(android.graphics.Color.BLACK)
+        val fitScale = minOf(viewportWidth.toFloat() / source.width, viewportHeight.toFloat() / source.height)
+        val imageScale = fitScale * zoom
+        val frameWidth = if (isCover) minOf(viewportWidth * 0.9f, viewportHeight * 0.9f * (16f / 9f))
+            else minOf(viewportWidth, viewportHeight) * 0.82f
+        val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
+        val frameLeft = (viewportWidth - frameWidth) / 2f
+        val frameTop = (viewportHeight - frameHeight) / 2f
+        val outputScale = outWidth.toFloat() / frameWidth
+        val imageLeft = viewportWidth / 2f + offsetX - source.width * imageScale / 2f
+        val imageTop = viewportHeight / 2f + offsetY - source.height * imageScale / 2f
+        val matrix = Matrix().apply {
+            setScale(imageScale * outputScale, imageScale * outputScale)
+            postTranslate((imageLeft - frameLeft) * outputScale, (imageTop - frameTop) * outputScale)
+        }
+        canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        val stream = java.io.ByteArrayOutputStream()
+        output.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+        output.recycle()
+        return stream.toByteArray()
+    }
+
+    Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 18.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            if (bitmap == null) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Image open nahi ho paayi. Dusri photo select karein.", color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onCancel) { Text("Close") }
+                }
+            } else if (isCropping) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onCancel) { Text("‹ Back") }
+                        Text("Crop", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            if (original != null) {
+                                originalBytes = original
+                                croppedBytes = makeCrop(bitmap)
+                                isCropping = false
+                            }
+                        }, enabled = viewportWidth > 0 && viewportHeight > 0) { Text("DONE") }
+                    }
+                    Text("Puri photo ko drag aur pinch karke frame mein set karein.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Box(
+                        Modifier.fillMaxWidth().height(480.dp)
+                            .background(Color(0xFF292929))
+                            .onSizeChanged { viewportWidth = it.width; viewportHeight = it.height }
+                            .pointerInput(uri) {
+                                detectTransformGestures { _, pan, zoomChange, _ ->
+                                    zoom = (zoom * zoomChange).coerceIn(0.25f, 6f)
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                }
+                            }
+                    ) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Full original photo for cropping",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                scaleX = zoom
+                                scaleY = zoom
+                                translationX = offsetX
+                                translationY = offsetY
+                            }
+                        )
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                            val frameWidth = if (isCover) minOf(size.width * 0.9f, size.height * 0.9f * (16f / 9f))
+                                else minOf(size.width, size.height) * 0.82f
+                            val frameHeight = if (isCover) frameWidth * 9f / 16f else frameWidth
+                            val left = (size.width - frameWidth) / 2f
+                            val top = (size.height - frameHeight) / 2f
+                            val frameRect = androidx.compose.ui.geometry.Rect(left, top, left + frameWidth, top + frameHeight)
+                            val mask = androidx.compose.ui.graphics.Path().apply {
+                                fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
+                                addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
+                                if (isCover) addRect(frameRect) else addOval(frameRect)
+                            }
+                            drawPath(mask, Color.Black.copy(alpha = 0.58f))
+                            if (isCover) {
+                                drawRect(Color(0xFF1877F2), topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                                    size = androidx.compose.ui.geometry.Size(frameWidth, frameHeight),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                            } else {
+                                drawCircle(Color(0xFF1877F2), radius = frameWidth / 2f, center = frameRect.center,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                            }
+                        }
+                    }
+                    Text("Zoom", style = MaterialTheme.typography.labelLarge)
+                    Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 0.25f..6f)
+                    OutlinedButton(onClick = { zoom = 1f; offsetX = 0f; offsetY = 0f }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Reset position")
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { isCropping = true }) { Text("‹ Crop") }
+                        Text("Preview", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        Button(onClick = {
+                            val original = originalBytes
+                            val crop = croppedBytes
+                            if (original != null && crop != null) onSave(original, crop)
+                        }) { Text("SAVE") }
+                    }
+                    Text("Preview your ${if (isCover) "cover" else "profile"} photo",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    croppedBytes?.let { bytes ->
+                        val preview = remember(bytes) {
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                        }
+                        if (preview != null) {
+                            Image(bitmap = preview, contentDescription = "Final photo preview",
+                                modifier = Modifier.fillMaxWidth()
+                                    .aspectRatio(if (isCover) 16f / 9f else 1f)
+                                    .clip(if (isCover) MaterialTheme.shapes.medium else CircleShape),
+                                contentScale = ContentScale.Crop)
+                        }
+                    }
+                    OutlinedButton(onClick = { isCropping = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Crop / Adjust again")
+                    }
+                    TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileScreen(uid: String, email: String, initialName: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var displayName by remember { mutableStateOf(initialName) }
+    var username by remember { mutableStateOf("") }
+    var profileVisibility by remember { mutableStateOf("public") }
+    var usernameCheckMessage by remember { mutableStateOf("") }
+    var usernameIsTaken by remember { mutableStateOf(false) }
+    var bio by remember { mutableStateOf("") }
+    var dateOfBirth by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
+    var hobby by remember { mutableStateOf("") }
+    var school by remember { mutableStateOf("") }
+    var favoritePlace by remember { mutableStateOf("") }
+    var hometown by remember { mutableStateOf("") }
+    var currentCity by remember { mutableStateOf("") }
+    var work by remember { mutableStateOf("") }
+    var education by remember { mutableStateOf("") }
+    var relationshipStatus by remember { mutableStateOf("") }
+    var interests by remember { mutableStateOf("") }
+    var photoUrl by remember { mutableStateOf("") }
+    var coverPhotoUrl by remember { mutableStateOf("") }
+    var photoOriginalUrl by remember { mutableStateOf("") }
+    var coverPhotoOriginalUrl by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+    var postCount by remember { mutableStateOf(0) }
+    var friendCount by remember { mutableStateOf(0) }
+    var profileTab by remember { mutableStateOf("All") }
+    var galleryItems by remember { mutableStateOf(emptyList<ProfileGalleryItem>()) }
+    var galleryFilter by remember { mutableStateOf("All photos") }
+    var selectedGalleryItem by remember { mutableStateOf<ProfileGalleryItem?>(null) }
+    var showStoryComposer by remember { mutableStateOf(false) }
+    var showProfileReelCreator by remember { mutableStateOf(false) }
+    var showProfileSetup by remember { mutableStateOf(false) }
+    var photoEditorUri by remember { mutableStateOf<Uri?>(null) }
+    var photoEditorIsCover by remember { mutableStateOf(false) }
+    var showProfilePhotoOptions by remember { mutableStateOf(false) }
+    var showCoverPhotoOptions by remember { mutableStateOf(false) }
+    var showPhotoLibraryPicker by remember { mutableStateOf(false) }
+    var photoLibraryTarget by remember { mutableStateOf("cover") }
+    var photoLibraryTab by remember { mutableStateOf("Photos of you") }
+    var photoLibraryAlbum by remember { mutableStateOf<String?>(null) }
+
+    fun openGalleryItem(item: ProfileGalleryItem) {
+        val path = item.securePath ?: firebaseStorageObjectPath(item.url)
+        val isProtectedProfileImage = path != null &&
+            (path.startsWith("profile_photos/$uid/original_") || path.startsWith("cover_photos/$uid/original_"))
+        if (!isProtectedProfileImage) {
+            selectedGalleryItem = item
+            return
+        }
+        FirebaseFunctions.getInstance("asia-south1")
+            .getHttpsCallable("getSecureProfileMediaUrl")
+            .call(mapOf("profileUid" to uid, "objectPath" to path))
+            .addOnSuccessListener { result ->
+                val secureUrl = (result.getData() as? Map<*, *>)?.get("url") as? String
+                if (secureUrl.isNullOrBlank()) {
+                    message = "Secure photo URL nahi mil paya."
+                    isError = true
+                } else {
+                    selectedGalleryItem = item.copy(url = secureUrl, securePath = null)
+                }
+            }
+            .addOnFailureListener { error ->
+                message = error.localizedMessage ?: "Photo access verify nahi ho paya."
+                isError = true
+            }
+    }
+
+    LaunchedEffect(uid) {
+        if (FirebaseAuth.getInstance().currentUser?.uid == uid) {
+            FirebaseFunctions.getInstance("asia-south1")
+                .getHttpsCallable("revokeLegacyProfileMediaTokens")
+                .call(mapOf("profileUid" to uid))
+                .addOnFailureListener { error ->
+                    android.util.Log.w("PpaProfileMedia", "Legacy profile media token migration did not finish", error)
+                }
+            FirebaseFunctions.getInstance("asia-south1")
+                .getHttpsCallable("revokeLegacyContentMediaTokens")
+                .call(mapOf("ownerUid" to uid))
+                .addOnFailureListener { error ->
+                    android.util.Log.w("PpaContentMedia", "Legacy post/story/reel media migration did not finish", error)
+                }
+        }
+    }
+
+
+    LaunchedEffect(username, uid) {
+        val cleanUsername = username.trim().lowercase()
+        usernameCheckMessage = ""
+        usernameIsTaken = false
+        if (cleanUsername.isBlank() || !cleanUsername.matches(Regex("^[a-z0-9_.]{4,20}$"))) {
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(450)
+        FirebaseFirestore.getInstance().collection("usernameClaims").document(cleanUsername).get()
+            .addOnSuccessListener { claim ->
+                if (username.trim().lowercase() != cleanUsername) return@addOnSuccessListener
+                val ownerUid = claim.getString("uid")
+                if (claim.exists() && ownerUid != uid) {
+                    usernameIsTaken = true
+                    usernameCheckMessage = "This username is already taken. Please choose another."
+                } else {
+                    usernameIsTaken = false
+                    usernameCheckMessage = if (claim.exists()) "This is your current username." else "Username available."
+                }
+            }
+            .addOnFailureListener {
+                if (username.trim().lowercase() == cleanUsername) {
+                    usernameCheckMessage = "Username availability check nahi ho paya. Internet check karein."
+                }
+            }
+    }
+
+    DisposableEffect(uid) {
+        val db = FirebaseFirestore.getInstance()
+        val postsRegistration = db.collection("posts").whereEqualTo("uid", uid).addSnapshotListener { snap, _ ->
+            if (snap != null) postCount = snap.size()
+        }
+        val friendsRegistration = db.collection("friends").document(uid).collection("list").addSnapshotListener { snap, _ ->
+            if (snap != null) friendCount = snap.size()
+        }
+        val galleryRegistration = db.collection("posts").whereEqualTo("uid", uid).addSnapshotListener { snap, _ ->
+            if (snap != null) galleryItems = snap.documents.mapNotNull { doc ->
+                val url = doc.getString("mediaUrl").orEmpty()
+                if (url.isBlank()) null else {
+                    val mediaType = doc.getString("mediaType").orEmpty().lowercase()
+                    val postType = doc.getString("postType").orEmpty().lowercase()
+                    val photoKind = doc.getString("photoKind").orEmpty().lowercase()
+                    val isProfileOriginal = photoKind == "profile" || photoKind == "cover"
+                    val originalPath = doc.getString("originalPath")
+                        ?: if (isProfileOriginal) firebaseStorageObjectPath(url) else null
+                    ProfileGalleryItem(doc.id, url, doc.getString("thumbnailUrl").orEmpty().ifBlank { url },
+                        if (mediaType.contains("video") || postType == "reel" || postType == "reels") "video" else "image",
+                        when (photoKind) { "profile" -> "Profile pictures"; "cover" -> "Cover photos"; else -> "Uploads" },
+                        doc.getString("text").orEmpty(), originalPath)
+                }
+            }.sortedByDescending { it.id }
+        }
+        onDispose { postsRegistration.remove(); friendsRegistration.remove(); galleryRegistration.remove() }
+    }
+
+    DisposableEffect(uid) {
+        val db = FirebaseFirestore.getInstance()
+        val privateRegistration = db.collection("users").document(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                message = error.localizedMessage ?: "Private profile load nahi ho paya."
+                isError = true
+                loading = false
+            } else if (snapshot != null) {
+                dateOfBirth = snapshot.getString("dateOfBirth") ?: ""
+                gender = snapshot.getString("gender") ?: ""
+                phoneNumber = snapshot.getString("phoneNumber") ?: ""
+                hobby = snapshot.getString("hobby") ?: ""
+                school = snapshot.getString("school") ?: ""
+                favoritePlace = snapshot.getString("favoritePlace") ?: ""
+                hometown = snapshot.getString("hometown") ?: ""
+                currentCity = snapshot.getString("currentCity") ?: ""
+                work = snapshot.getString("work") ?: ""
+                education = snapshot.getString("education") ?: ""
+                relationshipStatus = snapshot.getString("relationshipStatus") ?: ""
+                interests = snapshot.getString("interests") ?: ""
+                loading = false
+            }
+        }
+        val publicRegistration = db.collection("publicProfiles").document(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                message = error.localizedMessage ?: "Public profile load nahi ho paya."
+                isError = true
+            } else if (snapshot != null) {
+                displayName = snapshot.getString("displayName") ?: initialName
+                username = snapshot.getString("username") ?: ""
+                profileVisibility = snapshot.getString("profileVisibility") ?: "public"
+                bio = snapshot.getString("bio") ?: ""
+                photoUrl = snapshot.getString("photoUrl") ?: ""
+                coverPhotoUrl = snapshot.getString("coverPhotoUrl") ?: ""
+                currentCity = snapshot.getString("currentCity") ?: currentCity
+                work = snapshot.getString("work") ?: work
+                education = snapshot.getString("education") ?: education
+                relationshipStatus = snapshot.getString("relationshipStatus") ?: relationshipStatus
+                interests = snapshot.getString("interests") ?: interests
+                photoOriginalUrl = snapshot.getString("photoOriginalPath")
+                    ?: firebaseStorageObjectPath(snapshot.getString("photoOriginalUrl").orEmpty()).orEmpty()
+                coverPhotoOriginalUrl = snapshot.getString("coverPhotoOriginalPath")
+                    ?: firebaseStorageObjectPath(snapshot.getString("coverPhotoOriginalUrl").orEmpty()).orEmpty()
+            }
+        }
+        onDispose { privateRegistration.remove(); publicRegistration.remove() }
+    }
+
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            photoEditorUri = uri
+            photoEditorIsCover = false
+        }
+    }
+
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            photoEditorUri = uri
+            photoEditorIsCover = true
+        }
+    }
+
+    if (photoEditorUri != null) {
+        PhotoCropDialog(
+            uri = photoEditorUri!!,
+            isCover = photoEditorIsCover,
+            onCancel = { photoEditorUri = null },
+            onSave = { originalBytes, croppedBytes ->
+                val selectedUri = photoEditorUri
+                if (selectedUri == null) {
+                    saving = false
+                    isError = true
+                    message = "Selected photo dobara choose karein."
+                } else {
+                    saving = true
+                    message = if (photoEditorIsCover) "Original cover photo upload ho rahi hai..." else "Original profile photo upload ho rahi hai..."
+                    isError = false
+                    // Close the editor after the user confirms the cropped photo.
+                    photoEditorUri = null
+                val isCover = photoEditorIsCover
+                val originalPathField = if (isCover) "coverPhotoOriginalPath" else "photoOriginalPath"
+                val legacyOriginalField = if (isCover) "coverPhotoOriginalUrl" else "photoOriginalUrl"
+                val displayField = if (isCover) "coverPhotoUrl" else "photoUrl"
+                val folder = if (isCover) "cover_photos/$uid" else "profile_photos/$uid"
+                val storage = FirebaseStorage.getInstance().reference
+                // Unique object names prevent stale cached download URLs after replacing a photo.
+                val uploadVersion = System.currentTimeMillis().toString()
+                val originalRef = storage.child("$folder/original_$uploadVersion.jpg")
+                val displayFileName = if (isCover) "cover" else "profile"
+                val displayRef = storage.child("$folder/${displayFileName}_$uploadVersion.jpg")
+                val originalMimeType = context.contentResolver.getType(selectedUri) ?: "image/jpeg"
+                val originalMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType(originalMimeType).build()
+                val croppedMetadata = com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType("image/jpeg").build()
+                message = "Uploading original photo to Firebase Storage…"
+                originalRef.putBytes(originalBytes, originalMetadata)
+                    .addOnProgressListener { snapshot ->
+                        val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                        val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                        message = "Original photo upload: $percent%"
+                    }
+                    .addOnSuccessListener {
+                        message = "Original photo uploaded. Uploading display photo…"
+                        displayRef.putBytes(croppedBytes, croppedMetadata)
+                            .addOnProgressListener { snapshot ->
+                                val total = snapshot.totalByteCount.coerceAtLeast(1L)
+                                val percent = (100L * snapshot.bytesTransferred / total).toInt()
+                                message = "Display photo upload: $percent%"
+                            }
+                            .addOnSuccessListener {
+                                message = "Display photo uploaded. Saving profile details…"
+                                displayRef.downloadUrl.addOnSuccessListener { displayDownload ->
+                                    message = "Photo URL mil gaya. Profile details save ho rahi hain..."
+                                    val updates = mapOf(
+                                        "uid" to uid,
+                                        originalPathField to originalRef.path,
+                                        displayField to displayDownload.toString(),
+                                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    )
+                                        val firestore = FirebaseFirestore.getInstance()
+                                        val profileRef = firestore.collection("publicProfiles").document(uid)
+                                        val directoryRef = firestore.collection("profileDirectory").document(uid)
+                                        profileRef.set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                            .addOnSuccessListener {
+                                                message = "Profile photo details save ho gayi. Finalizing..."
+                                                if (isCover) {
+                                                    coverPhotoUrl = displayDownload.toString()
+                                                    coverPhotoOriginalUrl = originalRef.path
+                                                } else {
+                                                    photoUrl = displayDownload.toString()
+                                                    photoOriginalUrl = originalRef.path
+                                                }
+                                                // Directory sync is separate and non-blocking: it must not
+                                                // reject/rollback the primary profile media save.
+                                                directoryRef.set(mapOf(
+                                                    "uid" to uid,
+                                                    "displayName" to displayName.ifBlank { "PPA Talk user" },
+                                                    "username" to username,
+                                                    "photoUrl" to if (profileVisibility == "public")
+                                                        (if (isCover) photoUrl else displayDownload.toString())
+                                                        else com.google.firebase.firestore.FieldValue.delete(),
+                                                    "coverPhotoUrl" to if (profileVisibility == "public")
+                                                        (if (isCover) displayDownload.toString() else coverPhotoUrl)
+                                                        else com.google.firebase.firestore.FieldValue.delete(),
+                                                    "profileVisibility" to profileVisibility,
+                                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                ), com.google.firebase.firestore.SetOptions.merge())
+                                                    .addOnFailureListener { directoryException ->
+                                                        android.util.Log.w("PpaProfileMedia", "Directory sync failed after profile media save", directoryException)
+                                                    }
+                                                if (profileVisibility == "public") {
+                                                    val photoPost = hashMapOf(
+                                                        "uid" to uid,
+                                                        "authorName" to displayName.ifBlank { "PPA Talk user" },
+                                                        "text" to "",
+                                                        "mediaUrl" to displayDownload.toString(),
+                                                        "originalPath" to originalRef.path,
+                                                        "thumbnailUrl" to displayDownload.toString(),
+                                                        "mediaType" to "image",
+                                                        "postType" to "post",
+                                                        "photoKind" to if (isCover) "cover" else "profile",
+                                                        "profileVisibility" to profileVisibility,
+                                                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                    )
+                                                    FirebaseFirestore.getInstance().collection("posts").add(photoPost)
+                                                        .addOnSuccessListener {
+                                                            saving = false
+                                                            photoEditorUri = null
+                                                            isError = false
+                                                            message = if (isCover) "Cover photo saved and shared to Feed."
+                                                                else "Profile photo saved and shared to Feed."
+                                                        }
+                                                        .addOnFailureListener { exception ->
+                                                            saving = false
+                                                            photoEditorUri = null
+                                                            isError = false
+                                                            message = if (isCover)
+                                                                "Cover photo saved. Feed sharing failed: ${exception.localizedMessage ?: "unknown error"}"
+                                                            else
+                                                                "Profile photo saved. Feed sharing failed: ${exception.localizedMessage ?: "unknown error"}"
+                                                        }
+                                                } else {
+                                                    saving = false
+                                                    photoEditorUri = null
+                                                    isError = false
+                                                    message = if (isCover) "Cover photo saved successfully."
+                                                        else "Profile photo saved successfully."
+                                                }
+                                            }
+                                            .addOnFailureListener { exception ->
+                                                saving = false
+                                                isError = true
+                                                message = "FIRESTORE_PROFILE_SAVE_FAILED: ${exception.localizedMessage ?: "permission denied"}"
+                                            }
+                                    }.addOnFailureListener { exception ->
+                                        saving = false
+                                        isError = true
+                                        message = "STORAGE_DOWNLOAD_URL_FAILED: ${exception.localizedMessage ?: "permission denied"}"
+                                    }
+                                }
+                                .addOnFailureListener { exception ->
+                                    saving = false
+                                    isError = true
+                                    message = "STORAGE_DISPLAY_UPLOAD_FAILED: ${exception.localizedMessage ?: "permission denied"}"
+                                }
+                    }
+                    .addOnFailureListener { exception ->
+                        saving = false
+                        isError = true
+                        message = "STORAGE_ORIGINAL_UPLOAD_FAILED: ${exception.localizedMessage ?: "permission denied"}"
+                    }
+                }
+            }
+        )
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("My Profile", style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold, color = RoyalBlue,
+            modifier = Modifier.padding(start = 20.dp, top = 16.dp))
+
+        // Always surface profile/cover upload status and errors. Previously this was
+        // intentionally hidden, leaving Storage/Firestore failures invisible.
+        if (saving || isError || message.contains("photo", ignoreCase = true) ||
+            message.contains("cover", ignoreCase = true) || message.contains("STORAGE_") ||
+            message.contains("FIRESTORE_")) {
+            Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(message.ifBlank { "Photo save status" },
+                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        // Facebook-style cover with overlapping circular profile photo.
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(224.dp)) {
+            Card(Modifier.fillMaxWidth().height(190.dp), shape = MaterialTheme.shapes.large) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (coverPhotoUrl.isNotBlank()) {
+                        AsyncImage(model = coverPhotoUrl, contentDescription = "Profile cover photo",
+                            modifier = Modifier.fillMaxSize().clickable { showCoverPhotoOptions = true }, contentScale = ContentScale.Crop)
+                    } else {
+                        Column(Modifier.fillMaxSize().clickable { showCoverPhotoOptions = true },
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Icon(Icons.Default.Photo, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(38.dp))
+                            Text("Your cover photo", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            FilledIconButton(
+                onClick = { coverPicker.launch("image/*") }, enabled = !saving,
+                modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
+            ) { Icon(Icons.Default.CameraAlt, contentDescription = "Change cover photo") }
+            Box(
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp).size(116.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize().clickable { showProfilePhotoOptions = true },
+                    shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface)
+                ) {
+                    if (photoUrl.isNotBlank()) {
+                        AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = "Profile photo",
+                                modifier = Modifier.fillMaxSize(), tint = RoyalBlue)
+                        }
+                    }
+                }
+                FilledIconButton(
+                    onClick = { imagePicker.launch("image/*") }, enabled = !saving,
+                    modifier = Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(40.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = RoyalBlue, contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = "Edit profile photo", modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(displayName.ifBlank { "PPA Talk user" }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            if (username.isNotBlank()) Text("@$username", style = MaterialTheme.typography.bodyMedium, color = RoyalBlue)
+            if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(postCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Posts", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(friendCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Friends", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("—", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge); Text("Followers", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { showProfileSetup = true; message = ""; isError = false }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Edit, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Edit Profile")
+                }
+                OutlinedButton(onClick = { showStoryComposer = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.AddCircle, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add to Story")
+                }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Reels", "Photos", "More").forEach { tab ->
+                    FilterChip(selected = profileTab == tab, onClick = {
+                    profileTab = tab
+                    showProfileSetup = false
+                    if (tab == "Photos") galleryFilter = "All photos"
+                    if (tab == "Reels") galleryFilter = "All reels"
+                }, label = { Text(tab) })
+                }
+            }
+            if (profileTab == "Photos" || profileTab == "Reels") {
+                val isReels = profileTab == "Reels"
+                val currentProfilePhotos = listOfNotNull(
+                    (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let {
+                        ProfileGalleryItem("current-profile", photoUrl, photoUrl, "image", "Profile pictures", "Profile photo", it)
+                    },
+                    (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let {
+                        ProfileGalleryItem("current-cover", coverPhotoUrl, coverPhotoUrl, "image", "Cover photos", "Cover photo", it)
+                    }
+                )
+                val gallerySource = galleryItems + currentProfilePhotos.filter { current ->
+                    galleryItems.none { it.url == current.url }
+                }
+                val filteredItems = gallerySource.filter { item ->
+                    if (isReels) item.type == "video" else item.type == "image" && when (galleryFilter) {
+                        "Cover photos" -> item.category == "Cover photos"
+                        "Profile pictures" -> item.category == "Profile pictures"
+                        "Tagged photos" -> false
+                        else -> true
+                    }
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (if (isReels) listOf("All reels") else listOf("Tagged photos", "Cover photos", "Profile pictures", "All photos")).forEach { filter ->
+                        FilterChip(selected = galleryFilter == filter, onClick = { galleryFilter = filter }, label = { Text(filter) })
+                    }
+                }
+                Text(if (isReels) "Your Reels" else "Your Photos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (isReels || filteredItems.isNotEmpty()) {
+                    val reelGridItems = if (isReels) listOf<ProfileGalleryItem?>(null) + filteredItems else filteredItems.map { it as ProfileGalleryItem? }
+                    reelGridItems.chunked(3).forEach { rowItems ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        rowItems.forEach { item ->
+                            if (item == null) {
+                                Box(
+                                    Modifier.weight(1f).aspectRatio(1f)
+                                        .clip(MaterialTheme.shapes.small)
+                                        .background(Color(0xFFE86B55))
+                                        .clickable { showProfileReelCreator = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.size(58.dp).background(Color.White.copy(alpha = 0.95f), CircleShape), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.PlayCircleFilled, contentDescription = "Create reel", tint = Color(0xFFE85D75), modifier = Modifier.size(34.dp))
+                                        }
+                                        Text("Create reel", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            } else {
+                            Box(Modifier.weight(1f).aspectRatio(1f).clip(MaterialTheme.shapes.small).clickable { openGalleryItem(item) }) {
+                                AsyncImage(model = item.thumbnailUrl, contentDescription = item.caption.ifBlank { "Open media" },
+                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                if (item.type == "video") Icon(Icons.Default.PlayCircleFilled, contentDescription = "Play reel",
+                                    tint = Color.White, modifier = Modifier.align(Alignment.Center).size(42.dp))
+                            }
+                            }
+                        }
+                        repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                    }
+                } else {
+                    Text("Abhi is category mein koi photo nahi hai.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp))
+                }
+            }
+        }
+
+
+        if (showProfileReelCreator) {
+            Dialog(
+                onDismissRequest = { showProfileReelCreator = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+            ) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                    CreatePostScreen(
+                        uid = uid,
+                        displayName = displayName,
+                        email = email,
+                        modifier = Modifier.fillMaxSize(),
+                        initialPicker = "media",
+                        onPublished = { showProfileReelCreator = false },
+                        onClose = { showProfileReelCreator = false }
+                    )
+                }
+            }
+        }
+
+        if (!showProfileSetup && (profileTab == "All" || profileTab == "More")) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(if (profileTab == "All") "About" else "More about you",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                val profileDetails = listOf(
+                    "Name" to displayName,
+                    "Username" to username.takeIf { it.isNotBlank() }?.let { "@$it" }.orEmpty(),
+                    "Bio" to bio,
+                    "Email" to email,
+                    "Date of birth" to dateOfBirth,
+                    "Gender" to gender,
+                    "Phone" to phoneNumber,
+                    "Hobby" to hobby,
+                    "School / College" to school,
+                    "Favorite place" to favoritePlace,
+                    "Hometown" to hometown,
+                    "Current city" to currentCity,
+                    "Work" to work,
+                    "Education" to education,
+                    "Relationship status" to relationshipStatus,
+                    "Interests" to interests
+                ).filter { it.second.isNotBlank() }
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (profileDetails.isEmpty()) {
+                            Text("Abhi profile details add nahi ki gayi hain. Details add karne ke liye Edit Profile par click karein.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            profileDetails.forEach { (label, value) ->
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(label, style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(value, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showProfileSetup) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Profile Setup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.weight(1f))
+                TextButton(onClick = { showProfileSetup = false }) { Text("Close") }
+            }
+            if (loading) CircularProgressIndicator()
+            OutlinedTextField(value = displayName, onValueChange = { displayName = it },
+                label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = username, onValueChange = { username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '.' } },
+                label = { Text("Username") }, prefix = { Text("@") },
+                supportingText = { Text("4–20 characters: a-z, 0-9, underscore or dot. Must be unique.") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            if (usernameCheckMessage.isNotBlank()) {
+                Text(
+                    usernameCheckMessage,
+                    color = if (usernameIsTaken) MaterialTheme.colorScheme.error else RoyalBlue,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            OutlinedTextField(value = email, onValueChange = {}, readOnly = true,
+                label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") },
+                placeholder = { Text("Tell people about yourself") }, modifier = Modifier.fillMaxWidth(),
+                minLines = 3, maxLines = 4)
+            Text("Profile privacy", style = MaterialTheme.typography.titleMedium,
+                color = Orange, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (profileVisibility == "private") "Private profile" else "Public profile", fontWeight = FontWeight.SemiBold)
+                    Text(if (profileVisibility == "private") "Only you can view your profile." else "Other signed-in PPA Talk users can view your profile.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = profileVisibility == "private", onCheckedChange = {
+                    profileVisibility = if (it) "private" else "public"
+                })
+            }
+            Text("Personal details", style = MaterialTheme.typography.titleMedium,
+                color = Orange, fontWeight = FontWeight.Bold)
+            OutlinedTextField(value = dateOfBirth, onValueChange = { dateOfBirth = it },
+                label = { Text("Date of birth") }, placeholder = { Text("DD/MM/YYYY") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            var genderMenuExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = genderMenuExpanded,
+                onExpandedChange = { genderMenuExpanded = !genderMenuExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = gender, onValueChange = {}, readOnly = true,
+                    label = { Text("Gender") }, placeholder = { Text("Select gender") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = genderMenuExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(), singleLine = true
+                )
+                ExposedDropdownMenu(expanded = genderMenuExpanded,
+                    onDismissRequest = { genderMenuExpanded = false }) {
+                    listOf("Male", "Female", "Other", "Prefer not to say").forEach { option ->
+                        DropdownMenuItem(text = { Text(option) },
+                            onClick = { gender = option; genderMenuExpanded = false })
+                    }
+                }
+            }
+            OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it },
+                label = { Text("Phone number") }, placeholder = { Text("Enter phone number") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+            OutlinedTextField(value = hobby, onValueChange = { hobby = it },
+                label = { Text("Hobby") }, placeholder = { Text("Your hobbies") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = school, onValueChange = { school = it },
+                label = { Text("School / College") }, placeholder = { Text("School or college name") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = favoritePlace, onValueChange = { favoritePlace = it },
+                label = { Text("Favorite place") }, placeholder = { Text("Your favorite place") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = hometown, onValueChange = { hometown = it },
+                label = { Text("Hometown") }, placeholder = { Text("Your hometown") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = currentCity, onValueChange = { currentCity = it },
+                label = { Text("Current city") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = work, onValueChange = { work = it },
+                label = { Text("Work / Company and role") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = education, onValueChange = { education = it },
+                label = { Text("Education / College") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = relationshipStatus, onValueChange = { relationshipStatus = it },
+                label = { Text("Relationship status") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = interests, onValueChange = { interests = it },
+                label = { Text("Interests") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Text("Email is linked to your login account. Avoid sharing private details publicly.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth())
+            Button(
+                onClick = {
+                    val cleanName = displayName.trim()
+                    val cleanUsername = username.trim().lowercase()
+                    if (cleanName.isBlank()) {
+                        message = "Display name khali nahi ho sakta."
+                        isError = true
+                    } else if (!cleanUsername.matches(Regex("^[a-z0-9_.]{4,20}$"))) {
+                        message = "Username 4–20 characters ka ho: a-z, 0-9, underscore ya dot."
+                        isError = true
+                    } else {
+                        saving = true
+                        message = ""
+                        isError = false
+                        val db = FirebaseFirestore.getInstance()
+                        val timestamp = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        val privateUpdates = mapOf(
+                            "uid" to uid, "email" to email,
+                            "dateOfBirth" to dateOfBirth.trim(), "gender" to gender,
+                            "phoneNumber" to phoneNumber.trim(), "hobby" to hobby.trim(),
+                            "school" to school.trim(), "favoritePlace" to favoritePlace.trim(),
+                            "hometown" to hometown.trim(), "currentCity" to currentCity.trim(), "work" to work.trim(), "education" to education.trim(), "relationshipStatus" to relationshipStatus.trim(), "interests" to interests.trim(), "updatedAt" to timestamp
+                        )
+                        val publicUpdates = mapOf(
+                            "uid" to uid, "displayName" to cleanName, "username" to cleanUsername, "bio" to bio.trim(),
+                            "photoUrl" to photoUrl, "coverPhotoUrl" to coverPhotoUrl,
+                            "hobby" to hobby.trim(), "school" to school.trim(),
+                            "favoritePlace" to favoritePlace.trim(), "hometown" to hometown.trim(),
+                            "currentCity" to currentCity.trim(), "work" to work.trim(), "education" to education.trim(),
+                            "relationshipStatus" to relationshipStatus.trim(), "interests" to interests.trim(),
+                            "profileVisibility" to profileVisibility,
+                            "updatedAt" to timestamp
+                        )
+                        val usernameRef = db.collection("usernameClaims").document(cleanUsername)
+                        val profileRef = db.collection("publicProfiles").document(uid)
+                        val directoryRef = db.collection("profileDirectory").document(uid)
+                        val usersRef = db.collection("users").document(uid)
+                        db.runTransaction { transaction ->
+                            // Complete every transaction read before the first write.
+                            val newClaim = transaction.get(usernameRef)
+                            val currentProfile = transaction.get(profileRef)
+                            val oldUsername = currentProfile.getString("username").orEmpty()
+                            val oldClaimRef = if (oldUsername.isNotBlank() && oldUsername != cleanUsername) {
+                                db.collection("usernameClaims").document(oldUsername)
+                            } else null
+                            val oldClaim = oldClaimRef?.let { transaction.get(it) }
+
+                            if (newClaim.exists() && newClaim.getString("uid") != uid) {
+                                throw com.google.firebase.firestore.FirebaseFirestoreException(
+                                    "Username already taken. Please choose another.",
+                                    com.google.firebase.firestore.FirebaseFirestoreException.Code.ABORTED
+                                )
+                            }
+                            if (oldClaim?.exists() == true && oldClaim.getString("uid") == uid) {
+                                transaction.delete(oldClaimRef!!)
+                            }
+                            transaction.set(usernameRef, mapOf("uid" to uid, "username" to cleanUsername, "createdAt" to timestamp))
+                            transaction.set(profileRef, publicUpdates, com.google.firebase.firestore.SetOptions.merge())
+                            transaction.set(directoryRef, mapOf(
+                                "uid" to uid, "displayName" to cleanName, "username" to cleanUsername,
+                                "photoUrl" to if (profileVisibility == "public") photoUrl
+                                    else com.google.firebase.firestore.FieldValue.delete(),
+                                "coverPhotoUrl" to if (profileVisibility == "public") coverPhotoUrl
+                                    else com.google.firebase.firestore.FieldValue.delete(),
+                                "profileVisibility" to profileVisibility, "updatedAt" to timestamp
+                            ), com.google.firebase.firestore.SetOptions.merge())
+                            null
+                        }.addOnSuccessListener {
+                            // Keep private fields in users/{uid}; never copy them to publicProfiles.
+                            usersRef.set(privateUpdates, com.google.firebase.firestore.SetOptions.merge())
+                                .addOnSuccessListener {
+                                    FirebaseAuth.getInstance().currentUser
+                                        ?.updateProfile(com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                            .setDisplayName(cleanName).build())
+                                    saving = false
+                                    showProfileSetup = false
+                                    message = "Profile save ho gayi."
+                                }
+                                .addOnFailureListener { exception ->
+                                    saving = false
+                                    isError = true
+                                    message = "Private profile save failed: ${exception.localizedMessage ?: "permission denied"}"
+                                }
+                        }.addOnFailureListener { exception ->
+                            saving = false
+                            isError = true
+                            message = "Username/public profile save failed: ${exception.localizedMessage ?: "permission denied"}"
+                        }
+                    }
+                },
+                enabled = !saving && !loading,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (saving) "Saving..." else "Save Profile") }
+            if (message.isNotBlank()) {
+                Text(message, color = if (isError) MaterialTheme.colorScheme.error else RoyalBlue)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        }
+    }
+
+
+
+    if (selectedGalleryItem != null) {
+        val item = selectedGalleryItem!!
+        Dialog(onDismissRequest = { selectedGalleryItem = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                Box(Modifier.fillMaxSize()) {
+                    if (item.type == "video") {
+                        AndroidView(factory = { viewContext ->
+                            VideoView(viewContext).apply {
+                                setVideoURI(Uri.parse(item.url))
+                                setMediaController(MediaController(viewContext).also { it.setAnchorView(this) })
+                                setOnPreparedListener { player -> player.isLooping = true; start() }
+                            }
+                        }, modifier = Modifier.fillMaxSize())
+                    } else AsyncImage(model = item.url, contentDescription = item.caption,
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                    IconButton(onClick = { selectedGalleryItem = null }, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close media", tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
+        }
+    }
+    if (showProfilePhotoOptions || showCoverPhotoOptions) {
+        val isCoverOptions = showCoverPhotoOptions
+        val dismissPhotoOptions = {
+            showProfilePhotoOptions = false
+            showCoverPhotoOptions = false
+        }
+        Dialog(onDismissRequest = dismissPhotoOptions, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp)) {
+                        Box(Modifier.align(Alignment.CenterHorizontally).width(42.dp).height(5.dp)
+                            .clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)))
+                        Spacer(Modifier.height(18.dp))
+                        val profilePhotoAction: (String) -> Unit = { action ->
+                            dismissPhotoOptions()
+                            when (action) {
+                                "see-profile" -> if (photoUrl.isNotBlank()) openGalleryItem(ProfileGalleryItem("current-profile-preview", photoUrl, photoUrl, "image", "Profile pictures", "Profile photo", photoOriginalUrl.takeIf { it.isNotBlank() }))
+                                "choose-profile" -> { photoLibraryTarget = "profile"; photoLibraryTab = "Photos of you"; photoLibraryAlbum = null; showPhotoLibraryPicker = true }
+                                "see-cover" -> if (coverPhotoUrl.isNotBlank()) openGalleryItem(ProfileGalleryItem("current-cover-preview", coverPhotoUrl, coverPhotoUrl, "image", "Cover photos", "Cover photo", coverPhotoOriginalUrl.takeIf { it.isNotBlank() }))
+                                "upload-cover" -> coverPicker.launch("image/*")
+                                "choose-cover" -> { photoLibraryTarget = "cover"; photoLibraryTab = "Photos of you"; photoLibraryAlbum = null; showPhotoLibraryPicker = true }
+                            }
+                        }
+                        @Composable
+                        fun PhotoOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, action: String) {
+                            Row(
+                                Modifier.fillMaxWidth().clickable { profilePhotoAction(action) }.padding(vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Surface(Modifier.size(48.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(icon, contentDescription = null, modifier = Modifier.size(25.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                                Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        if (isCoverOptions) {
+                            PhotoOption(Icons.Default.Image, "See cover photo", "see-cover")
+                            PhotoOption(Icons.Default.Upload, "Upload photo", "upload-cover")
+                            PhotoOption(Icons.Default.FolderOpen, "Choose cover photo", "choose-cover")
+                        } else {
+                            PhotoOption(Icons.Default.AccountCircle, "See profile picture", "see-profile")
+                            PhotoOption(Icons.Default.Image, "Choose profile picture", "choose-profile")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showPhotoLibraryPicker) {
+        val ownPhotoItems = (galleryItems + listOfNotNull(
+            (photoOriginalUrl.ifBlank { photoUrl }).takeIf { it.isNotBlank() }?.let {
+                ProfileGalleryItem("current-profile", it, photoUrl.ifBlank { it }, "image", "Profile pictures", "Profile photo")
+            },
+            (coverPhotoOriginalUrl.ifBlank { coverPhotoUrl }).takeIf { it.isNotBlank() }?.let {
+                ProfileGalleryItem("current-cover", it, coverPhotoUrl.ifBlank { it }, "image", "Cover photos", "Cover photo")
+            }
+        )).filter { it.type == "image" }.distinctBy { it.url }
+        val albumNames = listOf("Uploads", "Profile pictures", "Cover photos")
+        val visiblePhotoItems = when (photoLibraryTab) {
+            "Uploads" -> ownPhotoItems.filter { it.category == "Uploads" }
+            "Albums" -> if (photoLibraryAlbum == null) emptyList() else ownPhotoItems.filter { it.category == photoLibraryAlbum }
+            else -> ownPhotoItems
+        }
+        Dialog(onDismissRequest = { showPhotoLibraryPicker = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = {
+                            if (photoLibraryAlbum != null) photoLibraryAlbum = null else showPhotoLibraryPicker = false
+                        }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+                        Text(if (photoLibraryAlbum != null) photoLibraryAlbum!! else "Photos of you",
+                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(Modifier.width(48.dp))
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf("Photos of you", "Uploads", "Albums").forEach { tab ->
+                            FilterChip(selected = photoLibraryTab == tab, onClick = {
+                                photoLibraryTab = tab
+                                photoLibraryAlbum = null
+                            }, label = { Text(tab) })
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    if (photoLibraryTab == "Albums" && photoLibraryAlbum == null) {
+                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            albumNames.forEach { album ->
+                                val albumItems = ownPhotoItems.filter { it.category == album }
+                                if (albumItems.isNotEmpty()) {
+                                    Row(Modifier.fillMaxWidth().clickable { photoLibraryAlbum = album }.padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        AsyncImage(model = albumItems.first().thumbnailUrl, contentDescription = album,
+                                            modifier = Modifier.size(76.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
+                                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                            Text(album, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                            Text("${albumItems.size} photos", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, contentDescription = "Open album")
+                                    }
+                                }
+                            }
+                            if (albumNames.none { name -> ownPhotoItems.any { it.category == name } }) {
+                                Text("Abhi koi album photo available nahi hai.", modifier = Modifier.padding(16.dp))
+                            }
+                        }
+                    } else {
+                        if (visiblePhotoItems.isEmpty()) {
+                            // Keep the photo library empty without showing placeholder text.
+                        } else {
+                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                                visiblePhotoItems.chunked(3).forEach { photoRow ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        photoRow.forEach { item ->
+                                            Box(Modifier.weight(1f).aspectRatio(1f).clickable {
+                                                val selectedOriginalPath = item.securePath ?: firebaseStorageObjectPath(item.url).orEmpty()
+                                                val selectedDisplayUrl = item.thumbnailUrl.ifBlank { item.url }
+                                                val updates = if (photoLibraryTarget == "cover") mapOf(
+                                                    "coverPhotoUrl" to selectedDisplayUrl,
+                                                    "coverPhotoOriginalPath" to selectedOriginalPath,
+                                                    "coverPhotoOriginalUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                                                    "updatedAt" to System.currentTimeMillis()
+                                                ) else mapOf(
+                                                    "photoUrl" to selectedDisplayUrl,
+                                                    "photoOriginalPath" to selectedOriginalPath,
+                                                    "photoOriginalUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                                                    "updatedAt" to System.currentTimeMillis()
+                                                )
+                                                FirebaseFirestore.getInstance().collection("users").document(uid)
+                                                    .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                    .addOnSuccessListener {
+                                                        FirebaseFirestore.getInstance().collection("publicProfiles").document(uid)
+                                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                        FirebaseFirestore.getInstance().collection("publicProfileDirectory").document(uid)
+                                                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                                                        if (photoLibraryTarget == "cover") {
+                                                            coverPhotoUrl = selectedDisplayUrl
+                                                            coverPhotoOriginalUrl = selectedOriginalPath
+                                                        } else {
+                                                            photoUrl = selectedDisplayUrl
+                                                            photoOriginalUrl = selectedOriginalPath
+                                                        }
+                                                        showPhotoLibraryPicker = false
+                                                        message = if (photoLibraryTarget == "cover") "Cover photo update ho gayi." else "Profile photo update ho gayi."
+                                                        isError = false
+                                                    }
+                                                    .addOnFailureListener { exception ->
+                                                        message = exception.localizedMessage ?: "Photo update nahi ho payi."
+                                                        isError = true
+                                                    }
+                                            }) {
+                                                AsyncImage(model = item.thumbnailUrl, contentDescription = item.caption.ifBlank { "Choose photo" },
+                                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                            }
+                                        }
+                                        repeat(3 - photoRow.size) { Spacer(Modifier.weight(1f)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showStoryComposer) CreateStoryDialog(uid, displayName, onDismiss = { showStoryComposer = false })
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PublicProfileScreen(
+    uid: String,
+    currentUid: String,
+    currentName: String,
+    onOpenChat: (String, String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var displayName by remember(uid) { mutableStateOf("PPA Talk user") }
+    var username by remember(uid) { mutableStateOf("") }
+    var bio by remember(uid) { mutableStateOf("") }
+    var photoUrl by remember(uid) { mutableStateOf("") }
+    var coverPhotoUrl by remember(uid) { mutableStateOf("") }
+    var hobby by remember(uid) { mutableStateOf("") }
+    var school by remember(uid) { mutableStateOf("") }
+    var favoritePlace by remember(uid) { mutableStateOf("") }
+    var hometown by remember(uid) { mutableStateOf("") }
+    var work by remember(uid) { mutableStateOf("") }
+    var education by remember(uid) { mutableStateOf("") }
+    var relationship by remember(uid) { mutableStateOf("") }
+    var currentCity by remember(uid) { mutableStateOf("") }
+    var interests by remember(uid) { mutableStateOf("") }
+    var isPrivate by remember(uid) { mutableStateOf(false) }
+    var loading by remember(uid) { mutableStateOf(true) }
+    var error by remember(uid) { mutableStateOf("") }
+    var friendStatus by remember(uid) { mutableStateOf("Add Friend") }
+    var hasIncomingPendingRequest by remember(uid) { mutableStateOf(false) }
+    var hasOutgoingPendingRequest by remember(uid) { mutableStateOf(false) }
+    var hasAcceptedFriendRequest by remember(uid) { mutableStateOf(false) }
+    var isFriendActionRunning by remember(uid) { mutableStateOf(false) }
+    var actionMessage by remember(uid) { mutableStateOf("") }
+    var selectedTab by remember(uid) { mutableStateOf("All") }
+    var selectedProfileImage by remember(uid) { mutableStateOf<String?>(null) }
+    var showFriendOptions by remember(uid) { mutableStateOf(false) }
+    var friendOptionsPage by remember(uid) { mutableStateOf("menu") }
+    var confirmUnfriend by remember(uid) { mutableStateOf(false) }
+    var breakSeeLess by remember(uid) { mutableStateOf("See profile anywhere") }
+    var breakLimit by remember(uid) { mutableStateOf("Keep current privacy settings") }
+    var breakPastPosts by remember(uid) { mutableStateOf("Keep all posts as they are") }
+    var friendLists by remember(uid) { mutableStateOf(setOf<String>()) }
+    var isFavoriteFriend by remember(uid) { mutableStateOf(false) }
+
+    DisposableEffect(uid, currentUid) {
+        val directoryRegistration = db.collection("profileDirectory").document(uid)
+            .addSnapshotListener { directory, directoryError ->
+                if (directoryError == null && directory != null && directory.exists()) {
+                    displayName = directory.getString("displayName")?.takeIf { it.isNotBlank() } ?: displayName
+                    username = directory.getString("username").orEmpty()
+                    photoUrl = directory.getString("photoUrl").orEmpty()
+                    coverPhotoUrl = directory.getString("coverPhotoUrl").orEmpty()
+                    isPrivate = directory.getString("profileVisibility") == "private"
+                    loading = false
+                }
+            }
+        val profileRegistration = db.collection("publicProfiles").document(uid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    val denied = exception.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    isPrivate = denied
+                    error = if (denied) "" else (exception.localizedMessage ?: "Profile load nahi ho payi.")
+                    loading = false
+                } else if (snapshot != null && snapshot.exists()) {
+                    displayName = snapshot.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user"
+                    username = snapshot.getString("username").orEmpty()
+                    bio = snapshot.getString("bio").orEmpty()
+                    photoUrl = snapshot.getString("photoUrl").orEmpty()
+                    coverPhotoUrl = snapshot.getString("coverPhotoUrl").orEmpty()
+                    hobby = snapshot.getString("hobby").orEmpty()
+                    school = snapshot.getString("school").orEmpty()
+                    favoritePlace = snapshot.getString("favoritePlace").orEmpty()
+                    currentCity = snapshot.getString("currentCity").orEmpty()
+                    hometown = snapshot.getString("hometown").orEmpty()
+                    work = snapshot.getString("work").orEmpty()
+                    education = snapshot.getString("education").orEmpty()
+                    relationship = snapshot.getString("relationshipStatus").orEmpty()
+                    interests = snapshot.getString("interests").orEmpty()
+                    isPrivate = snapshot.getString("profileVisibility") == "private"
+                    loading = false
+                } else {
+                    error = "Is user ki public profile abhi available nahi hai."
+                    loading = false
+                }
+            }
+        val outgoingRegistration = db.collection("friendRequests").document("${currentUid}_${uid}")
+            .addSnapshotListener { request, _ ->
+                hasOutgoingPendingRequest = request?.getString("status") == "pending"
+                hasAcceptedFriendRequest = hasAcceptedFriendRequest || request?.getString("status") == "accepted"
+                friendStatus = when {
+                    hasAcceptedFriendRequest -> "Friends"
+                    hasIncomingPendingRequest -> "Confirm Request"
+                    hasOutgoingPendingRequest -> "Requested"
+                    else -> "Add Friend"
+                }
+            }
+        val incomingRegistration = db.collection("friendRequests").document("${uid}_${currentUid}")
+            .addSnapshotListener { request, _ ->
+                hasIncomingPendingRequest = request?.getString("status") == "pending"
+                hasAcceptedFriendRequest = hasAcceptedFriendRequest || request?.getString("status") == "accepted"
+                friendStatus = when {
+                    hasAcceptedFriendRequest -> "Friends"
+                    hasIncomingPendingRequest -> "Confirm Request"
+                    hasOutgoingPendingRequest -> "Requested"
+                    else -> "Add Friend"
+                }
+            }
+        onDispose { directoryRegistration.remove(); profileRegistration.remove(); outgoingRegistration.remove(); incomingRegistration.remove() }
+    }
+
+    // A private profile becomes visible to an accepted friend; keep privacy for everyone else.
+    if (isPrivate && friendStatus != "Friends") {
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.fillMaxWidth().height(205.dp)) {
+                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
+                    modifier = Modifier.fillMaxSize().clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
+                    if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
+                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
+                }
+            }
+            Spacer(Modifier.height(45.dp))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        enabled = !isFriendActionRunning,
+                        onClick = {
+                            isFriendActionRunning = true
+                            if (friendStatus == "Friends") {
+                                isFriendActionRunning = false
+                                showFriendOptions = true
+                                friendOptionsPage = "menu"
+                            } else if (friendStatus == "Requested") {
+                                cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendStatus == "Confirm Request") {
+                                acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Friends"
+                                }
+                            } else {
+                                friendStatus = "Requested"
+                                sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (!success && !detail.contains("already sent", ignoreCase = true)) friendStatus = "Add Friend"
+                                    else friendStatus = "Requested"
+                                }
+                            }
+                        }, modifier = Modifier.weight(1f)
+                    ) {
+                        if (isFriendActionRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else Icon(if (friendStatus == "Friends") Icons.Default.PersonRemove else Icons.Default.PersonAdd, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Requested") "Cancelling..." else "Sending..." } else if (friendStatus == "Requested") "Cancel Request" else if (friendStatus == "Friends") "Friends" else friendStatus)
+                    }
+                    OutlinedButton(onClick = { if (!isPrivate || friendStatus == "Friends") onOpenChat(uid, displayName) else actionMessage = "Message karne ke liye pehle friend request accept honi chahiye." }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Chat, null); Spacer(Modifier.width(6.dp)); Text("Message")
+                    }
+                }
+                if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(30.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("This profile is private", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Add this person as a friend to see their posts, photos and personal details.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.fillMaxWidth().height(205.dp)) {
+                if (coverPhotoUrl.isNotBlank()) AsyncImage(model = coverPhotoUrl, contentDescription = "Cover photo",
+                    modifier = Modifier.fillMaxSize().clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = coverPhotoUrl }, contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = RoyalBlue, modifier = Modifier.size(48.dp)) }
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp).offset(y = 48.dp)) {
+                    if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                        modifier = Modifier.size(118.dp).padding(4.dp).clip(CircleShape).clickable { if (!isPrivate || friendStatus == "Friends") selectedProfileImage = photoUrl }, contentScale = ContentScale.Crop)
+                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.size(118.dp).padding(4.dp))
+                }
+            }
+            Spacer(Modifier.height(45.dp))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                if (username.isNotBlank()) Text("@$username", color = RoyalBlue)
+                if (bio.isNotBlank()) Text(bio, style = MaterialTheme.typography.bodyMedium)
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Text("Posts", fontWeight = FontWeight.SemiBold)
+                    Text("Friends", fontWeight = FontWeight.SemiBold)
+                    Text("Followers", fontWeight = FontWeight.SemiBold)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        enabled = !isFriendActionRunning && friendStatus != "Requested",
+                        onClick = {
+                            isFriendActionRunning = true
+                            actionMessage = if (friendStatus == "Confirm Request") "Accepting friend request..." else "Sending friend request..."
+                            if (friendStatus == "Friends") {
+                                isFriendActionRunning = false
+                                showFriendOptions = true
+                                friendOptionsPage = "menu"
+                            } else if (friendStatus == "Requested") {
+                                cancelFriendRequestSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendStatus == "Confirm Request") {
+                                acceptFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Friends"
+                                }
+                            } else {
+                                // Update the button immediately while Firestore confirms the request.
+                                friendStatus = "Requested"
+                                sendFriendRequestSafely(db, currentUid, uid, currentName, displayName) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (!success && !detail.contains("already sent", ignoreCase = true)) {
+                                        friendStatus = "Add Friend"
+                                    } else {
+                                        friendStatus = "Requested"
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (isFriendActionRunning) CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary
+                        ) else Icon(
+                            if (friendStatus == "Friends") Icons.Default.PersonRemove else Icons.Default.PersonAdd,
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isFriendActionRunning) { if (friendStatus == "Friends") "Removing..." else if (friendStatus == "Requested") "Cancelling..." else "Please wait..." } else if (friendStatus == "Friends") "Friends" else friendStatus)
+                    }
+                    OutlinedButton(
+                        onClick = { if (!isPrivate || friendStatus == "Friends") onOpenChat(uid, displayName) else actionMessage = "Message karne ke liye pehle friend request accept honi chahiye." },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Chat, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Message")
+                    }
+                }
+                if (actionMessage.isNotBlank()) Text(actionMessage, color = RoyalBlue, style = MaterialTheme.typography.bodySmall)
+            }
+            if (showFriendOptions && friendStatus == "Friends" && friendOptionsPage == "menu") {
+                ModalBottomSheet(
+                    onDismissRequest = { showFriendOptions = false },
+                    dragHandle = { BottomSheetDefaults.DragHandle() }
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+                        listOf(
+                            "Take a break" to Icons.Default.PersonOff,
+                            "Edit friend list" to Icons.Default.Edit,
+                            "Favorites" to Icons.Default.Star,
+                            "Unfriend" to Icons.Default.PersonRemove
+                        ).forEach { (option, optionIcon) ->
+                            Row(
+                                Modifier.fillMaxWidth().height(76.dp).clickable {
+                                    friendOptionsPage = when(option) {
+                                        "Take a break" -> "break"
+                                        "Edit friend list" -> "lists"
+                                        "Favorites" -> "favorites"
+                                        else -> "unfriend"
+                                    }
+                                }.padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(54.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(optionIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(28.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(16.dp))
+                                Text(option, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+            }
+            if (showFriendOptions && friendStatus == "Friends" && friendOptionsPage != "menu") {
+                AlertDialog(onDismissRequest = { showFriendOptions = false },
+                    title = { Text(when(friendOptionsPage) { "menu" -> displayName; "break" -> "Take a break"; "see" -> "See less of profile"; "limit" -> "Limit profile visibility"; "past" -> "Edit who can see past posts"; "lists" -> "Edit friend list"; "favorites" -> "Favorites"; else -> "Friend options" }) },
+                    text = {
+                        Column(Modifier.fillMaxWidth().heightIn(max = 430.dp).verticalScroll(rememberScrollState())) {
+                            when(friendOptionsPage) {
+                                "menu" -> listOf("Take a break", "Edit friend list", "Favorites", "Unfriend").forEach { option ->
+                                    TextButton(onClick = { friendOptionsPage = when(option) { "Take a break" -> "break"; "Edit friend list" -> "lists"; "Favorites" -> "favorites"; else -> "unfriend" } }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(when(option) { "Take a break" -> Icons.Default.PersonOff; "Edit friend list" -> Icons.Default.Edit; "Favorites" -> Icons.Default.Star; else -> Icons.Default.PersonRemove }, null)
+                                        Spacer(Modifier.width(12.dp)); Text(option)
+                                    }
+                                }
+                                "break" -> {
+                                    Text("Stay friends while controlling what you see and what they can see.")
+                                    TextButton(onClick = { friendOptionsPage = "see" }) { Text("See less of " + displayName + "'s profile") }
+                                    TextButton(onClick = { friendOptionsPage = "limit" }) { Text("Limit what " + displayName + "'s profile will see") }
+                                    TextButton(onClick = { friendOptionsPage = "past" }) { Text("Edit who can see past posts") }
+                                }
+                                "see" -> listOf("See profile anywhere", "Limit where you see this profile").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(breakSeeLess == v, onClick = { breakSeeLess = v }); Text(v) } }
+                                "limit" -> listOf("Keep current privacy settings", "Hide your posts from this profile").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(breakLimit == v, onClick = { breakLimit = v }); Text(v) } }
+                                "past" -> listOf("Keep all posts as they are", "Remove yourself from all their posts").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(breakPastPosts == v, onClick = { breakPastPosts = v }); Text(v) } }
+                                "lists" -> listOf("Close Friends", "Acquaintances", "Unnamed List", "Restricted").forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(friendLists.contains(v), onCheckedChange = { checked -> friendLists = if (checked) friendLists + v else friendLists - v }); Text(v) } }
+                                "favorites" -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(isFavoriteFriend, onCheckedChange = { isFavoriteFriend = it }); Text("Add to Favorites") }
+                                "unfriend" -> Text("Are you sure you want to remove " + displayName + " as your friend?")
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (friendOptionsPage == "unfriend") {
+                                showFriendOptions = false
+                                isFriendActionRunning = true
+                                unfriendSafely(db, currentUid, uid) { success, detail ->
+                                    isFriendActionRunning = false
+                                    actionMessage = detail
+                                    if (success) friendStatus = "Add Friend"
+                                }
+                            } else if (friendOptionsPage == "menu") showFriendOptions = false
+                            else if (friendOptionsPage in listOf("see","limit","past")) friendOptionsPage = "break"
+                            else showFriendOptions = false
+                        }) { Text(if (friendOptionsPage == "unfriend") "Yes" else if (friendOptionsPage in listOf("see","limit","past")) "Save" else "Done") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            if (friendOptionsPage == "unfriend") {
+                                showFriendOptions = false
+                                friendOptionsPage = "menu"
+                            } else if (friendOptionsPage == "menu") showFriendOptions = false
+                            else friendOptionsPage = if (friendOptionsPage in listOf("see","limit","past")) "break" else "menu"
+                        }) { Text(if (friendOptionsPage == "unfriend") "No" else if (friendOptionsPage == "menu") "Cancel" else "Back") }
+                    }
+                )
+            }
+            if (confirmUnfriend) AlertDialog(onDismissRequest = { confirmUnfriend = false }, title = { Text("Confirm unfriend") }, text = { Text("Are you sure you want to remove " + displayName + " as your friend?") }, confirmButton = { TextButton(onClick = { confirmUnfriend = false; isFriendActionRunning = true; unfriendSafely(db, currentUid, uid) { success, detail -> isFriendActionRunning = false; actionMessage = detail; if (success) friendStatus = "Add Friend" } }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { confirmUnfriend = false }) { Text("Cancel") } })
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Reels", "Photos").forEach { tab ->
+                    FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) })
+                }
+            }
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
+            if (selectedTab == "All") {
+                @Composable
+                fun DetailSection(title: String, rows: List<Pair<String, String>>, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+                    val visibleRows = rows.filter { it.second.isNotBlank() }
+                    if (visibleRows.isNotEmpty()) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            visibleRows.forEach { (label, value) ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(icon, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(34.dp))
+                                    Spacer(Modifier.width(18.dp))
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        if (label.isNotBlank()) Text(label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(value, style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                DetailSection("Personal details", listOf(
+                    "Current city" to currentCity.ifBlank { favoritePlace },
+                    "Hometown" to hometown,
+                    "Relationship" to relationship
+                ), Icons.Default.Home)
+
+                DetailSection("Work", listOf(
+                    "" to work
+                ), Icons.Default.Work)
+
+                DetailSection("Education", listOf(
+                    "" to school.ifBlank { education }
+                ), Icons.Default.School)
+
+                DetailSection("Hobbies", listOf(
+                    "" to hobby
+                ), Icons.Default.Favorite)
+
+                DetailSection("Interests", listOf(
+                    "" to interests
+                ), Icons.Default.Info)
+
+            } else {
+                Text(if (selectedTab == "Reels") "Reels will appear here." else "Photos will appear here.",
+                    modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    selectedProfileImage?.let { imageUrl ->
+        Dialog(
+            onDismissRequest = { selectedProfileImage = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Full-screen profile or cover photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                    IconButton(
+                        onClick = { selectedProfileImage = null },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close photo",
+                            tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NotificationsScreen(uid: String, modifier: Modifier = Modifier, onOpenFriends: () -> Unit = {}) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var notifications by remember(uid) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var loading by remember(uid) { mutableStateOf(true) }
+    var error by remember(uid) { mutableStateOf("") }
+
+    DisposableEffect(uid) {
+        var incoming = emptyList<Map<String, Any?>>()
+        var outgoing = emptyList<Map<String, Any?>>()
+        fun publish() {
+            notifications = (incoming + outgoing).sortedByDescending {
+                (it["createdAt"] as? Date)?.time ?: 0L
+            }
+            loading = false
+        }
+        val incomingRegistration = db.collection("friendRequests").whereEqualTo("toUid", uid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Notifications load nahi ho payi."
+                    loading = false
+                } else if (snapshot != null) {
+                    incoming = snapshot.documents.filter {
+                        it.getString("status") == "pending"
+                    }.map { doc ->
+                        mapOf(
+                            "fromName" to doc.getString("fromName").orEmpty().ifBlank { "PPA Talk user" },
+                            "toName" to doc.getString("toName").orEmpty(),
+                            "status" to doc.getString("status").orEmpty(),
+                            "direction" to "incoming",
+                            "createdAt" to doc.getTimestamp("createdAt")?.toDate()
+                        )
+                    }
+                    publish()
+                }
+            }
+        val outgoingRegistration = db.collection("friendRequests").whereEqualTo("fromUid", uid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    error = exception.localizedMessage ?: "Sent notifications load nahi ho payi."
+                    loading = false
+                } else if (snapshot != null) {
+                    outgoing = snapshot.documents.filter {
+                        it.getString("status") in listOf("pending", "accepted", "rejected")
+                    }.map { doc ->
+                        mapOf(
+                            "toName" to doc.getString("toName").orEmpty().ifBlank { "PPA Talk user" },
+                            "status" to doc.getString("status").orEmpty(),
+                            "direction" to "outgoing",
+                            "createdAt" to doc.getTimestamp("createdAt")?.toDate()
+                        )
+                    }
+                    publish()
+                }
+            }
+        onDispose {
+            incomingRegistration.remove()
+            outgoingRegistration.remove()
+        }
+    }
+
+    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Notifications", style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold, color = RoyalBlue)
+        Text("Friend requests and account activity", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (loading) CircularProgressIndicator()
+        if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+        if (!loading && notifications.isEmpty() && error.isBlank()) {
+            Text("Abhi koi notification nahi hai.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        notifications.forEach { item ->
+            val incoming = item["direction"] == "incoming"
+            val otherName = if (incoming) item["fromName"] as? String ?: "PPA Talk user"
+                else item["toName"] as? String ?: "PPA Talk user"
+            val status = item["status"] as? String ?: ""
+            val label = when {
+                incoming && status == "pending" -> "$otherName sent you a friend request"
+                incoming && status == "accepted" -> "You accepted $otherName's friend request"
+                incoming -> "You declined $otherName's friend request"
+                status == "pending" -> "Friend request sent to $otherName"
+                status == "accepted" -> "$otherName accepted your friend request"
+                else -> "$otherName declined your friend request"
+            }
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Notifications, contentDescription = null, tint = RoyalBlue,
+                        modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(label, fontWeight = FontWeight.SemiBold)
+                        (item["createdAt"] as? Date)?.let {
+                            Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(it),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (incoming && status == "pending") {
+                        TextButton(onClick = onOpenFriends) { Text("View") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class PPAUser(val uid: String, val name: String, val photoUrl: String = "")
+
+@Composable
+fun FriendsScreen(
+    uid: String, currentName: String, onMessage: (String, String) -> Unit,
+    modifier: Modifier = Modifier, onOpenProfile: (String) -> Unit = {}, onBack: () -> Unit = {},
+    screenTitle: String = "Messenger"
+) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var search by remember { mutableStateOf("") }
+    var users by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
+    var requests by remember { mutableStateOf<List<Map<String, String>>>(emptyList()) }
+    var friends by remember { mutableStateOf<List<PPAUser>>(emptyList()) }
+    var sentRequests by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var onlineFriends by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var status by remember { mutableStateOf("") }
+
+    DisposableEffect(uid) {
+        val usersListener = db.collection("profileDirectory").addSnapshotListener { snap, error ->
+            if (error != null) status = error.localizedMessage ?: "People directory load nahi hui. Firestore rules check karein."
+            if (snap != null) users = snap.documents.mapNotNull { doc ->
+                if (doc.id == uid) null else PPAUser(doc.id,
+                    doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: "PPA Talk user",
+                    doc.getString("photoUrl") ?: "")
+            }
+        }
+        val requestsListener = db.collection("friendRequests").whereEqualTo("toUid", uid).addSnapshotListener { snap, _ ->
+                if (snap != null) requests = snap.documents.filter { it.getString("status") == "pending" }.map { doc ->
+                    mapOf("id" to doc.id, "fromUid" to (doc.getString("fromUid") ?: ""),
+                        "fromName" to (doc.getString("fromName") ?: "PPA Talk user"))
+                }
+            }
+        val sentListener = db.collection("friendRequests").whereEqualTo("fromUid", uid).addSnapshotListener { snap, _ ->
+                if (snap != null) sentRequests = snap.documents.filter { it.getString("status") == "pending" }.mapNotNull { it.getString("toUid") }.toSet()
+            }
+        val friendsListener = db.collection("friends").document(uid).collection("list")
+            .addSnapshotListener { snap, error ->
+                if (error != null) status = error.localizedMessage ?: "Friends list load nahi hui."
+                if (snap != null) {
+                    friends = snap.documents.map { doc ->
+                        PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user",
+                            doc.getString("photoUrl") ?: "")
+                    }
+                    // Older friend-list entries may not contain photoUrl. Hydrate
+                    // them from the public profile so existing friends also see photos.
+                    snap.documents.filter { it.getString("photoUrl").isNullOrBlank() }.forEach { doc ->
+                        db.collection("publicProfiles").document(doc.id).get().addOnSuccessListener { profile ->
+                            val photo = profile.getString("photoUrl").orEmpty()
+                            val name = profile.getString("displayName").orEmpty()
+                            if (photo.isNotBlank() || name.isNotBlank()) {
+                                friends = friends.map { friend ->
+                                    if (friend.uid == doc.id) friend.copy(
+                                        name = name.ifBlank { friend.name },
+                                        photoUrl = photo.ifBlank { friend.photoUrl }
+                                    ) else friend
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        onDispose { usersListener.remove(); requestsListener.remove(); sentListener.remove(); friendsListener.remove() }
+    }
+    DisposableEffect(uid, friends.map { it.uid }.sorted().joinToString("|")) {
+        val registrations = friends.map { friend ->
+            db.collection("profilePresence").document(friend.uid).addSnapshotListener { snap, _ ->
+                onlineFriends = if (snap?.getBoolean("isOnline") == true) {
+                    onlineFriends + friend.uid
+                } else {
+                    onlineFriends - friend.uid
+                }
+            }
+        }
+        onDispose {
+            registrations.forEach { it.remove() }
+            onlineFriends = emptySet()
+        }
+    }
+
+    var selectedFriendsTab by remember(uid) { mutableStateOf("Requests") }
+    var showSearch by remember(uid) { mutableStateOf(false) }
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
+            Text("Friends", style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showSearch = !showSearch; search = "" }) {
+                Icon(Icons.Default.Search, contentDescription = "Search friends")
+            }
+        }
+        if (showSearch) {
+            OutlinedTextField(
+                value = search, onValueChange = { search = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                singleLine = true, shape = CircleShape, label = { Text("Search people or friends") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = { IconButton(onClick = { search = ""; showSearch = false }) {
+                    Icon(Icons.Default.Close, contentDescription = "Close search")
+                } }
+            )
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                "Online" to "🟢 ${onlineFriends.intersect(friends.map { it.uid }.toSet()).size} online",
+                "Suggestions" to "Suggestions",
+                "Friends" to "Your friends"
+            ).forEach { (tab, label) ->
+                Surface(
+                    modifier = Modifier.clip(CircleShape).clickable { selectedFriendsTab = tab },
+                    shape = CircleShape,
+                    color = Color(0xFFE4E7EB)
+                ) {
+                    Text(label, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                        color = Color(0xFF17191C), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        if (search.isNotBlank()) {
+            val searchResults = users.filter { it.name.contains(search.trim(), true) }
+                .distinctBy { it.uid }.take(100)
+            Text("Search results (" + searchResults.size + ")", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+            if (searchResults.isEmpty()) Text("No people found.", modifier = Modifier.padding(18.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                items(searchResults, key = { it.uid }) { person ->
+                    val isFriend = friends.any { it.uid == person.uid }
+                    val hasIncoming = requests.any { it["fromUid"] == person.uid }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Surface(Modifier.size(64.dp).clip(CircleShape).clickable { onOpenProfile(person.uid) },
+                            shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                            if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl,
+                                contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop)
+                            else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+                        }
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(person.name, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenProfile(person.uid) })
+                            Text(if (isFriend) "Friend" else "PPA Talk user",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        }
+                        when {
+                            isFriend -> Text("Friends", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            sentRequests.contains(person.uid) -> Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            hasIncoming -> TextButton(onClick = { selectedFriendsTab = "Requests" }) { Text("Respond") }
+                            else -> Button(onClick = {
+                                sendFriendRequestSafely(db, uid, person.uid, currentName, person.name) { _, detail -> status = detail }
+                            }) { Text("Add Friend") }
+                        }
+                    }
+                }
+            }
+        } else when (selectedFriendsTab) {
+            "Requests" -> {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("Friend requests", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f))
+                    Text("${requests.size}", color = Color(0xFFD33B4A), style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { selectedFriendsTab = "Suggestions" }) { Text("See all") }
+                }
+                if (requests.isEmpty()) Text("No new friend requests.", modifier = Modifier.padding(18.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    items(requests, key = { it["id"].orEmpty() }) { request ->
+                        val fromUid = request["fromUid"].orEmpty()
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            val requestPerson = users.firstOrNull { it.uid == fromUid }
+                            Surface(modifier = Modifier.size(164.dp, 164.dp).clip(CircleShape)
+                                .clickable { onOpenProfile(fromUid) },
+                                shape = CircleShape, color = Color(0xFFE4E6EB)) {
+                                if (requestPerson?.photoUrl?.isNotBlank() == true) {
+                                    AsyncImage(model = requestPerson.photoUrl, contentDescription = "Friend profile",
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                                } else {
+                                    Icon(Icons.Default.AccountCircle, contentDescription = "Friend profile",
+                                        tint = Color(0xFF7B8087), modifier = Modifier.padding(8.dp))
+                                }
+                            }
+                            Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(request["fromName"] ?: "PPA Talk user", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenProfile(fromUid) })
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(onClick = {
+                                        acceptFriendRequestSafely(db, uid, fromUid, currentName,
+                                            request["fromName"].orEmpty()) { success, detail -> status = detail }
+                                    }, modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0866FF))) {
+                                        Text("Confirm", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Button(onClick = {
+                                        db.collection("friendRequests").document(request["id"].orEmpty())
+                                            .update("status", "rejected")
+                                            .addOnSuccessListener { status = "Request deleted." }
+                                            .addOnFailureListener { status = it.localizedMessage ?: "Could not delete request." }
+                                    }, modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4E6EB))) {
+                                        Text("Delete", color = Color(0xFF17191C), fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "Friends", "Online" -> {
+                val visibleFriends = friends.filter {
+                    (selectedFriendsTab != "Online" || it.uid in onlineFriends) &&
+                        (search.isBlank() || it.name.contains(search, true))
+                }
+                Text(if (selectedFriendsTab == "Online") "Friends online" else "Your friends (${visibleFriends.size})",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
+                if (visibleFriends.isEmpty()) Text("No friends to show here yet.",
+                    modifier = Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    items(visibleFriends, key = { it.uid }) { friend ->
+                        Row(Modifier.fillMaxWidth().clickable { onOpenProfile(friend.uid) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(66.dp)) {
+                                Surface(Modifier.size(62.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                    if (friend.photoUrl.isNotBlank()) AsyncImage(model = friend.photoUrl,
+                                        contentDescription = friend.name, modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                        contentScale = ContentScale.Crop)
+                                    else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+                                }
+                                if (friend.uid in onlineFriends) Surface(Modifier.size(15.dp).align(Alignment.BottomEnd),
+                                    shape = CircleShape, color = Color(0xFF31C46C),
+                                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
+                            }
+                            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                Text(friend.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                Text(if (friend.uid in onlineFriends) "Active now" else "Your friend",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Button(onClick = { onMessage(friend.uid, friend.name) }) { Text("Message") }
+                        }
+                    }
+                }
+            }
+            "Suggestions" -> {
+                val matches = users.filter { person ->
+                    person.name.contains(search, true) &&
+                        friends.none { it.uid == person.uid } &&
+                        requests.none { it["fromUid"] == person.uid }
+                }.take(50)
+                Text("People you may know", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
+                if (matches.isEmpty()) Text("No suggestions found.", modifier = Modifier.padding(18.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    items(matches, key = { it.uid }) { person ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Surface(Modifier.size(66.dp).clickable { onOpenProfile(person.uid) },
+                                shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl,
+                                    contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop)
+                                else Icon(Icons.Default.AccountCircle, null, tint = RoyalBlue, modifier = Modifier.padding(4.dp))
+                            }
+                            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                Text(person.name, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenProfile(person.uid) })
+                                Text("Suggested for you", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (sentRequests.contains(person.uid)) Text("Requested", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            else Button(onClick = {
+                                sendFriendRequestSafely(db, uid, person.uid, currentName, person.name) { _, detail -> status = detail }
+                            }) { Text("Add Friend") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MessengerScreen(uid: String, onOpenChat: (String, String) -> Unit, modifier: Modifier = Modifier) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    var search by remember { mutableStateOf("") }
+    var chats by remember(uid) { mutableStateOf<List<Map<String, String>>>(emptyList()) }
+    var selectedTab by remember { mutableStateOf("Inbox") }
+    var loading by remember(uid) { mutableStateOf(true) }
+    DisposableEffect(uid) {
+        val registration = db.collection("chats").whereArrayContains("participantIds", uid)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    chats = snapshot.documents.mapNotNull { doc ->
+                        val participants = doc.get("participantIds") as? List<*> ?: return@mapNotNull null
+                        val otherUid = participants.filterIsInstance<String>().firstOrNull { it != uid } ?: return@mapNotNull null
+                        val lastMessage = doc.getString("lastMessage")?.takeIf { it.isNotBlank() }
+                            ?: return@mapNotNull null
+                        val lastMessageAt = doc.getTimestamp("lastMessageAt")?.toDate()?.time ?: 0L
+                        mapOf(
+                            "uid" to otherUid,
+                            "lastMessage" to lastMessage,
+                            "lastMessageAt" to lastMessageAt.toString(),
+                            "lastReadAt" to (doc.getTimestamp("lastReadAt_$uid")?.toDate()?.time ?: 0L).toString(),
+                            "lastSenderUid" to (doc.getString("lastSenderUid") ?: ""),
+                            "unreadCount" to (doc.getLong("unreadCount_$uid") ?: 0L).toString()
+                        )
+                    }.sortedByDescending { it["lastMessageAt"]?.toLongOrNull() ?: 0L }
+                    loading = false
+                }
+            }
+        onDispose { registration.remove() }
+    }
+    var people by remember(uid) { mutableStateOf<List<PPAUser>>(emptyList()) }
+    var onlinePeople by remember(uid) { mutableStateOf<Set<String>>(emptySet()) }
+    DisposableEffect(uid, people.map { it.uid }.sorted().joinToString("|")) {
+        val presenceRegistrations = people.map { person ->
+            db.collection("profilePresence").document(person.uid).addSnapshotListener { snapshot, _ ->
+                onlinePeople = if (snapshot?.getBoolean("isOnline") == true) {
+                    onlinePeople + person.uid
+                } else {
+                    onlinePeople - person.uid
+                }
+            }
+        }
+        onDispose {
+            presenceRegistrations.forEach { it.remove() }
+            onlinePeople = emptySet()
+        }
+    }
+    var friendsLoadError by remember(uid) { mutableStateOf("") }
+    DisposableEffect(uid) {
+        val registration = db.collection("friends").document(uid).collection("list")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    friendsLoadError = error.localizedMessage ?: "Friend list sync failed. Firestore rules check karein."
+                } else if (snapshot != null) {
+                    friendsLoadError = ""
+                    val base = snapshot.documents.map { doc ->
+                        PPAUser(doc.id, doc.getString("displayName") ?: "PPA Talk user", doc.getString("photoUrl") ?: "")
+                    }
+                    people = base
+                    base.filter { it.photoUrl.isBlank() || it.name == "PPA Talk user" }.forEach { friend ->
+                        db.collection("publicProfiles").document(friend.uid).get().addOnSuccessListener { profile ->
+                            people = people.map { current ->
+                                if (current.uid == friend.uid) current.copy(
+                                    name = profile.getString("displayName")?.takeIf { it.isNotBlank() } ?: current.name,
+                                    photoUrl = profile.getString("photoUrl")?.takeIf { it.isNotBlank() } ?: current.photoUrl
+                                ) else current
+                            }
+                        }
+                    }
+                }
+            }
+        onDispose { registration.remove() }
+    }
+    // Messenger shows only people with at least one sent/received message.
+    // Opening an empty chat does not add a friend to the inbox.
+    val visible = chats.mapNotNull { chat ->
+        people.firstOrNull { it.uid == chat["uid"] }?.let { person -> person.copy(name = person.name) }
+    }.distinctBy { it.uid }.filter { it.name.contains(search, true) }
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { }) { Icon(Icons.Default.ArrowBack, contentDescription = "Chats", tint = MaterialTheme.colorScheme.onSurface) }
+            Text("Chats", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            IconButton(onClick = { }) { Icon(Icons.Default.Settings, contentDescription = "Chat settings") }
+            IconButton(onClick = { }) { Icon(Icons.Default.Edit, contentDescription = "New message") }
+        }
+        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            singleLine = true, shape = CircleShape, placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) })
+        if (friendsLoadError.isNotBlank()) Text(friendsLoadError, color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
+        if (people.isEmpty() && !loading && friendsLoadError.isBlank()) Text("Abhi koi accepted friend sync nahi hua. Friends tab mein friend list check karein.",
+            modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Inbox", "Marketplace", "Communities").forEach { tab ->
+                FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) })
+            }
+        }
+        if (selectedTab == "Inbox") {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
+                if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                if (visible.isEmpty() && !loading) item { Text("Your conversations will appear here. Add friends to start chatting.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(visible, key = { it.uid }) { person ->
+                    Row(Modifier.fillMaxWidth().clickable { onOpenChat(person.uid, person.name) }.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(66.dp)) {
+                            Surface(Modifier.size(62.dp).align(Alignment.TopStart), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                                if (person.photoUrl.isNotBlank()) AsyncImage(model = person.photoUrl, contentDescription = person.name, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                                else Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoyalBlue, modifier = Modifier.padding(5.dp))
+                            }
+                            if (person.uid in onlinePeople) Surface(Modifier.size(14.dp).align(Alignment.BottomEnd),
+                                shape = CircleShape, color = Color(0xFF31C46C), border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {}
+                        }
+                        val chat = chats.firstOrNull { it["uid"] == person.uid }
+                        val unreadCount = chat?.get("unreadCount")?.toLongOrNull() ?: 0L
+                        val unread = chat != null && (
+                            unreadCount > 0L ||
+                            (chat["lastSenderUid"] == person.uid &&
+                                (chat["lastMessageAt"]?.toLongOrNull() ?: 0L) >
+                                (chat["lastReadAt"]?.toLongOrNull() ?: 0L))
+                        )
+                        val preview = if (unread) "${maxOf(1L, unreadCount)} new messages"
+                            else chat?.get("lastMessage") ?: "Tap to message"
+                        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(person.name, style = MaterialTheme.typography.titleMedium,
+                                fontWeight = if (unread) FontWeight.ExtraBold else FontWeight.SemiBold)
+                            Text(preview,
+                                color = if (unread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1)
+                        }
+                        if (unread) {
+                            Icon(Icons.Default.Circle, contentDescription = "Unread message",
+                                tint = RoyalBlue, modifier = Modifier.size(8.dp))
+                        }
+                    }
+                }
+            }
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("$selectedTab coming soon", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
+}
+
+@Composable
+fun ChatScreen(currentUid: String, friendUid: String, friendName: String, modifier: Modifier = Modifier, onBack: () -> Unit, onOpenProfile: () -> Unit) {
+    val db = remember { FirebaseFirestore.getInstance() }
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val chatId = remember(currentUid, friendUid) { listOf(currentUid, friendUid).sorted().joinToString("_") }
+    var messages by remember(chatId) { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var draft by remember(chatId) { mutableStateOf("") }
+    var sending by remember(chatId) { mutableStateOf(false) }
+    var error by remember(chatId) { mutableStateOf("") }
+    var callController by remember { mutableStateOf<PpaCallController?>(null) }
+    var callStatus by remember { mutableStateOf("") }
+    var callError by remember { mutableStateOf("") }
+    var incomingCallId by remember { mutableStateOf<String?>(null) }
+    var incomingCallType by remember { mutableStateOf("audio") }
+    var friendPhotoUrl by remember(friendUid) { mutableStateOf("") }
+    var autoDeleteSeconds by remember(chatId) { mutableStateOf(0L) }
+    var showChatSettings by remember { mutableStateOf(false) }
+    var selectedMessageId by remember { mutableStateOf<String?>(null) }
+    var chatSettingsSaving by remember { mutableStateOf(false) }
+
+    DisposableEffect(friendUid) {
+        val profileListener = db.collection("publicProfiles").document(friendUid)
+            .addSnapshotListener { snapshot, _ ->
+                friendPhotoUrl = snapshot?.getString("photoUrl").orEmpty()
+            }
+        onDispose { profileListener.remove() }
+    }
+    var pendingCallId by remember { mutableStateOf<String?>(null) }
+    var requestedCallType by remember { mutableStateOf("audio") }
+
+    // Keep the display awake on both caller and receiver while a call controller is active.
+    // Restore the previous window setting as soon as the call ends or this screen is disposed.
+    DisposableEffect(callController) {
+        val window = activity?.window
+        val keepScreenOnFlag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        val wasAlreadyEnabled = (window?.attributes?.flags ?: 0) and keepScreenOnFlag != 0
+        if (callController != null) window?.addFlags(keepScreenOnFlag)
+        onDispose {
+            if (!wasAlreadyEnabled) window?.clearFlags(keepScreenOnFlag)
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val denied = permissions.filterValues { !it }.keys
+        val incomingId = pendingCallId
+        pendingCallId = null
+        if (denied.isNotEmpty()) {
+            val deniedNames = denied.mapNotNull { permission ->
+                when (permission) {
+                    android.Manifest.permission.RECORD_AUDIO -> "Microphone"
+                    android.Manifest.permission.CAMERA -> "Camera"
+                    else -> null
+                }
+            }.joinToString(" and ")
+            callError = "$deniedNames permission denied. Allow it in Android Settings > Apps > PPA Talk > Permissions."
+            if (incomingId != null) {
+                db.collection("callSessions").document(incomingId).update(mapOf(
+                    "status" to "rejected",
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ))
+            }
+        } else {
+            val controller = PpaCallController(
+                context, currentUid, friendUid,
+                onStatus = { callStatus = it },
+                onError = { callError = it; callStatus = it },
+                onRemoteCallEnded = {
+                    callStatus = "Call ended"
+                    callController?.let { active ->
+                        active.release()
+                        callController = null
+                    }
+                }
+            )
+            callController = controller
+            if (incomingId != null) controller.acceptIncoming(incomingId)
+            else controller.startOutgoing(requestedCallType)
+        }
+    }
+
+    fun requestCall(type: String, incomingId: String? = null) {
+        requestedCallType = type
+        pendingCallId = incomingId
+        callError = ""
+        if (incomingId != null) {
+            incomingCallId = null
+            (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(incomingId.hashCode())
+        }
+        val permissions = if (type == "video") {
+            arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+        } else arrayOf(android.Manifest.permission.RECORD_AUDIO)
+        permissionLauncher.launch(permissions)
+    }
+
+    DisposableEffect(currentUid, friendUid) {
+        val incomingRegistration = db.collection("callSessions")
+            .whereEqualTo("calleeUid", currentUid)
+            .whereEqualTo("status", "ringing")
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    callError = exception.localizedMessage ?: "Incoming call check failed."
+                } else {
+                    val incoming = snapshot?.documents?.firstOrNull {
+                        it.getString("callerUid") == friendUid
+                    }
+                    incomingCallId = incoming?.id
+                    incomingCallType = incoming?.getString("callType") ?: "audio"
+                }
+            }
+        onDispose { incomingRegistration.remove() }
+    }
+
+    // Close the local call UI when Firestore reports that the other participant
+    // ended or rejected the call.
+    LaunchedEffect(callStatus) {
+        if (callStatus == "Call ended" || callStatus == "Call declined") {
+            callController?.let { controller ->
+                controller.release()
+                callController = null
+            }
+        }
+    }
+
+    // Initialize only missing chat documents. Existing participant IDs are immutable
+    // in Firestore rules, so never rewrite them during chat opening.
+    DisposableEffect(chatId, currentUid, friendUid) {
+        var registration: com.google.firebase.firestore.ListenerRegistration? = null
+        var settingsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+        val chatRef = db.collection("chats").document(chatId)
+        val expectedParticipants = listOf(currentUid, friendUid).sorted()
+        chatRef.get()
+            .addOnSuccessListener { existing ->
+                val initTask = if (existing.exists()) {
+                    val participants = existing.get("participantIds") as? List<*>
+                    if (participants != expectedParticipants) {
+                        error = "This chat's participant data needs repair. Please try again later."
+                        null
+                    } else {
+                        // Opening an existing chat should not require a metadata write.
+                        // Read-state is updated separately after the message listener succeeds.
+                        com.google.android.gms.tasks.Tasks.forResult<Void>(null)
+                    }
+                } else {
+                    chatRef.set(mapOf(
+                        "participantIds" to expectedParticipants,
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "lastReadAt_$currentUid" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "unreadCount_$currentUid" to 0L
+                    ), com.google.firebase.firestore.SetOptions.merge())
+                }
+                initTask?.addOnSuccessListener {
+                    settingsRegistration = chatRef.addSnapshotListener { chatSnapshot, settingsError ->
+                        if (settingsError != null) error = "Chat settings couldn't be loaded."
+                        else autoDeleteSeconds = chatSnapshot?.getLong("autoDeleteSeconds") ?: 0L
+                    }
+                    registration = chatRef.collection("messages")
+                        .orderBy("createdAt", Query.Direction.ASCENDING)
+                        .addSnapshotListener { snap, exception ->
+                            if (exception != null) error = "Messages couldn't load. Check your connection or chat access."
+                            else if (snap != null) {
+                                messages = snap.documents.map { doc ->
+                                    mapOf("id" to doc.id, "uid" to (doc.getString("uid") ?: ""),
+                                        "text" to (doc.getString("text") ?: ""),
+                                        "expireAt" to doc.getTimestamp("expireAt"))
+                                }
+                                // Best-effort read receipt; do not block displaying messages.
+                                chatRef.update(
+                                    "lastReadAt_$currentUid", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                    "unreadCount_$currentUid", 0L
+                                ).addOnFailureListener { /* read receipt failure is non-blocking */ }
+                            }
+                        }
+                }?.addOnFailureListener { exception ->
+                    error = "Chat initialization denied (${exception.message ?: exception::class.java.simpleName}). Chat ID: $chatId"
+                }
+            }
+            .addOnFailureListener { exception -> error = "Chat verification failed (${exception.message ?: exception::class.java.simpleName}). Chat ID: $chatId" }
+        onDispose { registration?.remove(); settingsRegistration?.remove() }
+    }
+    Column(modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            Box(
+                Modifier.size(42.dp).clip(CircleShape).clickable { onOpenProfile() },
+                contentAlignment = Alignment.Center
+            ) {
+                if (friendPhotoUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = friendPhotoUrl,
+                        contentDescription = "$friendName profile photo",
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = "Friend profile",
+                        modifier = Modifier.fillMaxSize(),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                friendName,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f).clickable { onOpenProfile() }
+            )
+            Box {
+                IconButton(onClick = { showChatSettings = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Chat settings")
+                }
+                DropdownMenu(expanded = showChatSettings, onDismissRequest = { showChatSettings = false }) {
+                    DropdownMenuItem(text = { Text("Auto-delete messages") }, onClick = { showChatSettings = false; selectedMessageId = "__timer__" })
+                }
+            }
+            IconButton(enabled = callController == null, onClick = { requestCall("audio") }) {
+                Icon(Icons.Default.Call, contentDescription = "Voice call", tint = RoyalBlue)
+            }
+            IconButton(enabled = callController == null, onClick = { requestCall("video") }) {
+                Icon(Icons.Default.VideoCall, contentDescription = "Video call", tint = Orange)
+            }
+        }
+        HorizontalDivider()
+        if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
+        if (callError.isNotBlank()) Text(callError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
+            contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (messages.isEmpty()) item { Text("Say hello to ${friendName} 👋", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            items(messages, key = { it["id"] as String }) { msg ->
+                val mine = msg["uid"] == currentUid
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+                    Box {
+                        Surface(
+                            color = if (mine) RoyalBlue else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.clickable { if (mine) selectedMessageId = msg["id"] as String }
+                        ) {
+                            Text(msg["text"] as? String ?: "", modifier = Modifier.widthIn(max = 280.dp).padding(12.dp),
+                                color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface)
+                        }
+                        DropdownMenu(expanded = selectedMessageId == msg["id"], onDismissRequest = { selectedMessageId = null }) {
+                            DropdownMenuItem(text = { Text("Delete message") }, onClick = {
+                                val messageId = msg["id"] as String
+                                selectedMessageId = null
+                                db.collection("chats").document(chatId).collection("messages").document(messageId)
+                                    .delete().addOnFailureListener { error = it.localizedMessage ?: "Message delete failed." }
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(value = draft, onValueChange = { draft = it }, modifier = Modifier.weight(1f),
+                placeholder = { Text("Type a message...") }, maxLines = 4)
+            Spacer(Modifier.width(8.dp))
+            IconButton(enabled = draft.isNotBlank() && !sending, onClick = {
+                val messageText = draft.trim()
+                if (messageText.isNotBlank()) {
+                    sending = true; error = ""
+                    val chatRef = db.collection("chats").document(chatId)
+                    val messageData = hashMapOf<String, Any>(
+                        "uid" to currentUid, "text" to messageText,
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    if (autoDeleteSeconds > 0L) {
+                        messageData["expireAt"] = com.google.firebase.Timestamp(
+                            java.util.Date(System.currentTimeMillis() + autoDeleteSeconds * 1000L)
+                        )
+                    }
+                    // Send directly to the messages subcollection; avoid rewriting participantIds.
+                    chatRef.collection("messages").add(messageData)
+                        .addOnSuccessListener {
+                            draft = ""; sending = false
+                            chatRef.update(
+                                "lastMessage", messageText,
+                                "lastMessageAt", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                "lastSenderUid", currentUid,
+                                "updatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            ).addOnFailureListener { /* message is sent; metadata update is best effort */ }
+                        }
+                        .addOnFailureListener { sending = false; error = it.localizedMessage ?: "Message send failed. Check Firestore rules." }
+                }
+            }) { Icon(Icons.Default.Send, contentDescription = "Send message", tint = RoyalBlue) }
+        }
+    }
+
+    if (selectedMessageId == "__timer__") {
+        AlertDialog(
+            onDismissRequest = { selectedMessageId = null },
+            title = { Text("Auto-delete messages") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Choose when new messages in this chat are automatically deleted.")
+                    listOf(
+                        0L to "Never",
+                        86400L to "24 hours",
+                        604800L to "7 days",
+                        1296000L to "15 days",
+                        2592000L to "30 days"
+                    ).forEach { (seconds, label) ->
+                        Row(Modifier.fillMaxWidth().clickable(enabled = !chatSettingsSaving) {
+                            chatSettingsSaving = true
+                            db.collection("chats").document(chatId).update(
+                                mapOf("autoDeleteSeconds" to seconds,
+                                    "autoDeleteLabel" to label,
+                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                            ).addOnSuccessListener {
+                                autoDeleteSeconds = seconds
+                                chatSettingsSaving = false
+                                selectedMessageId = null
+                            }.addOnFailureListener {
+                                chatSettingsSaving = false
+                                error = it.localizedMessage ?: "Could not update auto-delete setting."
+                                selectedMessageId = null
+                            }
+                        }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = autoDeleteSeconds == seconds, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedMessageId = null }) { Text("Close") } }
+        )
+    }
+
+    if (incomingCallId != null && callController == null) {
+        IncomingCallScreen(
+            callerName = friendName,
+            callerPhotoUrl = friendPhotoUrl,
+            callType = incomingCallType,
+            onAccept = { requestCall(incomingCallType, incomingCallId) },
+            onReject = {
+                val id = incomingCallId
+                incomingCallId = null
+                if (id != null) {
+                    (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(id.hashCode())
+                    db.collection("callSessions").document(id).update(
+                        mapOf("status" to "rejected", "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+                    )
+                }
+            }
+        )
+    }
+
+    callController?.let { controller ->
+        PpaCallDialog(
+            controller = controller,
+            callerName = friendName,
+            callType = requestedCallType,
+            status = callStatus.ifBlank { "Connecting…" },
+            onEnd = {
+                controller.endCall()
+                callController = null
+                callStatus = "Call ended"
+            }
+        )
+    }
+}
+
+
+@Composable
+fun IncomingCallScreen(
+    callerName: String,
+    callerPhotoUrl: String,
+    callType: String,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color(0xFF101827)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 42.dp)
+            ) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        "PPA TALK",
+                        color = Color(0xFF79A6FF),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        if (callType == "video") "Incoming video call" else "Incoming voice call",
+                        color = Color(0xFFCBD5E1),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Surface(
+                        modifier = Modifier.size(150.dp),
+                        shape = CircleShape,
+                        color = Color(0xFF26364F)
+                    ) {
+                        if (callerPhotoUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = callerPhotoUrl,
+                                contentDescription = "$callerName profile photo",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = "Caller profile",
+                                    tint = Color(0xFF9FB7E8),
+                                    modifier = Modifier.size(112.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        callerName.ifBlank { "PPA Talk user" },
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "is calling you…",
+                        color = Color(0xFFB8C4D8),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                Row(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(
+                            onClick = onReject,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            color = Color(0xFFE53945),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.CallEnd, contentDescription = "Reject call", tint = Color.White, modifier = Modifier.size(32.dp))
+                            }
+                        }
+                        Text("Reject", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(
+                            onClick = onAccept,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            color = Color(0xFF19A65A),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    if (callType == "video") Icons.Default.Videocam else Icons.Default.Call,
+                                    contentDescription = "Accept call",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                        Text("Accept", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(isDarkMode: Boolean, onThemeModeChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val auth = remember { FirebaseAuth.getInstance() }
+    val account = auth.currentUser
+    var emailVerified by remember { mutableStateOf(account?.isEmailVerified == true) }
+    var securityMessage by remember { mutableStateOf("") }
+    var securityBusy by remember { mutableStateOf(false) }
+    var showChangePassword by remember { mutableStateOf(false) }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmNewPassword by remember { mutableStateOf("") }
+    var phoneChangePasswordMode by remember { mutableStateOf(false) }
+
+    Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary)
+
+        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Account security", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("Account", fontWeight = FontWeight.SemiBold)
+                Text(account?.email ?: account?.phoneNumber ?: "Signed-in PPA Talk account",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (account?.email != null) {
+                    Text(if (emailVerified) "Email status: Verified" else "Email status: Not verified",
+                        color = if (emailVerified) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            securityBusy = true
+                            securityMessage = ""
+                            account.reload().addOnCompleteListener { reloadTask ->
+                                if (reloadTask.isSuccessful) {
+                                    emailVerified = auth.currentUser?.isEmailVerified == true
+                                    securityMessage = if (emailVerified) "Your email is verified."
+                                        else "Email is not verified yet. Check your inbox."
+                                } else {
+                                    securityMessage = reloadTask.exception?.localizedMessage ?: "Could not refresh email status."
+                                }
+                                securityBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Refresh verification status") }
+                    if (!emailVerified) {
+                        Button(
+                            enabled = !securityBusy,
+                            onClick = {
+                                securityBusy = true
+                                securityMessage = ""
+                                account.sendEmailVerification().addOnCompleteListener { task ->
+                                    securityMessage = if (task.isSuccessful) "Verification email sent. Check your inbox and spam folder."
+                                        else task.exception?.localizedMessage ?: "Could not send verification email."
+                                    securityBusy = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Resend verification email") }
+                    }
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            currentPassword = ""
+                            newPassword = ""
+                            confirmNewPassword = ""
+                            securityMessage = ""
+                            showChangePassword = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Change password") }
+                } else {
+                    Text("This account uses mobile-number authentication.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(
+                        enabled = !securityBusy,
+                        onClick = {
+                            currentPassword = ""
+                            newPassword = ""
+                            confirmNewPassword = ""
+                            securityMessage = ""
+                            showChangePassword = true
+                            phoneChangePasswordMode = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Change password") }
+                }
+                if (securityMessage.isNotBlank()) {
+                    Text(securityMessage, style = MaterialTheme.typography.bodySmall,
+                        color = if (securityMessage.contains("sent", ignoreCase = true) || securityMessage.contains("verified", ignoreCase = true))
+                            Color(0xFF2E7D32) else MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Dark mode", fontWeight = FontWeight.SemiBold)
+                    Text(if (isDarkMode) "Dark appearance is enabled" else "Royal White appearance is enabled",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = isDarkMode, onCheckedChange = onThemeModeChange)
+            }
+        }
+        Text("Your theme choice is saved on this device. Log out from the account menu.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    if (showChangePassword && account != null) {
+        AlertDialog(
+            onDismissRequest = { if (!securityBusy) showChangePassword = false },
+            title = { Text("Change password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = currentPassword, onValueChange = { currentPassword = it },
+                        label = { Text("Current password") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newPassword, onValueChange = { newPassword = it },
+                        label = { Text("New password (at least 8 characters)") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmNewPassword, onValueChange = { confirmNewPassword = it },
+                        label = { Text("Confirm new password") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !securityBusy,
+                    onClick = {
+                        when {
+                            currentPassword.isBlank() -> securityMessage = "Enter your current password."
+                            newPassword.length < 8 -> securityMessage = "New password must be at least 8 characters."
+                            newPassword != confirmNewPassword -> securityMessage = "New passwords do not match."
+                            currentPassword == newPassword -> securityMessage = "Choose a password different from your current password."
+                            else -> {
+                                securityBusy = true
+                                securityMessage = ""
+                                if (phoneChangePasswordMode) {
+                                    if (newPassword.length > 128) {
+                                        securityMessage = "New password must be 128 characters or fewer."
+                                        return@TextButton
+                                    }
+                                    val phone = account.phoneNumber
+                                    if (phone.isNullOrBlank()) {
+                                        securityMessage = "Phone number is unavailable for this account."
+                                        return@TextButton
+                                    }
+                                    securityBusy = true
+                                    val payload = hashMapOf(
+                                        "phoneNumber" to phone,
+                                        "currentPassword" to currentPassword,
+                                        "newPassword" to newPassword
+                                    )
+                                    FirebaseFunctions.getInstance("asia-south1")
+                                        .getHttpsCallable("changePhonePassword").call(payload)
+                                        .addOnSuccessListener {
+                                            securityMessage = "Password changed successfully."
+                                            showChangePassword = false
+                                            phoneChangePasswordMode = false
+                                            currentPassword = ""
+                                            newPassword = ""
+                                            confirmNewPassword = ""
+                                            securityBusy = false
+                                        }
+                                        .addOnFailureListener { exception ->
+                                            securityMessage = exception.localizedMessage ?: "Could not change password."
+                                            securityBusy = false
+                                        }
+                                } else {
+                                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(
+                                    account.email!!, currentPassword
+                                )
+                                account.reauthenticate(credential).addOnCompleteListener { reauthTask ->
+                                    if (!reauthTask.isSuccessful) {
+                                        securityMessage = reauthTask.exception?.localizedMessage
+                                            ?: "Current password is incorrect. Please try again."
+                                        securityBusy = false
+                                    } else {
+                                        account.updatePassword(newPassword).addOnCompleteListener { updateTask ->
+                                            securityMessage = if (updateTask.isSuccessful) {
+                                                showChangePassword = false
+                                                currentPassword = ""
+                                                newPassword = ""
+                                                confirmNewPassword = ""
+                                                "Password changed successfully."
+                                            } else {
+                                                updateTask.exception?.localizedMessage ?: "Could not change password."
+                                            }
+                                            securityBusy = false
+                                        }
+                                    }
+                                }
+                                }
+                            }
+                        }
+                    }
+                ) { Text(if (securityBusy) "Please wait…" else "Update password") }
+            },
+            dismissButton = {
+                TextButton(enabled = !securityBusy, onClick = {
+                    showChangePassword = false
+                    phoneChangePasswordMode = false
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SimplePage(title: String, detail: String, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = RoyalBlue)
+            Spacer(Modifier.height(8.dp))
+            Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
