@@ -3,6 +3,7 @@ service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() { return request.auth != null; }
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
+
     function profileDocPath(uid) {
       return /databases/(default)/documents/publicProfiles/$(uid);
     }
@@ -21,36 +22,51 @@ service firebase.storage {
     function canReadProfileMedia(uid) {
       return signedIn() && (owns(uid) || isPublicProfile(uid) || isAcceptedFriend(uid));
     }
+
+    // Validate both declared MIME type and filename extension. These checks are
+    // defense-in-depth; Firebase Storage Rules cannot inspect actual file bytes.
+    function validImageUpload(maxBytes) {
+      return request.resource.size < maxBytes
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp']
+        && fileName.matches('^[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$');
+    }
+    function validStoryUpload() {
+      return request.resource.size < 100 * 1024 * 1024
+        && ((request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp']
+             && fileName.matches('^[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$'))
+          || (request.resource.contentType == 'video/mp4'
+             && fileName.matches('^[A-Za-z0-9_-]+\\.mp4$')));
+    }
+    function validReelUpload() {
+      return request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType == 'video/mp4'
+        && fileName.matches('^[A-Za-z0-9_-]+\\.mp4$');
+    }
+
     match /profile_photos/{uid}/{fileName} {
       allow read: if canReadProfileMedia(uid) && !fileName.matches('^original_.*');
-      allow create, update: if owns(uid) && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow create, update: if owns(uid) && validImageUpload(10 * 1024 * 1024);
       allow delete: if owns(uid);
     }
     match /cover_photos/{uid}/{fileName} {
       allow read: if canReadProfileMedia(uid) && !fileName.matches('^original_.*');
-      allow create, update: if owns(uid) && request.resource.size < 15 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow create, update: if owns(uid) && validImageUpload(15 * 1024 * 1024);
       allow delete: if owns(uid);
     }
-    // Media reads are served only through authenticated, short-lived signed URLs
-    // minted by getSecureMediaUrl after Firestore audience checks. Direct SDK reads are denied.
     match /post_photos/{uid}/{fileName} {
+      // Direct reads remain denied; use the authenticated secure-media flow.
       allow read: if false;
-      allow create, update: if owns(uid) && request.resource.size < 25 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow create, update: if owns(uid) && validImageUpload(25 * 1024 * 1024);
       allow delete: if owns(uid);
     }
     match /stories/{uid}/{fileName} {
       allow read: if false;
-      allow create, update: if owns(uid) && request.resource.size < 100 * 1024 * 1024
-        && request.resource.contentType.matches('(image|video)/.*');
+      allow create, update: if owns(uid) && validStoryUpload();
       allow delete: if owns(uid);
     }
     match /reels/{uid}/{fileName} {
       allow read: if false;
-      allow create, update: if owns(uid) && request.resource.size < 100 * 1024 * 1024
-        && request.resource.contentType.matches('video/.*');
+      allow create, update: if owns(uid) && validReelUpload();
       allow delete: if owns(uid);
     }
   }
