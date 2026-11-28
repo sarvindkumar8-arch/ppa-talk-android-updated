@@ -1182,7 +1182,7 @@ fun MainSocialApp(uid: String, email: String, displayName: String, isDarkMode: B
                                 Text("CONNECT", color = Color(0xFFF06412), fontWeight = FontWeight.ExtraBold,
                                     style = MaterialTheme.typography.headlineSmall)
                             }
-                            Text("Create. Connect. Share.", color = Orange,
+                            Text("Create. Connect. Share.", color = Color.Black,
                                 style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     },
