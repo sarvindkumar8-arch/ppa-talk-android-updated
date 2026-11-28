@@ -624,9 +624,9 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
         if (isSignUp) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBackToWelcome, enabled = !busy) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = authCyan)
                     Spacer(Modifier.width(6.dp))
-                    Text("Back", color = MaterialTheme.colorScheme.primary)
+                    Text("Back", color = authCyan)
                 }
                 Spacer(Modifier.weight(1f))
             }
@@ -677,7 +677,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 value = name, onValueChange = { name = it },
                 label = { Text("Full Name") }, placeholder = { Text("Enter your full name") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
-                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = LocalTextStyle.current.copy(color = authText),
                 shape = RoundedCornerShape(14.dp), colors = authFieldColors
             )
             Spacer(Modifier.height(8.dp))
@@ -708,7 +708,7 @@ fun AuthScreen(initialIsSignUp: Boolean = false, onBackToWelcome: () -> Unit = {
                 value = phoneNumber,
                 onValueChange = { phoneNumber = it.filter(Char::isDigit).take(14) },
                 label = { Text("Mobile number") }, placeholder = { Text("Enter mobile number") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+                modifier = Modifier.fillMaxWidth(), singleLine = true, textStyle = LocalTextStyle.current.copy(color = authText),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = authFieldColors
             )
         } else {
